@@ -197,7 +197,7 @@ export function useInteractionPanel() {
     const activeKey = activeConversationKey(conversationGroups);
     return conversationGroups.map(g => {
       const gkey = groupKey(g);
-      const isActive = gkey === activeKey;
+      const isActive = activeKey !== null && gkey === activeKey;
       const isExpanded = g.isExpanded !== undefined ? g.isExpanded : isActive;
       return { ...g, isActive, isExpanded };
     });
@@ -343,7 +343,9 @@ export function useInteractionPanel() {
       return prev.map((g, i) => {
         if (i !== index) return g;
         const derived =
-          g.isExpanded !== undefined ? g.isExpanded : groupKey(g) === activeKey;
+          g.isExpanded !== undefined
+            ? g.isExpanded
+            : activeKey !== null && groupKey(g) === activeKey;
         return { ...g, isExpanded: !derived };
       });
     });

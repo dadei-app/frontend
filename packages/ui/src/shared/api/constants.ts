@@ -29,6 +29,8 @@ export const ENDPOINTS = {
   SERVICE_CLIENT_BY_ID: '/service/clients/:clientId',
   SERVICE_NETWORK_ENABLE: '/service/network/enable',
   SERVICE_NETWORK_DISABLE: '/service/network/disable',
+  SERVICE_ASSISTANT_MODE_CLAIM: '/service/network/assistant-mode/claim',
+  SERVICE_ASSISTANT_MODE_RELEASE: '/service/network/assistant-mode/release',
 
   // Interactions
   INTERACTIONS: '/interactions',
@@ -45,6 +47,7 @@ export const ENDPOINTS = {
 
   // Network memory API (same API prefix as client; v2 when BETA=true): episodic facts + structured actions
   MEMORIES: '/memories',
+  MEMORY_BY_ID: '/memories/:memoryId',
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
   COMMAND: '/actions/voice',

@@ -13,6 +13,12 @@ export interface ClientResponse {
   metadata?: Record<string, unknown>;
 }
 
+export interface AssistantModeState {
+  active: boolean;
+  owner_session_id: string | null;
+  expires_at: string | null;
+}
+
 export const serviceApi = {
   /**
    * Register client with network. Omit clientId to let the server assign client1, client2, …
@@ -69,5 +75,27 @@ export const serviceApi = {
     await retryWithBackoff(
       () => api.patch(ENDPOINTS.SERVICE_NETWORK_DISABLE)
     );
+  },
+
+  /**
+   * Attempt to claim assistant mode ownership for a short conversational window.
+   * PATCH /api/v1/service/network/assistant-mode/claim
+   */
+  async claimAssistantMode(sessionToken: string, holdSeconds = 5): Promise<AssistantModeState> {
+    const { data } = await api.patch<AssistantModeState>(ENDPOINTS.SERVICE_ASSISTANT_MODE_CLAIM, {
+      session_token: sessionToken,
+      hold_seconds: holdSeconds,
+    });
+    return data;
+  },
+
+  /**
+   * Release assistant mode ownership.
+   * PATCH /api/v1/service/network/assistant-mode/release
+   */
+  async releaseAssistantMode(sessionToken: string): Promise<void> {
+    await api.patch(ENDPOINTS.SERVICE_ASSISTANT_MODE_RELEASE, {
+      session_token: sessionToken,
+    });
   },
 };

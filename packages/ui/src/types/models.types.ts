@@ -25,7 +25,7 @@ export interface Conversation {
   is_active: boolean;
 }
 
-/** Persisted Action row from GET /memories/actions or realtime `action` events. */
+/** Persisted Action row from GET /actions or realtime `action` events. */
 export interface NetworkAction {
   id: string;
   action_type: string;

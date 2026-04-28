@@ -2,7 +2,7 @@ import { api } from '@dadei/ui/shared/api/client';
 import { ENDPOINTS, API_CONFIG } from '@dadei/ui/shared/api/constants';
 import { buildEndpoint } from './utils';
 import { Interaction } from '@dadei/ui/types/models.types';
-import { getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
+import { getRealtimeClientId, getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
 
 interface GetInteractionsParams {
   limit?: number;
@@ -96,13 +96,17 @@ export const interactionsApi = {
    */
   async register(
     audioData: ArrayBuffer,
-    clientId: string,
+    clientId?: string,
     timing?: RegisterInteractionTiming,
   ): Promise<void> {
+    const effectiveClientId = clientId?.trim() || getRealtimeClientId();
+    if (!effectiveClientId) {
+      throw new Error('No active realtime client id available');
+    }
     const formData = new FormData();
     const blob = new Blob([audioData], { type: 'audio/wav' });
     formData.append('audio', blob, 'audio.wav');
-    formData.append('client_id', clientId);
+    formData.append('client_id', effectiveClientId);
     const sessionToken = getRealtimeSessionToken();
     if (sessionToken) {
       formData.append('session_token', sessionToken);

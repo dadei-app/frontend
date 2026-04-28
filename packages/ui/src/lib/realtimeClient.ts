@@ -13,7 +13,7 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let heartbeatWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = true;
 let reconnectAttempt = 0;
-let connectOpts: { getAccessToken: () => Promise<string | null>; clientId: string } | null = null;
+let connectOpts: { getAccessToken: () => Promise<string | null>; clientId?: string } | null = null;
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const HEARTBEAT_TIMEOUT_MS = 60_000;
 let lastInboundAt = 0;
@@ -121,7 +121,12 @@ async function openSocket() {
   }
 
   const base = buildRealtimeWebSocketUrl();
-  const url = `${base}?token=${encodeURIComponent(token)}&client_id=${encodeURIComponent(connectOpts.clientId)}`;
+  const qs = new URLSearchParams();
+  qs.set('token', token);
+  if (connectOpts.clientId?.trim()) {
+    qs.set('client_id', connectOpts.clientId.trim());
+  }
+  const url = `${base}?${qs.toString()}`;
 
   try {
     ws = new WebSocket(url);
@@ -185,7 +190,7 @@ async function openSocket() {
 
 export function startRealtimeClient(opts: {
   getAccessToken: () => Promise<string | null>;
-  clientId: string;
+  clientId?: string;
 }): void {
   stopped = false;
   connectOpts = opts;
@@ -216,6 +221,10 @@ export function stopRealtimeClient(): void {
 
 export function getRealtimeSessionToken(): string | null {
   return activeSessionCapability?.sessionToken ?? null;
+}
+
+export function getRealtimeSessionId(): string | null {
+  return activeSessionCapability?.sessionId ?? null;
 }
 
 export function getRealtimeClientId(): string | null {

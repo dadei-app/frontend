@@ -12,4 +12,3 @@ export interface ConversationGroupView extends ConversationGroupState {
   isExpanded: boolean;
 }
 
-export type SplitDeleteGroup = 'interaction' | 'conversation';

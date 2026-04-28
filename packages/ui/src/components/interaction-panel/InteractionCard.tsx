@@ -1,6 +1,6 @@
 import type { Interaction } from '@dadei/ui/types/models.types';
 import { formatLocalTime } from './conversationUtils';
-import SplitDeleteToolbar from './SplitDeleteToolbar';
+import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 
 type PersonColor = { background: string; border: string; text: string };
 
@@ -47,7 +47,6 @@ export default function InteractionCard({
         </div>
 
         <SplitDeleteToolbar
-          group="interaction"
           armed={armedInteractionDeleteId === interaction.id}
           onArm={() => {
             setArmedConversationDeleteId(null);
@@ -59,6 +58,7 @@ export default function InteractionCard({
           }}
           idleTitle="Delete interaction"
           idleAriaLabel="Delete interaction"
+          idleVisibleClassName="group-hover/interaction:opacity-100"
         />
       </div>
     </div>

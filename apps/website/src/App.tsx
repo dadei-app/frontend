@@ -32,6 +32,7 @@ export function App() {
                 </ServiceProvider>
               }
             />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>

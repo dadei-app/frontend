@@ -5,7 +5,10 @@ import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@dadei/ui/lib/queryKeys';
-import { transcriptStartsWithWakeCommand } from '@dadei/ui/lib/wakeWordDetection';
+import {
+  normalizeTranscriptForWake,
+  transcriptStartsWithWakeCommand,
+} from '@dadei/ui/lib/wakeWordDetection';
 
 interface AudioContextType {
   isProcessing: boolean;
@@ -107,7 +110,13 @@ type TranscribePending = {
 };
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
-  const { clientName, isServiceEnabled, registrationConflict, isConnected } = useService();
+  const {
+    isServiceEnabled,
+    registrationConflict,
+    isConnected,
+    isAssistantMode,
+    isAssistantOwner,
+  } = useService();
   const { mode, submitCommandAudio } = useCommand();
   const queryClient = useQueryClient();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -228,7 +237,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
         const wavBuffer = encodeWAV(audio, 16000);
 
-        if (fullQuality && wakeWordWorkerRef.current) {
+        if (wakeScanOk && wakeWordWorkerRef.current) {
           let localText = '';
           try {
             localText = await transcribeSegment(audio);
@@ -236,17 +245,18 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
             console.warn('[Wake] Local ASR threw:', e);
             localText = '';
           }
+          const normalized = normalizeTranscriptForWake(localText);
           const preview =
-            localText.length > 120 ? `${localText.slice(0, 120)}…` : localText || '(empty)';
+            normalized.length > 120 ? `${normalized.slice(0, 120)}…` : normalized || '(empty)';
           const prefixMatch = transcriptStartsWithWakeCommand(localText);
           console.log('[Wake] Local ASR done', { chars: localText.length, preview, prefixMatch });
           if (prefixMatch) {
-            console.log('[Wake] Routed to command (Dadei-prefixed transcript)');
-            submitCommandAudioRef.current(wavBuffer);
+            console.log('[Wake] Routed to command (wake-prefixed transcript)');
+            submitCommandAudioRef.current(wavBuffer, { claimAssistantMode: true });
             return;
           }
-        } else if (fullQuality && !wakeWordWorkerRef.current) {
-          console.warn('[Wake] fullQuality but wake worker not ready — cannot run prefix ASR');
+        } else if (wakeScanOk && !wakeWordWorkerRef.current) {
+          console.warn('[Wake] wakeScanOk but wake worker not ready — cannot run wake ASR');
         }
 
         if (!fullQuality) {
@@ -257,7 +267,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
-        await interactionsApi.register(wavBuffer, clientName, {
+        if (isAssistantMode && isAssistantOwner) {
+          console.log('[AssistantMode] Routed segment directly to command');
+          submitCommandAudioRef.current(wavBuffer);
+          return;
+        }
+
+        await interactionsApi.register(wavBuffer, undefined, {
           chunkStartMs,
           chunkEndMs,
         });
@@ -289,7 +305,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isVADReady) return;
 
-    const shouldListen = isServiceEnabled && !registrationConflict && isConnected;
+    const shouldListen =
+      (isServiceEnabled || (isAssistantMode && isAssistantOwner)) &&
+      !registrationConflict &&
+      isConnected;
 
     if (shouldListen && !vad.listening) {
       console.log('[VAD] Starting listening');
@@ -298,7 +317,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       console.log('[VAD] Pausing listening');
       vad.pause();
     }
-  }, [isServiceEnabled, registrationConflict, isConnected, vad.listening, isVADReady]);
+  }, [
+    isAssistantMode,
+    isAssistantOwner,
+    isServiceEnabled,
+    registrationConflict,
+    isConnected,
+    vad.listening,
+    isVADReady,
+  ]);
 
   useEffect(() => {
     if (vad.loading) {

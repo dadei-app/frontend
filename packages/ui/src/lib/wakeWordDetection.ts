@@ -1,18 +1,42 @@
 /**
- * On-device wake ASR (Whisper tiny) is weak on rare names. We bias decoding with a long
- * initial_prompt and accept several plausible spellings / “dah dee” phonetic outputs.
+ * On-device wake ASR (Whisper) is weak on rare names. We bias decoding with initial_prompt
+ * and accept several plausible spellings / “dah dee” phonetic outputs, plus “Assistant”.
  */
+
+const LEADING_DISFLUENCY =
+  /^[\s,.;:!?'"`]+|^(?:um|uh|ugh|erm|er|hm+|hmm+|hey|hi|hello|ok|okay|so|well)\b[\s,.;:!?'"`]*/iu;
+
+/** Max leading filler words to strip before wake-token detection. */
+const MAX_DISFLUENCY_STRIPS = 4;
+
+/**
+ * Strips a bounded chain of leading hesitation words (e.g. "Um, uh, Dadei").
+ */
+export function stripLeadingWakeDisfluencies(text: string): string {
+  let s = text.trim();
+  for (let i = 0; i < MAX_DISFLUENCY_STRIPS; i++) {
+    const next = s.replace(LEADING_DISFLUENCY, '').trim();
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
+export function normalizeTranscriptForWake(text: string): string {
+  return stripLeadingWakeDisfluencies(text.trim());
+}
 
 export const WAKE_WORD_INITIAL_PROMPT = [
   'Dadei.',
-  'Wake word: Dadei.',
+  'Wake words: Dadei, Assistant.',
   'Spelled D-A-D-E-I.',
   'Pronounced dah-dee, like "dah dee" or "da dee".',
   'Not "daddy". Not "day day". Not "diddy".',
+  'Assistant means the voice assistant, not "assist".',
 ].join(' ');
 
 /**
- * True when the transcript is plausibly the user saying the wake word "Dadei".
+ * True when the transcript is plausibly the user saying a wake word.
  * Intentionally stricter on "daddy" alone to avoid accidental triggers.
  */
 export function transcriptLikelyContainsWakeWord(text: string): boolean {
@@ -20,6 +44,8 @@ export function transcriptLikelyContainsWakeWord(text: string): boolean {
   if (!raw) return false;
 
   const lower = raw.toLowerCase().normalize('NFKD');
+
+  if (/\bassistant\b/.test(lower)) return true;
 
   const hasDadeiShape =
     /\bdadei\b/.test(lower) ||
@@ -34,29 +60,21 @@ export function transcriptLikelyContainsWakeWord(text: string): boolean {
 
   if (hasDadeiShape) return true;
 
-  // Collapsed spacing / punctuation: "dahdee", "daday"
   const collapsed = lower.replace(/[^a-z]/g, '');
   if (/dadei|dadey|dadee|daday|dahdee|dadai|dadeh/.test(collapsed)) return true;
+  if (/assistant/.test(collapsed)) return true;
 
-  // "daddy" alone is a common mis-hear; avoid firing unless we also see a Dadei-like token.
   if (/\bdaddy\b/.test(lower)) return false;
 
   return false;
 }
 
-/**
- * True when the transcript begins with a Dadei-like wake token (command-style utterance).
- * Mid-sentence "… and Dadei …" is intentionally not treated as a command.
- */
-export function transcriptStartsWithWakeCommand(text: string): boolean {
-  const raw = text.trim();
-  if (!raw) return false;
+function startsWithAssistantWake(lead: string, collapsedLead: string): boolean {
+  if (/^assistant\b/i.test(lead)) return true;
+  return /^assistant/i.test(collapsedLead);
+}
 
-  const lower = raw.toLowerCase().normalize('NFKD');
-  const lead = lower.replace(/^[^\p{L}\p{N}]+/u, '');
-  if (!lead) return false;
-
-  const firstWord = lead.match(/^[\p{L}\p{N}'-]+/u)?.[0]?.toLowerCase() ?? '';
+function startsWithDadeiWake(lead: string, collapsedLead: string, firstWord: string): boolean {
   if (firstWord === 'daddy') return false;
 
   const startsShape =
@@ -72,6 +90,28 @@ export function transcriptStartsWithWakeCommand(text: string): boolean {
 
   if (startsShape) return true;
 
-  const collapsedLead = lead.replace(/[^a-z]/g, '');
   return /^(dadei|dadey|dadee|daday|dahdee|dadai|dadeh)/.test(collapsedLead);
+}
+
+/**
+ * True when the transcript begins with a wake token after optional leading fillers
+ * (“Um, Dadei …”). Mid-sentence “… and Dadei …” is not treated as a command.
+ */
+export function transcriptStartsWithWakeCommand(text: string): boolean {
+  const normalized = normalizeTranscriptForWake(text);
+  if (!normalized) return false;
+
+  const lower = normalized.toLowerCase().normalize('NFKD');
+  const lead = lower.replace(/^[^\p{L}\p{N}]+/u, '');
+  if (!lead) return false;
+
+  const firstWord = lead.match(/^[\p{L}\p{N}'-]+/u)?.[0]?.toLowerCase() ?? '';
+  if (firstWord === 'daddy') return false;
+
+  const collapsedLead = lead.replace(/[^a-z]/g, '');
+
+  if (startsWithAssistantWake(lead, collapsedLead)) return true;
+  if (startsWithDadeiWake(lead, collapsedLead, firstWord)) return true;
+
+  return false;
 }

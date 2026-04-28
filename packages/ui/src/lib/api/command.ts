@@ -24,17 +24,23 @@ function parseDataLine(line: string): CommandSSEEvent | null {
 
 export async function* streamCommand(
   wavBuffer: ArrayBuffer,
-  clientId: string,
   accessToken: string,
+  options?: { signal?: AbortSignal },
 ): AsyncGenerator<CommandSSEEvent> {
   const url = `${API_BASE_URL}${ENDPOINTS.COMMAND}`;
   const form = new FormData();
   form.append('audio', new Blob([wavBuffer], { type: 'audio/wav' }), 'audio.wav');
-  form.append('client_id', clientId);
-  const sessionToken = getRealtimeSessionToken();
-  if (sessionToken) {
-    form.append('session_token', sessionToken);
+  const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (clientTimeZone && clientTimeZone.trim()) {
+    form.append('client_timezone', clientTimeZone.trim());
   }
+  const sessionToken = getRealtimeSessionToken();
+  if (!sessionToken) {
+    yield { type: 'error', message: 'Not connected to the assistant service yet' };
+    yield { type: 'done' };
+    return;
+  }
+  form.append('session_token', sessionToken);
 
   let response: Response;
   try {
@@ -44,8 +50,13 @@ export async function* streamCommand(
         Authorization: `Bearer ${accessToken}`,
       },
       body: form,
+      signal: options?.signal,
     });
   } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') {
+      yield { type: 'done' };
+      return;
+    }
     const message = e instanceof Error ? e.message : 'Network error';
     yield { type: 'error', message };
     yield { type: 'done' };
@@ -56,7 +67,25 @@ export async function* streamCommand(
     let detail = `HTTP ${response.status}`;
     try {
       const t = await response.text();
-      if (t) detail = t.slice(0, 200);
+      if (t) {
+        try {
+          const parsed = JSON.parse(t) as { detail?: unknown };
+          if (typeof parsed.detail === 'string') {
+            detail = parsed.detail.slice(0, 240);
+          } else if (parsed.detail && typeof parsed.detail === 'object') {
+            const detailObj = parsed.detail as { message?: unknown; code?: unknown };
+            if (typeof detailObj.message === 'string' && typeof detailObj.code === 'string') {
+              detail = `${detailObj.code}: ${detailObj.message}`.slice(0, 240);
+            } else {
+              detail = t.slice(0, 240);
+            }
+          } else {
+            detail = t.slice(0, 240);
+          }
+        } catch {
+          detail = t.slice(0, 240);
+        }
+      }
     } catch {
       /* ignore */
     }

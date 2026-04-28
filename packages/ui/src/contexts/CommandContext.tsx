@@ -10,6 +10,8 @@ import {
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { streamCommand, type CommandSSEEvent } from '@dadei/ui/lib/api/command';
+import { serviceApi } from '@dadei/ui/lib/api/service';
+import { getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
 
 export type CommandMode = 'passive' | 'capturing' | 'streaming' | 'done';
 
@@ -18,11 +20,12 @@ interface CommandContextValue {
   transcript: string;
   responseTokens: string[];
   activeToolCall: string | undefined;
-  submitCommandAudio: (wav: ArrayBuffer) => void;
+  submitCommandAudio: (wav: ArrayBuffer, options?: { claimAssistantMode?: boolean }) => void;
   dismiss: () => void;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
+const ASSISTANT_WINDOW_MS = 5000;
 
 const TOOL_LABELS: Record<string, string> = {
   create_calendar_event: 'Creating calendar event',
@@ -41,7 +44,12 @@ function toolLabel(tool: string): string {
 
 export function CommandProvider({ children }: { children: ReactNode }) {
   const { getAccessToken } = useAuth();
-  const { clientName, isConnected } = useService();
+  const {
+    isConnected,
+    isServiceEnabled,
+    isAssistantMode,
+    isAssistantOwner,
+  } = useService();
 
   const [mode, setMode] = useState<CommandMode>('passive');
   const [transcript, setTranscript] = useState('');
@@ -49,6 +57,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const [activeToolCall, setActiveToolCall] = useState<string | undefined>(undefined);
 
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assistantReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
+  const localAssistantOwnershipRef = useRef(false);
 
   const clearDismissTimer = useCallback(() => {
     if (dismissTimerRef.current != null) {
@@ -57,13 +68,76 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const clearAssistantReleaseTimer = useCallback(() => {
+    if (assistantReleaseTimerRef.current != null) {
+      clearTimeout(assistantReleaseTimerRef.current);
+      assistantReleaseTimerRef.current = null;
+    }
+  }, []);
+
+  const abortActiveStream = useCallback(() => {
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort();
+      streamAbortRef.current = null;
+    }
+  }, []);
+
+  const releaseAssistantMode = useCallback(async (): Promise<boolean> => {
+    const sessionToken = getRealtimeSessionToken();
+    if (!sessionToken) return false;
+    try {
+      await serviceApi.releaseAssistantMode(sessionToken);
+      localAssistantOwnershipRef.current = false;
+      return true;
+    } catch (error) {
+      console.warn('[Command] Failed to release assistant mode', error);
+      return false;
+    }
+  }, []);
+
   const dismiss = useCallback(() => {
     clearDismissTimer();
+    clearAssistantReleaseTimer();
+    abortActiveStream();
+    localAssistantOwnershipRef.current = false;
     setMode('passive');
     setTranscript('');
     setResponseTokens([]);
     setActiveToolCall(undefined);
-  }, [clearDismissTimer]);
+  }, [abortActiveStream, clearAssistantReleaseTimer, clearDismissTimer]);
+
+  const schedulePostDoneCleanup = useCallback(() => {
+    clearDismissTimer();
+    clearAssistantReleaseTimer();
+
+    if (localAssistantOwnershipRef.current || (isAssistantMode && isAssistantOwner)) {
+      assistantReleaseTimerRef.current = setTimeout(() => {
+        void (async () => {
+          const released = await releaseAssistantMode();
+          if (!released) {
+            try {
+              await serviceApi.enable();
+            } catch (error) {
+              console.warn('[Command] Failed to recover service after release failure', error);
+            }
+          }
+          dismiss();
+        })();
+      }, ASSISTANT_WINDOW_MS);
+      return;
+    }
+
+    dismissTimerRef.current = setTimeout(() => {
+      dismiss();
+    }, ASSISTANT_WINDOW_MS);
+  }, [
+    clearAssistantReleaseTimer,
+    clearDismissTimer,
+    dismiss,
+    isAssistantMode,
+    isAssistantOwner,
+    releaseAssistantMode,
+  ]);
 
   const handleEvent = useCallback(
     (ev: CommandSSEEvent) => {
@@ -87,20 +161,20 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
         case 'done':
           setMode('done');
-          clearDismissTimer();
-          dismissTimerRef.current = setTimeout(() => {
-            dismiss();
-          }, 5000);
+          schedulePostDoneCleanup();
           break;
         default:
           break;
       }
     },
-    [clearDismissTimer, dismiss],
+    [schedulePostDoneCleanup],
   );
 
   const submitCommandAudio = useCallback(
-    (wav: ArrayBuffer) => {
+    (wav: ArrayBuffer, options?: { claimAssistantMode?: boolean }) => {
+      abortActiveStream();
+      clearAssistantReleaseTimer();
+      clearDismissTimer();
       setMode('capturing');
       setTranscript('');
       setResponseTokens([]);
@@ -111,34 +185,93 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (!accessToken) {
           setTranscript('Not authenticated');
           setMode('done');
-          clearDismissTimer();
-          dismissTimerRef.current = setTimeout(() => dismiss(), 5000);
+          schedulePostDoneCleanup();
           return;
         }
 
-        if (!isConnected || !clientName.trim()) {
+        const sessionToken = getRealtimeSessionToken();
+        if (!isConnected || !sessionToken) {
           handleEvent({ type: 'error', message: 'Not connected to the assistant service yet' });
           return;
         }
 
+        if (options?.claimAssistantMode) {
+          try {
+            await serviceApi.claimAssistantMode(sessionToken, 5);
+            localAssistantOwnershipRef.current = true;
+          } catch (e) {
+            const message = e instanceof Error ? e.message : 'Another device owns assistant mode';
+            handleEvent({ type: 'error', message });
+            handleEvent({ type: 'done' });
+            return;
+          }
+        } else if (isAssistantMode && isAssistantOwner) {
+          // Follow-up turns inside the same 5s conversational window should still release service.
+          localAssistantOwnershipRef.current = true;
+        } else if (isAssistantMode && !isAssistantOwner) {
+          handleEvent({
+            type: 'error',
+            message: 'Another device is currently handling assistant mode',
+          });
+          handleEvent({ type: 'done' });
+          return;
+        }
+
         try {
-          for await (const ev of streamCommand(wav, clientName, accessToken)) {
+          const abortController = new AbortController();
+          streamAbortRef.current = abortController;
+          for await (const ev of streamCommand(wav, accessToken, {
+            signal: abortController.signal,
+          })) {
             handleEvent(ev);
           }
         } catch (e) {
+          if (e instanceof DOMException && e.name === 'AbortError') {
+            return;
+          }
           const message = e instanceof Error ? e.message : 'Command failed';
           handleEvent({ type: 'error', message });
+        } finally {
+          streamAbortRef.current = null;
         }
       })();
     },
-    [clearDismissTimer, clientName, dismiss, getAccessToken, handleEvent, isConnected],
+    [
+      abortActiveStream,
+      clearAssistantReleaseTimer,
+      clearDismissTimer,
+      getAccessToken,
+      handleEvent,
+      isAssistantMode,
+      isAssistantOwner,
+      isConnected,
+      schedulePostDoneCleanup,
+    ],
   );
+
+  useEffect(() => {
+    if (mode === 'passive') return;
+    if (isAssistantMode && !isAssistantOwner) {
+      abortActiveStream();
+      dismiss();
+    }
+  }, [abortActiveStream, dismiss, isAssistantMode, isAssistantOwner, mode]);
+
+  useEffect(() => {
+    if (mode === 'passive') return;
+    if (isAssistantMode && isServiceEnabled) {
+      abortActiveStream();
+      dismiss();
+    }
+  }, [abortActiveStream, dismiss, isAssistantMode, isServiceEnabled, mode]);
 
   useEffect(
     () => () => {
       clearDismissTimer();
+      clearAssistantReleaseTimer();
+      abortActiveStream();
     },
-    [clearDismissTimer],
+    [abortActiveStream, clearAssistantReleaseTimer, clearDismissTimer],
   );
 
   const value: CommandContextValue = {

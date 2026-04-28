@@ -25,4 +25,9 @@ export const actionsApi = {
     const { data } = await api.patch<NetworkAction>(endpoint, { status });
     return data;
   },
+
+  async delete(id: string): Promise<void> {
+    const endpoint = buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId: id });
+    await api.delete(endpoint);
+  },
 };

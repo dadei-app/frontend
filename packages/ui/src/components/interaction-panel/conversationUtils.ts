@@ -57,9 +57,20 @@ export function latestInteraction(groups: { interactions: Interaction[] }[]): In
   );
 }
 
-export function activeConversationKey(groups: { interactions: Interaction[] }[]): string {
+function hasConversationSummary(conversation: Conversation | null): boolean {
+  if (!conversation) return false;
+  return Boolean(conversation.topic_summary?.trim() || conversation.context_summary?.trim());
+}
+
+export function activeConversationKey(
+  groups: { conversation: Conversation | null; interactions: Interaction[] }[]
+): string | null {
   const latest = latestInteraction(groups);
-  return latest ? interactionKey(latest) : ORPHAN_KEY;
+  if (!latest) return null;
+  const key = interactionKey(latest);
+  const latestGroup = groups.find(g => groupKey(g) === key);
+  if (!latestGroup) return null;
+  return hasConversationSummary(latestGroup.conversation) ? null : key;
 }
 
 export function findGroupIndex(

@@ -1,6 +1,7 @@
 import { api } from '@dadei/ui/shared/api/client';
 import { ENDPOINTS } from '@dadei/ui/shared/api/constants';
 import type { EpisodicMemory } from '@dadei/ui/types/models.types';
+import { buildEndpoint } from './utils';
 
 export interface ListMemoriesParams {
   limit?: number;
@@ -12,5 +13,10 @@ export const memoriesApi = {
       params: { limit: params?.limit ?? 100 },
     });
     return data;
+  },
+
+  async delete(id: string): Promise<void> {
+    const endpoint = buildEndpoint(ENDPOINTS.MEMORY_BY_ID, { memoryId: id });
+    await api.delete(endpoint);
   },
 };

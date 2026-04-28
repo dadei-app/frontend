@@ -165,6 +165,26 @@ export function useActionsQuery(
   });
 }
 
+export function useDeleteMemoryMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (memoryId: string) => memoriesApi.delete(memoryId),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.memories });
+    },
+  });
+}
+
+export function useDeleteActionMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (actionId: string) => actionsApi.delete(actionId),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.actions });
+    },
+  });
+}
+
 export function useRecentConversationsQuery(enabled = true, limit = INTERACTION_PANEL_RECENT_LIMIT) {
   const queryClient = useQueryClient();
   return useQuery({

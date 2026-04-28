@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Person } from '@dadei/ui/types/models.types';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { cn } from '@dadei/ui/lib/cn';
-import { Check, Trash2, X } from 'lucide-react';
+import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import {
   useDeletePersonMutation,
   usePersonsQuery,
@@ -243,68 +243,24 @@ export default function PeoplePanel({ isOpen, onClose, excludeElement }: PeopleP
                                 >
                                   <i className="fas fa-pencil-alt text-xs" />
                                 </button>
-                                <div
-                                  data-split-delete
-                                  className="flex shrink-0 items-center"
-                                  onClick={e => e.stopPropagation()}
-                                >
-                                  <AnimatePresence mode="wait" initial={false}>
-                                    {armedPersonDeleteId === person.id ? (
-                                      <motion.div
-                                        key="person-del-armed"
-                                        initial={{ opacity: 0, x: 6 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 4 }}
-                                        transition={{ type: 'spring', stiffness: 420, damping: 28 }}
-                                        className="flex items-center gap-0.5"
-                                      >
-                                        <button
-                                          type="button"
-                                          aria-label="Confirm delete person"
-                                          title="Confirm delete"
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            void handleDeletePerson(person.id);
-                                          }}
-                                          disabled={deletePersonMutation.isPending}
-                                          className="flex h-7 w-7 items-center justify-center rounded-md text-emerald-400/95 transition-colors hover:bg-emerald-500/15"
-                                        >
-                                          <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          aria-label="Cancel"
-                                          title="Cancel"
-                                          onClick={e => {
-                                            e.stopPropagation();
-                                            setArmedPersonDeleteId(null);
-                                          }}
-                                          className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-white/10 hover:text-zinc-200"
-                                        >
-                                          <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-                                        </button>
-                                      </motion.div>
-                                    ) : (
-                                      <motion.button
-                                        key="person-del-idle"
-                                        type="button"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                        exit={{ opacity: 0 }}
-                                        transition={{ duration: 0.12 }}
-                                        title="Delete person"
-                                        aria-label="Delete person"
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          setArmedPersonDeleteId(person.id);
-                                        }}
-                                        className="flex h-7 w-7 items-center justify-center rounded-md text-rose-400/90 transition-colors hover:bg-rose-950/35"
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" strokeWidth={2.2} />
-                                      </motion.button>
-                                    )}
-                                  </AnimatePresence>
-                                </div>
+                                <SplitDeleteToolbar
+                                  armed={armedPersonDeleteId === person.id}
+                                  disabled={deletePersonMutation.isPending}
+                                  onArm={() => setArmedPersonDeleteId(person.id)}
+                                  onDisarm={() => setArmedPersonDeleteId(null)}
+                                  onConfirm={() => {
+                                    void handleDeletePerson(person.id);
+                                  }}
+                                  idleTitle="Delete person"
+                                  idleAriaLabel="Delete person"
+                                  containerClassName="h-7 self-auto"
+                                  armedContainerClassName="gap-0.5"
+                                  idleButtonClassName="opacity-100 rounded-md hover:bg-rose-950/35"
+                                  confirmButtonClassName="h-7 w-7 rounded-md"
+                                  cancelButtonClassName="h-7 w-7 rounded-md text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                                  idleWidthPx={28}
+                                  armedWidthPx={58}
+                                />
                               </>
                             )}
                           </div>

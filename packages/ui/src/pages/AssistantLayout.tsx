@@ -1,5 +1,5 @@
-import { useLayoutEffect, useState, type CSSProperties } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useCommand, type CommandMode } from '@dadei/ui/contexts/CommandContext';
@@ -24,10 +24,48 @@ import { Mic } from 'lucide-react';
 export default function AssistantLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isConnected } = useService();
-  const { mode, transcript, responseTokens, activeToolCall, dismiss } = useCommand();
+  const { mode, transcript, responseTokens, activeToolCall } = useCommand();
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [bubbleHistory, setBubbleHistory] = useState<
+    Array<{ id: string; role: 'assistant' | 'user'; text: string }>
+  >([]);
+  const lastCompletedFingerprint = useRef<string | null>(null);
   const location = useLocation();
+
+  useEffect(() => {
+    if (mode === 'capturing') {
+      lastCompletedFingerprint.current = null;
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode === 'passive') {
+      setBubbleHistory([]);
+    }
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== 'done') return;
+    const completedTranscript = transcript.trim();
+    const completedResponse = responseTokens.join('').trim();
+    if (!completedTranscript && !completedResponse) return;
+    const fingerprint = `${completedTranscript}::${completedResponse}`;
+    if (lastCompletedFingerprint.current === fingerprint) return;
+    lastCompletedFingerprint.current = fingerprint;
+    setBubbleHistory((prev) => {
+      const next = [
+        ...prev,
+        ...(completedTranscript
+          ? [{ id: crypto.randomUUID(), role: 'user' as const, text: completedTranscript }]
+          : []),
+        ...(completedResponse
+          ? [{ id: crypto.randomUUID(), role: 'assistant' as const, text: completedResponse }]
+          : []),
+      ];
+      return next.slice(-8);
+    });
+  }, [mode, responseTokens, transcript]);
 
   /** Same gate as interaction panel: list + realtime only after `/service/clients` registration. */
   const sessionDataEnabled = isAuthenticated && !isLoading && isConnected;
@@ -113,28 +151,87 @@ export default function AssistantLayout() {
         {/* z-0 so header (z-20) stacks above this column; fixed tooltips in header are not covered */}
         <main className="relative z-0 flex min-h-0 flex-1 overflow-hidden overscroll-none">
           <div
-            className="flex min-h-0 flex-1 flex-col px-10 pt-6 pb-10"
+            className="relative flex min-h-0 flex-1 flex-col px-10 pt-6 pb-10"
             style={{
               background:
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
             }}
           >
             <NotificationBannerSlot />
-            <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6">
-              <AnimatePresence>
-                {mode !== 'passive' ? (
-                  <CommandBubble
-                    key="command-bubble"
-                    mode={mode as Exclude<CommandMode, 'passive'>}
-                    transcript={transcript}
-                    responseTokens={responseTokens}
-                    activeToolCall={activeToolCall}
-                    onDismiss={dismiss}
-                  />
-                ) : null}
-              </AnimatePresence>
-              <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
+            <div className="relative flex min-h-0 flex-1 items-center justify-center">
+              <div className="relative z-10">
+                <div className="relative">
+                  <div className="pointer-events-none absolute bottom-[calc(100%+1.25rem)] left-1/2 z-20 w-[min(560px,calc(100vw-8rem))] -translate-x-1/2">
+                    <div className="flex w-full flex-col gap-3">
+                      <AnimatePresence initial={false}>
+                        {bubbleHistory.map((bubble) => (
+                          <motion.div
+                            key={bubble.id}
+                            layout
+                            initial={{ opacity: 0, y: 34, scale: 0.96 }}
+                            animate={{ opacity: 0.83, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -18, scale: 0.95 }}
+                            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                            className="pointer-events-none"
+                          >
+                            <CommandBubble
+                              role={bubble.role}
+                              mode="done"
+                              text={bubble.text}
+                              variant="history"
+                            />
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
+                      <AnimatePresence>
+                        {mode !== 'passive' && mode !== 'done' ? (
+                          <motion.div
+                            key="command-live-bubble"
+                            layout
+                            initial={{ opacity: 0, y: 30, scale: 0.97 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: -18, scale: 0.96 }}
+                            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                            className="pointer-events-none"
+                          >
+                            <div className="flex flex-col gap-3">
+                              {(transcript || mode === 'capturing') && (
+                                <CommandBubble
+                                  role="user"
+                                  mode={mode as Exclude<CommandMode, 'passive'>}
+                                  text={transcript}
+                                  variant="live"
+                                />
+                              )}
+                              {(responseTokens.length > 0 || mode !== 'capturing') && (
+                                <CommandBubble
+                                  role="assistant"
+                                  mode={mode as Exclude<CommandMode, 'passive'>}
+                                  text={responseTokens.join('')}
+                                  activeToolCall={activeToolCall}
+                                  variant="live"
+                                />
+                              )}
+                            </div>
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+                  <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
+                </div>
+              </div>
             </div>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="pointer-events-none absolute inset-x-0 bottom-20 z-10 flex items-center justify-center gap-2 text-sm text-zinc-500 font-secondary"
+            >
+              <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
+                Space
+              </kbd>
+              <span>to toggle</span>
+            </motion.div>
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col border-l border-white/[0.07] bg-zinc-950/40 backdrop-blur-sm">

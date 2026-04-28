@@ -3,8 +3,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { serviceApi } from '@dadei/ui/lib/api/service';
-import { getStoredClientName, setStoredClientName } from '@dadei/ui/lib/clientNameStorage';
 import { startRealtimeClient, stopRealtimeClient, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
+import { getRealtimeSessionId } from '@dadei/ui/lib/realtimeClient';
 import { clearAssistantSessionCaches } from '@dadei/ui/lib/queryHooks';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -17,25 +17,16 @@ interface ServiceContextType {
   clientName: string;
   toggleService: () => Promise<void>;
   isTogglingService: boolean;
+  isAssistantMode: boolean;
+  isAssistantOwner: boolean;
+  assistantOwnerSessionId: string | null;
+  assistantModeExpiresAt: string | null;
+  assistantModeRemainingMs: number;
 }
 
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
 const ENABLE_TIMEOUT_MS = 5000;
-
-function readInitialClientId(): string {
-  if (typeof window === 'undefined' || window.electronAPI) {
-    return '';
-  }
-  return getStoredClientName() || '';
-}
-
-function generateClientId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return `client-${crypto.randomUUID().slice(0, 8)}`;
-  }
-  return `client-${Math.random().toString(36).slice(2, 10)}`;
-}
 
 export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading, getAccessToken } = useAuth();
@@ -46,50 +37,22 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const [isServiceEnabled, setIsServiceEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [clientName, setClientName] = useState(readInitialClientId);
-  /** False until persisted identity has been applied (Electron IPC); web resolves on microtask. */
-  const [isClientIdentityReady, setIsClientIdentityReady] = useState(false);
+  const [clientName, setClientName] = useState('');
   const [isTogglingService, setIsTogglingService] = useState(false);
   const [registrationConflict, setRegistrationConflict] = useState(false);
+  const [isAssistantMode, setIsAssistantMode] = useState(false);
+  const [assistantOwnerSessionId, setAssistantOwnerSessionId] = useState<string | null>(null);
+  const [assistantModeExpiresAt, setAssistantModeExpiresAt] = useState<string | null>(null);
 
   const enableTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const clientNameRef = useRef(clientName);
-  clientNameRef.current = clientName;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    if (window.electronAPI) {
-      void window.electronAPI
-        .getClientName()
-        .then((result) => {
-          if (cancelled) return;
-          if (result.success && result.clientName) {
-            setClientName(result.clientName);
-          }
-        })
-        .catch(() => {
-          /* keep empty — server will assign */
-        })
-        .finally(() => {
-          if (!cancelled) setIsClientIdentityReady(true);
-        });
-    } else {
-      queueMicrotask(() => {
-        if (!cancelled) setIsClientIdentityReady(true);
-      });
-    }
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   useEffect(() => {
     if (!isAuthenticated) {
       stopRealtimeClient();
       setIsConnected(false);
       setRegistrationConflict(false);
+      setIsAssistantMode(false);
+      setAssistantOwnerSessionId(null);
+      setAssistantModeExpiresAt(null);
       clearAssistantSessionCaches(queryClient);
     }
   }, [isAuthenticated, queryClient]);
@@ -104,25 +67,13 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     const connectRealtime = async () => {
-      if (!isClientIdentityReady) return;
-      const persisted = clientNameRef.current.trim();
-      const effectiveClientId = persisted || generateClientId();
-
       try {
         if (cancelled) {
           return;
         }
         setRegistrationConflict(false);
-        if (window.electronAPI) {
-          await window.electronAPI.storeClientName(effectiveClientId);
-        } else {
-          setStoredClientName(effectiveClientId);
-        }
-        setClientName(effectiveClientId);
-
         startRealtimeClient({
           getAccessToken: () => getAccessTokenRef.current(),
-          clientId: effectiveClientId,
         });
       } catch (error: unknown) {
         console.error('Failed to start realtime client:', error);
@@ -141,7 +92,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, isAuthLoading, isClientIdentityReady, showToast]);
+  }, [isAuthenticated, isAuthLoading, showToast]);
 
   useEffect(() => {
     const handleServiceStatusChanged = (status: { enabled: boolean }) => {
@@ -155,6 +106,15 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       setIsServiceEnabled(status.enabled);
       setIsTogglingService(false);
     };
+    const handleAssistantModeChanged = (payload: {
+      active: boolean;
+      ownerSessionId: string | null;
+      expiresAt: string | null;
+    }) => {
+      setIsAssistantMode(payload.active);
+      setAssistantOwnerSessionId(payload.ownerSessionId);
+      setAssistantModeExpiresAt(payload.expiresAt);
+    };
 
     const offWs = subscribeRealtimeMessages(msg => {
       if (msg.event === 'realtime_status') {
@@ -167,19 +127,23 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         const serverClientId = typeof msg.client_id === 'string' ? msg.client_id : null;
         if (serverClientId) {
           setClientName(serverClientId);
-          if (window.electronAPI) {
-            void window.electronAPI.storeClientName(serverClientId);
-          } else {
-            setStoredClientName(serverClientId);
-          }
         }
         setIsConnected(true);
         setRegistrationConflict(false);
         return;
       }
-      if (msg.event !== 'service_status') return;
-      if (typeof msg.enabled !== 'boolean') return;
-      handleServiceStatusChanged({ enabled: msg.enabled });
+      if (msg.event === 'service_status') {
+        if (typeof msg.enabled !== 'boolean') return;
+        handleServiceStatusChanged({ enabled: msg.enabled });
+        return;
+      }
+      if (msg.event === 'assistant_mode') {
+        const active = typeof msg.active === 'boolean' ? msg.active : false;
+        const ownerSessionId =
+          typeof msg.owner_session_id === 'string' ? msg.owner_session_id : null;
+        const expiresAt = typeof msg.expires_at === 'string' ? msg.expires_at : null;
+        handleAssistantModeChanged({ active, ownerSessionId, expiresAt });
+      }
     });
 
     let offElectron: (() => void) | undefined;
@@ -223,6 +187,16 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isServiceEnabled, showToast, registrationConflict]);
 
+  const realtimeSessionId = getRealtimeSessionId();
+  const isAssistantOwner =
+    isAssistantMode && !!realtimeSessionId && assistantOwnerSessionId === realtimeSessionId;
+  const assistantModeRemainingMs = (() => {
+    if (!assistantModeExpiresAt) return 0;
+    const expiresAtMs = Date.parse(assistantModeExpiresAt);
+    if (!Number.isFinite(expiresAtMs)) return 0;
+    return Math.max(0, expiresAtMs - Date.now());
+  })();
+
   return (
     <ServiceContext.Provider
       value={{
@@ -232,6 +206,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         clientName,
         toggleService,
         isTogglingService,
+        isAssistantMode,
+        isAssistantOwner,
+        assistantOwnerSessionId,
+        assistantModeExpiresAt,
+        assistantModeRemainingMs,
       }}
     >
       {children}

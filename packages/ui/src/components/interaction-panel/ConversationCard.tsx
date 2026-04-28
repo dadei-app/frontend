@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import type { ConversationGroupView } from './types';
 import { accordionEase } from './constants';
 import { formatLocalDate, getConversationTitle } from './conversationUtils';
-import SplitDeleteToolbar from './SplitDeleteToolbar';
+import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import InteractionCard from './InteractionCard';
 
 function ConversationExpandedSummary({ group }: { group: ConversationGroupView }) {
@@ -149,7 +149,6 @@ export default function ConversationCard({
 
         {conversationIdForActions ? (
           <SplitDeleteToolbar
-            group="conversation"
             armed={armedConversationDeleteId === conversationIdForActions}
             onArm={() => {
               setArmedInteractionDeleteId(null);
@@ -161,6 +160,7 @@ export default function ConversationCard({
             }}
             idleTitle="Delete conversation"
             idleAriaLabel="Delete conversation"
+            idleVisibleClassName="group-hover/conv:opacity-100"
           />
         ) : null}
       </div>

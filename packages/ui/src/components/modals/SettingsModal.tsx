@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import { Brain, ListTodo, LogOut, Trash2, X } from 'lucide-react';
@@ -6,8 +6,15 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { useAuthMeQuery, useMemoriesQuery, useActionsQuery } from '@dadei/ui/lib/queryHooks';
+import {
+  useAuthMeQuery,
+  useMemoriesQuery,
+  useActionsQuery,
+  useDeleteActionMutation,
+  useDeleteMemoryMutation,
+} from '@dadei/ui/lib/queryHooks';
 import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
+import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 
 type AssistantSettingsModalProps = {
   open: boolean;
@@ -46,9 +53,13 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const authMeQuery = useAuthMeQuery(open);
   const memoriesQuery = useMemoriesQuery(isConnected);
   const actionsQuery = useActionsQuery(isConnected);
+  const deleteMemoryMutation = useDeleteMemoryMutation();
+  const deleteActionMutation = useDeleteActionMutation();
   const [deletePhrase, setDeletePhrase] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
+  const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
+  const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
 
   const profile = authMeQuery.data ?? user;
   const email = profile?.email ?? '—';
@@ -88,6 +99,52 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const memoryRows = memoriesQuery.data ?? [];
   const actionRows = actionsQuery.data ?? [];
+
+  const handleDeleteMemory = async (memoryId: string) => {
+    try {
+      await deleteMemoryMutation.mutateAsync(memoryId);
+      showToast('Memory deleted', 'success');
+    } catch (error) {
+      console.error('Failed to delete memory:', error);
+      showToast('Failed to delete memory', 'error');
+    } finally {
+      setArmedMemoryDeleteId(null);
+    }
+  };
+
+  const handleDeleteAction = async (actionId: string) => {
+    try {
+      await deleteActionMutation.mutateAsync(actionId);
+      showToast('Action deleted', 'success');
+    } catch (error) {
+      console.error('Failed to delete action:', error);
+      showToast('Failed to delete action', 'error');
+    } finally {
+      setArmedActionDeleteId(null);
+    }
+  };
+
+  useEffect(() => {
+    if (!armedMemoryDeleteId && !armedActionDeleteId) return;
+    const onDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.closest('[data-split-delete]')) return;
+      setArmedMemoryDeleteId(null);
+      setArmedActionDeleteId(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setArmedMemoryDeleteId(null);
+        setArmedActionDeleteId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [armedMemoryDeleteId, armedActionDeleteId]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -180,12 +237,31 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                       {memoryRows.map((m: EpisodicMemory) => (
                         <li
                           key={m.id}
-                          className="rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
+                          className="group/memory rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
                         >
-                          <p className="text-sm leading-snug text-zinc-100">{m.canonical_text}</p>
-                          <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                            {m.memory_type} · {m.status} · {formatWhen(m.created_at)}
-                          </p>
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm leading-snug text-zinc-100">{m.canonical_text}</p>
+                              <p className="mt-1 text-xs text-zinc-500 font-secondary">
+                                {m.memory_type} · {m.status} · {formatWhen(m.created_at)}
+                              </p>
+                            </div>
+                            <SplitDeleteToolbar
+                              armed={armedMemoryDeleteId === m.id}
+                              disabled={deleteMemoryMutation.isPending}
+                              onArm={() => {
+                                setArmedActionDeleteId(null);
+                                setArmedMemoryDeleteId(m.id);
+                              }}
+                              onDisarm={() => setArmedMemoryDeleteId(null)}
+                              onConfirm={() => {
+                                void handleDeleteMemory(m.id);
+                              }}
+                              idleTitle="Delete memory"
+                              idleAriaLabel="Delete memory"
+                              idleVisibleClassName="group-hover/memory:opacity-100"
+                            />
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -216,19 +292,38 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                       {actionRows.map((a: NetworkAction) => (
                         <li
                           key={a.id}
-                          className="rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
+                          className="group/action rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
                         >
-                          <p className="text-sm font-medium capitalize text-zinc-100">
-                            {a.action_type.replace(/_/g, ' ')} · {a.status}
-                          </p>
-                          {actionSummary(a.details) ? (
-                            <p className="mt-1 text-xs leading-snug text-zinc-400 font-secondary">
-                              {actionSummary(a.details)}
-                            </p>
-                          ) : null}
-                          <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                            Scheduled: {formatWhen(a.scheduled_time)} · {formatWhen(a.created_at)}
-                          </p>
+                          <div className="flex items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium capitalize text-zinc-100">
+                                {a.action_type.replace(/_/g, ' ')} · {a.status}
+                              </p>
+                              {actionSummary(a.details) ? (
+                                <p className="mt-1 text-xs leading-snug text-zinc-400 font-secondary">
+                                  {actionSummary(a.details)}
+                                </p>
+                              ) : null}
+                              <p className="mt-1 text-xs text-zinc-500 font-secondary">
+                                Scheduled: {formatWhen(a.scheduled_time)} · {formatWhen(a.created_at)}
+                              </p>
+                            </div>
+                            <SplitDeleteToolbar
+                              armed={armedActionDeleteId === a.id}
+                              disabled={deleteActionMutation.isPending}
+                              onArm={() => {
+                                setArmedMemoryDeleteId(null);
+                                setArmedActionDeleteId(a.id);
+                              }}
+                              onDisarm={() => setArmedActionDeleteId(null)}
+                              onConfirm={() => {
+                                void handleDeleteAction(a.id);
+                              }}
+                              idleTitle="Delete action"
+                              idleAriaLabel="Delete action"
+                              idleVisibleClassName="group-hover/action:opacity-100"
+                            />
+                          </div>
                         </li>
                       ))}
                     </ul>

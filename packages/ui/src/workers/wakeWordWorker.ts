@@ -51,7 +51,7 @@ async function ensurePipeline() {
   if (!loading) {
     loading = (async () => {
       await purgePoisonedTransformersCache();
-      asr = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny');
+      asr = await pipeline('automatic-speech-recognition', 'Xenova/whisper-base');
     })();
   }
   await loading;
