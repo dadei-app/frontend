@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  normalizeVisibleCommandText,
   normalizeTranscriptForWake,
   stripLeadingWakeDisfluencies,
   transcriptLikelyContainsWakeWord,
@@ -55,5 +56,20 @@ describe('transcriptLikelyContainsWakeWord', () => {
   it('finds assistant or dadei shapes in text', () => {
     expect(transcriptLikelyContainsWakeWord('foo Dadei bar')).toBe(true);
     expect(transcriptLikelyContainsWakeWord('my assistant is here')).toBe(true);
+  });
+});
+
+describe('normalizeVisibleCommandText', () => {
+  it('strips wake words and leading punctuation', () => {
+    expect(normalizeVisibleCommandText('Assistant, set a reminder')).toBe('set a reminder');
+    expect(normalizeVisibleCommandText('Dadei what time is it')).toBe('what time is it');
+  });
+
+  it('handles disfluencies before wake words', () => {
+    expect(normalizeVisibleCommandText('Um, Assistant: call mom')).toBe('call mom');
+  });
+
+  it('keeps non-wake text unchanged', () => {
+    expect(normalizeVisibleCommandText('turn on the lights')).toBe('turn on the lights');
   });
 });

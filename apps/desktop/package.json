@@ -1,6 +1,6 @@
 {
   "name": "dadei-desktop",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "author": {
     "name": "Ankur Desai",
     "email": "ardusa05@gmail.com",
@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@dadei/ui": "*",
-    "@ricky0123/vad-react": "^0.0.36",
     "axios": "^1.13.2",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
@@ -30,7 +29,7 @@
   },
   "devDependencies": {
     "@electron/notarize": "^2.5.0",
-    "@electron/rebuild": "^3.6.0",
+    "@electron/rebuild": "^4.0.4",
     "@tailwindcss/postcss": "^4",
     "@types/keytar": "^4.4.0",
     "@types/node": "^20",

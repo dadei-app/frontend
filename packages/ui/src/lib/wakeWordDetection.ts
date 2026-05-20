@@ -115,3 +115,18 @@ export function transcriptStartsWithWakeCommand(text: string): boolean {
 
   return false;
 }
+
+/**
+ * Produces the exact visible command text after wake-word stripping.
+ * This output should be rendered in UI and sent as payload verbatim.
+ */
+export function normalizeVisibleCommandText(text: string): string {
+  const normalized = normalizeTranscriptForWake(text);
+  if (!normalized) return '';
+
+  let out = normalized;
+  out = out.replace(/^\s*da[- ]?dei[,.]?\s*/i, '');
+  out = out.replace(/^\s*assistant\b[,.:]?\s*/i, '');
+  out = out.replace(/\s+/g, ' ').trim();
+  return out;
+}
