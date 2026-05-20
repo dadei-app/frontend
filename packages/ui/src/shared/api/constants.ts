@@ -51,4 +51,5 @@ export const ENDPOINTS = {
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
   COMMAND: '/actions/voice',
+  COMMAND_TEXT: '/actions/voice/text',
 } as const;

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
+import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { cn } from '@dadei/ui/lib/cn';
 
 interface MicrophoneButtonProps {
@@ -15,8 +16,11 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     registrationConflict,
     isAssistantMode,
   } = useService();
+  const { mode, dismiss } = useCommand();
 
   const micBlocked = isTogglingService || registrationConflict;
+  const isCommandProcessing = mode === 'capturing' || mode === 'streaming';
+  const isAssistantFollowupReady = mode === 'done';
 
   // Spacebar activation
   // Spacebar activation (disabled when panel open)
@@ -26,16 +30,24 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !micBlocked) {
         e.preventDefault();
-        toggleService();
+        if (mode !== 'passive') {
+          dismiss();
+        } else {
+          toggleService();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [micBlocked, toggleService, disableSpaceToggle]);
+  }, [micBlocked, toggleService, disableSpaceToggle, mode, dismiss]);
 
   const handleClick = async () => {
     if (micBlocked) return;
+    if (mode !== 'passive') {
+      dismiss();
+      return;
+    }
     await toggleService();
   };
 
@@ -55,6 +67,8 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           'focus:outline-none focus:ring-4 focus:ring-emerald-500/25',
           micBlocked
             ? 'cursor-not-allowed border-white/15 bg-zinc-700 opacity-60'
+            : isCommandProcessing || isAssistantFollowupReady
+              ? 'cursor-pointer border-sky-100/35 bg-[linear-gradient(132deg,rgba(37,99,235,0.28),rgba(14,165,233,0.25)_45%,rgba(186,230,253,0.22))] shadow-[0_0_32px_rgba(37,99,235,0.35),0_0_68px_rgba(14,165,233,0.22)] ring-1 ring-sky-200/35 backdrop-blur-xl'
             : isAssistantMode
               ? 'cursor-pointer border-emerald-100/35 bg-[linear-gradient(132deg,rgba(20,184,166,0.24),rgba(16,185,129,0.22)_45%,rgba(167,243,208,0.22))] shadow-[0_0_32px_rgba(16,185,129,0.35),0_0_68px_rgba(16,185,129,0.22)] ring-1 ring-emerald-200/35 backdrop-blur-xl'
             : isServiceEnabled
@@ -63,7 +77,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
         )}
       >
         {/* Red Ripple Waves - when service enabled */}
-        {isServiceEnabled && !micBlocked && !isAssistantMode && (
+        {isServiceEnabled && !micBlocked && mode === 'passive' && !isAssistantMode && (
           <>
             {[
               { delay: 0 },
@@ -92,8 +106,38 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           </>
         )}
 
+        {/* Blue Ripple Waves - assistant follow-up window ready */}
+        {isAssistantFollowupReady && !micBlocked && (
+          <>
+            {[
+              { delay: 0 },
+              { delay: 0.4 },
+              { delay: 0.8 },
+            ].map(({ delay }) => (
+              <div
+                key={`blue-${delay}`}
+                className="pointer-events-none absolute inset-0 flex items-center justify-center"
+              >
+                <motion.div
+                  className="h-full w-full rounded-full border-2 border-[rgba(56,189,248,0.6)] bg-transparent"
+                  animate={{
+                    scale: [1.05, 2],
+                    opacity: [0, 0.6, 0],
+                  }}
+                  transition={{
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: 'easeOut',
+                    delay,
+                  }}
+                />
+              </div>
+            ))}
+          </>
+        )}
+
         {/* Green pulse effect when disabled (inactive) */}
-        {!isServiceEnabled && !micBlocked && !isAssistantMode && (
+        {!isServiceEnabled && !micBlocked && mode === 'passive' && !isAssistantMode && (
           <motion.div
             className="absolute inset-0 rounded-full bg-linear-to-br from-emerald-400 to-emerald-600 opacity-0"
             animate={{
@@ -108,7 +152,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           />
         )}
 
-        {isAssistantMode && !micBlocked && (
+        {isAssistantMode && !micBlocked && mode === 'passive' && (
           <>
             <div
               className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(ellipse_90%_90%_at_50%_0%,rgba(236,253,245,0.5),transparent_50%),radial-gradient(ellipse_80%_85%_at_50%_100%,rgba(16,185,129,0.25),transparent_75%)]"
@@ -135,7 +179,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
         </div>
 
         {/* Spinning ring when toggling */}
-        {isTogglingService && (
+        {(isTogglingService || isCommandProcessing) && (
           <motion.div
             className="absolute inset-0 rounded-full border-4 border-t-white border-r-transparent border-b-transparent border-l-transparent"
             animate={{ rotate: 360 }}

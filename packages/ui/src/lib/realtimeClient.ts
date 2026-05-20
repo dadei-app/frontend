@@ -230,3 +230,14 @@ export function getRealtimeSessionId(): string | null {
 export function getRealtimeClientId(): string | null {
   return activeSessionCapability?.clientId ?? connectOpts?.clientId ?? null;
 }
+
+export function sendRealtimeMessage(payload: Record<string, unknown>): boolean {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+  try {
+    ws.send(JSON.stringify(payload));
+    return true;
+  } catch (e) {
+    console.error('[Realtime] send failed', e);
+    return false;
+  }
+}

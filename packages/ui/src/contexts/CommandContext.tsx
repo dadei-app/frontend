@@ -9,7 +9,11 @@ import {
 } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { streamCommand, type CommandSSEEvent } from '@dadei/ui/lib/api/command';
+import {
+  streamCommand,
+  streamCommandFromText,
+  type CommandSSEEvent,
+} from '@dadei/ui/lib/api/command';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import { getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
 
@@ -21,11 +25,14 @@ interface CommandContextValue {
   responseTokens: string[];
   activeToolCall: string | undefined;
   submitCommandAudio: (wav: ArrayBuffer, options?: { claimAssistantMode?: boolean }) => void;
+  submitCommandText: (text: string, options?: { claimAssistantMode?: boolean }) => void;
+  setInterimTranscript: (text: string) => void;
   dismiss: () => void;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
-const ASSISTANT_WINDOW_MS = 5000;
+const ASSISTANT_WINDOW_MS = 12000;
+const ASSISTANT_HOLD_SECONDS = 12;
 
 const TOOL_LABELS: Record<string, string> = {
   create_calendar_event: 'Creating calendar event',
@@ -170,8 +177,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     [schedulePostDoneCleanup],
   );
 
-  const submitCommandAudio = useCallback(
-    (wav: ArrayBuffer, options?: { claimAssistantMode?: boolean }) => {
+  const runCommandPipeline = useCallback(
+    (
+      request:
+        | { kind: 'audio'; wav: ArrayBuffer }
+        | { kind: 'text'; text: string },
+      options?: { claimAssistantMode?: boolean },
+    ) => {
       abortActiveStream();
       clearAssistantReleaseTimer();
       clearDismissTimer();
@@ -197,7 +209,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         if (options?.claimAssistantMode) {
           try {
-            await serviceApi.claimAssistantMode(sessionToken, 5);
+            await serviceApi.claimAssistantMode(sessionToken, ASSISTANT_HOLD_SECONDS);
             localAssistantOwnershipRef.current = true;
           } catch (e) {
             const message = e instanceof Error ? e.message : 'Another device owns assistant mode';
@@ -220,9 +232,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         try {
           const abortController = new AbortController();
           streamAbortRef.current = abortController;
-          for await (const ev of streamCommand(wav, accessToken, {
-            signal: abortController.signal,
-          })) {
+          const stream =
+            request.kind === 'audio'
+              ? streamCommand(request.wav, accessToken, {
+                  signal: abortController.signal,
+                })
+              : streamCommandFromText(request.text, accessToken, {
+                  signal: abortController.signal,
+                });
+          for await (const ev of stream) {
             handleEvent(ev);
           }
         } catch (e) {
@@ -248,6 +266,26 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       schedulePostDoneCleanup,
     ],
   );
+
+  const submitCommandAudio = useCallback(
+    (wav: ArrayBuffer, options?: { claimAssistantMode?: boolean }) => {
+      runCommandPipeline({ kind: 'audio', wav }, options);
+    },
+    [runCommandPipeline],
+  );
+
+  const submitCommandText = useCallback(
+    (text: string, options?: { claimAssistantMode?: boolean }) => {
+      runCommandPipeline({ kind: 'text', text }, options);
+    },
+    [runCommandPipeline],
+  );
+
+  const setInterimTranscript = useCallback((text: string) => {
+    if (!text.trim()) return;
+    setMode((prev) => (prev === 'passive' ? 'capturing' : prev));
+    setTranscript(text);
+  }, []);
 
   useEffect(() => {
     if (mode === 'passive') return;
@@ -280,6 +318,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     responseTokens,
     activeToolCall,
     submitCommandAudio,
+    submitCommandText,
+    setInterimTranscript,
     dismiss,
   };
 
