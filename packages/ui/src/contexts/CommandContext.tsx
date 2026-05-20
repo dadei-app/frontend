@@ -120,14 +120,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (localAssistantOwnershipRef.current || (isAssistantMode && isAssistantOwner)) {
       assistantReleaseTimerRef.current = setTimeout(() => {
         void (async () => {
-          const released = await releaseAssistantMode();
-          if (!released) {
-            try {
-              await serviceApi.enable();
-            } catch (error) {
-              console.warn('[Command] Failed to recover service after release failure', error);
-            }
-          }
+          await releaseAssistantMode();
           dismiss();
         })();
       }, ASSISTANT_WINDOW_MS);

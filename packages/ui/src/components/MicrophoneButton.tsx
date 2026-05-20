@@ -30,7 +30,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !micBlocked) {
         e.preventDefault();
-        if (mode !== 'passive') {
+        if (mode !== 'passive' || isAssistantMode) {
           dismiss();
         } else {
           toggleService();
@@ -40,11 +40,11 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [micBlocked, toggleService, disableSpaceToggle, mode, dismiss]);
+  }, [micBlocked, toggleService, disableSpaceToggle, mode, dismiss, isAssistantMode]);
 
   const handleClick = async () => {
     if (micBlocked) return;
-    if (mode !== 'passive') {
+    if (mode !== 'passive' || isAssistantMode) {
       dismiss();
       return;
     }
