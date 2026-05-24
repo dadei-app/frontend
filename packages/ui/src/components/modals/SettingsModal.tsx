@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import { Brain, ListTodo, LogOut, Trash2, X } from 'lucide-react';
+import { Bell, Brain, CalendarDays, CheckSquare, LogOut, Mail, Trash2, X } from 'lucide-react';
+import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
+import { triggerGoogleOAuth } from '@dadei/ui/lib/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import {
   useAuthMeQuery,
   useMemoriesQuery,
-  useActionsQuery,
-  useDeleteActionMutation,
   useDeleteMemoryMutation,
 } from '@dadei/ui/lib/queryHooks';
-import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
+import type { EpisodicMemory } from '@dadei/ui/types/models.types';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 
 type AssistantSettingsModalProps = {
@@ -33,42 +33,61 @@ function formatWhen(iso: string | null | undefined): string {
   }
 }
 
-function actionSummary(details: string | null): string | undefined {
-  if (!details?.trim()) return undefined;
-  try {
-    const o = JSON.parse(details) as { canonical_text?: string };
-    if (typeof o.canonical_text === 'string' && o.canonical_text.trim()) {
-      return o.canonical_text.trim();
-    }
-  } catch {
-    /* plain text */
-  }
-  return details.length > 120 ? `${details.slice(0, 117)}…` : details;
-}
+type SidebarView = 'memories' | 'events' | 'tasks' | 'reminders' | 'mail';
+
+const viewMeta: Record<SidebarView, { label: string; Icon: typeof CalendarDays }> = {
+  memories: { label: 'Memories', Icon: Brain },
+  events: { label: 'Events', Icon: CalendarDays },
+  tasks: { label: 'Tasks', Icon: CheckSquare },
+  reminders: { label: 'Reminders', Icon: Bell },
+  mail: { label: 'Mail', Icon: Mail },
+};
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
-  const { user, refreshUser, logout } = useAuth();
+  const { user, refreshUser, logout, saveTokens } = useAuth();
   const { isConnected } = useService();
   const { showToast } = useNotifications();
   const authMeQuery = useAuthMeQuery(open);
   const memoriesQuery = useMemoriesQuery(isConnected);
-  const actionsQuery = useActionsQuery(isConnected);
   const deleteMemoryMutation = useDeleteMemoryMutation();
-  const deleteActionMutation = useDeleteActionMutation();
   const [deletePhrase, setDeletePhrase] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
+  const [googleConnectError, setGoogleConnectError] = useState('');
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
-  const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<SidebarView>('memories');
 
   const profile = authMeQuery.data ?? user;
   const email = profile?.email ?? '—';
   const canDelete =
     !!profile && deletePhrase.trim().toLowerCase() === profile.email.trim().toLowerCase();
+  const googleConnected = Boolean(profile?.google_connected);
+  const activeViewMeta = viewMeta[activeView];
 
   const handleSignOut = async () => {
     onOpenChange(false);
     await logout();
+  };
+
+  const handleGoogleConnect = async () => {
+    setGoogleConnectError('');
+    const isElectron = Boolean(window.electronAPI);
+    if (isElectron) {
+      setConnectingGoogle(true);
+    }
+    try {
+      await triggerGoogleOAuth({
+        saveTokens,
+        onSuccess: () => void refreshUser(),
+        onError: (msg) => setGoogleConnectError(msg),
+        webNextPath: '/auth/callback',
+      });
+    } finally {
+      if (isElectron) {
+        setConnectingGoogle(false);
+      }
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -98,7 +117,6 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     typeof e === 'object' && e !== null && 'message' in e ? String((e as Error).message) : 'Request failed';
 
   const memoryRows = memoriesQuery.data ?? [];
-  const actionRows = actionsQuery.data ?? [];
 
   const handleDeleteMemory = async (memoryId: string) => {
     try {
@@ -112,30 +130,16 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     }
   };
 
-  const handleDeleteAction = async (actionId: string) => {
-    try {
-      await deleteActionMutation.mutateAsync(actionId);
-      showToast('Action deleted', 'success');
-    } catch (error) {
-      console.error('Failed to delete action:', error);
-      showToast('Failed to delete action', 'error');
-    } finally {
-      setArmedActionDeleteId(null);
-    }
-  };
-
   useEffect(() => {
-    if (!armedMemoryDeleteId && !armedActionDeleteId) return;
+    if (!armedMemoryDeleteId) return;
     const onDown = (e: MouseEvent) => {
       const el = e.target as HTMLElement;
       if (el.closest('[data-split-delete]')) return;
       setArmedMemoryDeleteId(null);
-      setArmedActionDeleteId(null);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setArmedMemoryDeleteId(null);
-        setArmedActionDeleteId(null);
       }
     };
     document.addEventListener('mousedown', onDown);
@@ -144,7 +148,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('keydown', onKey);
     };
-  }, [armedMemoryDeleteId, armedActionDeleteId]);
+  }, [armedMemoryDeleteId]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -156,7 +160,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               <Dialog.Title className="text-lg font-semibold tracking-tight text-zinc-50">
                 Settings
               </Dialog.Title>
-              <p className="mt-1 text-sm text-zinc-500 font-secondary">Account, Dadei&apos;s memory, and actions</p>
+              <p className="mt-1 text-sm text-zinc-500 font-secondary">Memories and Google Workspace</p>
             </div>
             <Dialog.Close asChild>
               <button
@@ -170,26 +174,48 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
           </div>
 
           <div className="grid min-h-0 flex-1 gap-0 lg:grid-cols-[minmax(0,20rem)_1fr] lg:divide-x lg:divide-white/10">
-            <div className="flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-none p-5 sm:p-6">
-              <section className="rounded-xl border border-white/10 bg-zinc-950/50 p-4">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
-                  Account
-                </h3>
-                <p className="mt-2 text-sm text-zinc-400 font-secondary">Email</p>
-                <p className="mt-0.5 font-medium text-zinc-100">{email}</p>
-                {profile?.has_password === false ? (
-                  <p className="mt-2 text-xs text-zinc-500 font-secondary">
-                    Signed in with Google — no password on file.
-                  </p>
-                ) : null}
+            <aside className="flex min-h-0 flex-col overflow-y-auto overscroll-none p-5 sm:p-6">
+              <nav className="space-y-1">
                 <button
                   type="button"
-                  onClick={() => void refreshUser()}
-                  className="mt-3 text-xs font-medium text-emerald-400/90 hover:text-emerald-300 font-secondary"
+                  onClick={() => setActiveView('memories')}
+                  className={`inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-secondary transition-colors ${
+                    activeView === 'memories'
+                      ? 'bg-emerald-500/15 text-emerald-300'
+                      : 'text-zinc-300 hover:bg-white/5 hover:text-zinc-100'
+                  }`}
                 >
-                  Refresh profile
+                  <Brain className="h-4 w-4" />
+                  Memories
                 </button>
-              </section>
+              </nav>
+
+              <div className="mt-5 border-t border-white/10 pt-4">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
+                  Google Workspace
+                </p>
+                <nav className="space-y-1">
+                  {(['events', 'tasks', 'reminders', 'mail'] as SidebarView[]).map((view) => {
+                    const { label, Icon } = viewMeta[view];
+                    const isActive = activeView === view;
+                    return (
+                      <button
+                        key={view}
+                        type="button"
+                        onClick={() => setActiveView(view)}
+                        className={`inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-secondary transition-colors ${
+                          isActive
+                            ? 'bg-emerald-500/15 text-emerald-300'
+                            : 'text-zinc-300 hover:bg-white/5 hover:text-zinc-100'
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {label}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
 
               <div className="mt-auto flex flex-col gap-3 border-t border-white/10 pt-5">
                 <button
@@ -209,16 +235,17 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   Delete account…
                 </button>
               </div>
-            </div>
+            </aside>
 
-            <div className="grid min-h-0 grid-rows-2 gap-0 divide-y divide-white/10 lg:grid-rows-2">
-              <section className="flex min-h-0 flex-col p-5 sm:p-6">
-                <div className="mb-3 flex items-center gap-2">
-                  <Brain className="h-4 w-4 text-emerald-400/90" aria-hidden />
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
-                    Dadei&apos;s memory
-                  </h3>
-                </div>
+            <section className="flex min-h-0 flex-col p-5 sm:p-6">
+              <div className="mb-3 flex items-center gap-2">
+                <activeViewMeta.Icon className="h-4 w-4 text-emerald-400/90" aria-hidden />
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
+                  {activeViewMeta.label}
+                </h3>
+              </div>
+
+              {activeView === 'memories' ? (
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
                   {!isConnected ? (
                     <p className="text-sm text-zinc-500 font-secondary">
@@ -250,7 +277,6 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                               armed={armedMemoryDeleteId === m.id}
                               disabled={deleteMemoryMutation.isPending}
                               onArm={() => {
-                                setArmedActionDeleteId(null);
                                 setArmedMemoryDeleteId(m.id);
                               }}
                               onDisarm={() => setArmedMemoryDeleteId(null)}
@@ -267,70 +293,39 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                     </ul>
                   )}
                 </div>
-              </section>
-
-              <section className="flex min-h-0 flex-col p-5 sm:p-6">
-                <div className="mb-3 flex items-center gap-2">
-                  <ListTodo className="h-4 w-4 text-cyan-400/90" aria-hidden />
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
-                    Actions
-                  </h3>
+              ) : (
+                <div className="relative min-h-0 flex-1">
+                  <div className={`space-y-2 rounded-xl border border-white/10 bg-zinc-950/40 p-4 ${googleConnected ? '' : 'opacity-35'}`}>
+                    <div className="h-2 w-5/6 rounded-full bg-zinc-500/50" />
+                    <div className="h-2 w-3/4 rounded-full bg-zinc-500/40" />
+                    <div className="h-2 w-2/3 rounded-full bg-zinc-500/40" />
+                    {googleConnected ? (
+                      <p className="pt-2 text-sm text-zinc-500 font-secondary">
+                        {activeViewMeta.label} integration coming soon.
+                      </p>
+                    ) : null}
+                  </div>
+                  {!googleConnected ? (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-zinc-900/60 backdrop-blur-sm">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white">
+                        <FcGoogle className="h-6 w-6" aria-hidden />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleGoogleConnect()}
+                        disabled={connectingGoogle}
+                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-zinc-800/85 px-4 py-2 text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {connectingGoogle ? 'Connecting…' : 'Connect Google'}
+                      </button>
+                      {googleConnectError ? (
+                        <p className="text-xs text-rose-300/90 font-secondary">{googleConnectError}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
-                  {!isConnected ? (
-                    <p className="text-sm text-zinc-500 font-secondary">
-                      Actions load after this device registers as a client (same as the interaction feed).
-                    </p>
-                  ) : actionsQuery.isLoading ? (
-                    <p className="text-sm text-zinc-500 font-secondary">Loading actions…</p>
-                  ) : actionsQuery.isError ? (
-                    <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(actionsQuery.error)}</p>
-                  ) : actionRows.length === 0 ? (
-                    <p className="text-sm text-zinc-500 font-secondary">No actions yet.</p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {actionRows.map((a: NetworkAction) => (
-                        <li
-                          key={a.id}
-                          className="group/action rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium capitalize text-zinc-100">
-                                {a.action_type.replace(/_/g, ' ')} · {a.status}
-                              </p>
-                              {actionSummary(a.details) ? (
-                                <p className="mt-1 text-xs leading-snug text-zinc-400 font-secondary">
-                                  {actionSummary(a.details)}
-                                </p>
-                              ) : null}
-                              <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                                Scheduled: {formatWhen(a.scheduled_time)} · {formatWhen(a.created_at)}
-                              </p>
-                            </div>
-                            <SplitDeleteToolbar
-                              armed={armedActionDeleteId === a.id}
-                              disabled={deleteActionMutation.isPending}
-                              onArm={() => {
-                                setArmedMemoryDeleteId(null);
-                                setArmedActionDeleteId(a.id);
-                              }}
-                              onDisarm={() => setArmedActionDeleteId(null)}
-                              onConfirm={() => {
-                                void handleDeleteAction(a.id);
-                              }}
-                              idleTitle="Delete action"
-                              idleAriaLabel="Delete action"
-                              idleVisibleClassName="group-hover/action:opacity-100"
-                            />
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </section>
-            </div>
+              )}
+            </section>
           </div>
         </Dialog.Content>
       </Dialog.Portal>

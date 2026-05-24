@@ -3,11 +3,10 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { authApi } from '@dadei/ui/lib/api/auth';
-import { buildWebGoogleOAuthLoginUrl } from '@dadei/ui/lib/webOAuthUrls';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
 import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
 import { isElectronDesktop } from '@dadei/ui/lib/electronWindowChrome';
+import { triggerGoogleOAuth } from '@dadei/ui/lib/googleAuth';
 
 const veilEase = [0.22, 1, 0.36, 1] as const;
 
@@ -84,31 +83,22 @@ export default function LoginOverlay({
 
   const handleGoogleLogin = async () => {
     setError('');
-    if (window.electronAPI) {
+    const isElectron = Boolean(window.electronAPI);
+    if (isElectron) {
       setLoading(true);
-      try {
-        const result = await window.electronAPI.loginWithGoogle();
-        if (!result.success || !result.data) {
-          throw new Error(result.error || 'Google OAuth failed');
-        }
-        const { code, state } = result.data;
-        const response = await authApi.googleCallback(code, state);
-        await window.electronAPI.storeTokens(response.access_token, response.refresh_token);
-        await saveTokens({
-          accessToken: response.access_token,
-          refreshToken: response.refresh_token,
-        });
-        onAuthenticated?.();
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Google login failed');
-      } finally {
+    }
+    try {
+      await triggerGoogleOAuth({
+        saveTokens,
+        onSuccess: onAuthenticated,
+        onError: (msg) => setError(msg),
+        webNextPath: webOAuthNextPath,
+      });
+    } finally {
+      if (isElectron) {
         setLoading(false);
       }
-      return;
     }
-
-    const spaOrigin = typeof window !== 'undefined' ? window.location.origin : undefined;
-    window.location.href = buildWebGoogleOAuthLoginUrl(webOAuthNextPath, spaOrigin);
   };
 
   return (

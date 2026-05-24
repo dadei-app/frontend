@@ -34,4 +34,5 @@ export interface UserMe {
     id: string;
     email: string;
     has_password: boolean;
+    google_connected: boolean;
 }
