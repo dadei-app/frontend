@@ -12,8 +12,10 @@ import {
   useAuthMeQuery,
   useMemoriesQuery,
   useDeleteMemoryMutation,
+  useActionsQuery,
+  useDeleteActionMutation,
 } from '@dadei/ui/lib/queryHooks';
-import type { EpisodicMemory } from '@dadei/ui/types/models.types';
+import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 
 type AssistantSettingsModalProps = {
@@ -43,19 +45,45 @@ const viewMeta: Record<SidebarView, { label: string; Icon: typeof CalendarDays }
   mail: { label: 'Mail', Icon: Mail },
 };
 
+const ACTION_TYPES_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string[]> = {
+  events: ['calendar'],
+  tasks: ['todo'],
+  reminders: ['reminder'],
+  mail: ['email', 'message'],
+};
+
+function actionDisplayText(action: NetworkAction): string {
+  const details = action.details?.trim();
+  if (details) {
+    try {
+      const parsed = JSON.parse(details) as { canonical_text?: unknown };
+      if (typeof parsed.canonical_text === 'string' && parsed.canonical_text.trim()) {
+        return parsed.canonical_text.trim();
+      }
+    } catch {
+      /* not JSON */
+    }
+    return details;
+  }
+  return action.action_type;
+}
+
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
   const { user, refreshUser, logout, saveTokens } = useAuth();
   const { isConnected } = useService();
   const { showToast } = useNotifications();
   const authMeQuery = useAuthMeQuery(open);
   const memoriesQuery = useMemoriesQuery(isConnected);
+  const actionsQuery = useActionsQuery(open && isConnected);
   const deleteMemoryMutation = useDeleteMemoryMutation();
+  const deleteActionMutation = useDeleteActionMutation();
   const [deletePhrase, setDeletePhrase] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [googleConnectError, setGoogleConnectError] = useState('');
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
+  const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<SidebarView>('memories');
 
   const profile = authMeQuery.data ?? user;
@@ -117,6 +145,12 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     typeof e === 'object' && e !== null && 'message' in e ? String((e as Error).message) : 'Request failed';
 
   const memoryRows = memoriesQuery.data ?? [];
+  const workspaceActionRows =
+    activeView === 'memories'
+      ? []
+      : (actionsQuery.data ?? []).filter((action) =>
+          ACTION_TYPES_BY_VIEW[activeView].includes(action.action_type)
+        );
 
   const handleDeleteMemory = async (memoryId: string) => {
     try {
@@ -127,6 +161,18 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       showToast('Failed to delete memory', 'error');
     } finally {
       setArmedMemoryDeleteId(null);
+    }
+  };
+
+  const handleDeleteAction = async (actionId: string) => {
+    try {
+      await deleteActionMutation.mutateAsync(actionId);
+      showToast('Action deleted', 'success');
+    } catch (error) {
+      console.error('Failed to delete action:', error);
+      showToast('Failed to delete action', 'error');
+    } finally {
+      setArmedActionDeleteId(null);
     }
   };
 
@@ -149,6 +195,26 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       window.removeEventListener('keydown', onKey);
     };
   }, [armedMemoryDeleteId]);
+
+  useEffect(() => {
+    if (!armedActionDeleteId) return;
+    const onDown = (e: MouseEvent) => {
+      const el = e.target as HTMLElement;
+      if (el.closest('[data-split-delete]')) return;
+      setArmedActionDeleteId(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setArmedActionDeleteId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [armedActionDeleteId]);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -295,15 +361,59 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 </div>
               ) : (
                 <div className="relative min-h-0 flex-1">
-                  <div className={`space-y-2 rounded-xl border border-white/10 bg-zinc-950/40 p-4 ${googleConnected ? '' : 'opacity-35'}`}>
-                    <div className="h-2 w-5/6 rounded-full bg-zinc-500/50" />
-                    <div className="h-2 w-3/4 rounded-full bg-zinc-500/40" />
-                    <div className="h-2 w-2/3 rounded-full bg-zinc-500/40" />
-                    {googleConnected ? (
-                      <p className="pt-2 text-sm text-zinc-500 font-secondary">
-                        {activeViewMeta.label} integration coming soon.
+                  <div className={`min-h-0 flex-1 overflow-y-auto overscroll-none pr-1 ${googleConnected ? '' : 'opacity-35'}`}>
+                    {!isConnected ? (
+                      <p className="text-sm text-zinc-500 font-secondary">
+                        Actions load after this device registers as a client.
                       </p>
-                    ) : null}
+                    ) : actionsQuery.isLoading ? (
+                      <p className="text-sm text-zinc-500 font-secondary">Loading actions…</p>
+                    ) : actionsQuery.isError ? (
+                      <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(actionsQuery.error)}</p>
+                    ) : workspaceActionRows.length === 0 ? (
+                      <p className="text-sm text-zinc-500 font-secondary">
+                        No {activeViewMeta.label.toLowerCase()} yet. They appear when conversations surface
+                        actionable {activeViewMeta.label.toLowerCase()}.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {workspaceActionRows.map((action: NetworkAction) => (
+                          <li
+                            key={action.id}
+                            className="group/action rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
+                          >
+                            <div className="flex items-start gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-sm leading-snug text-zinc-100">
+                                  {actionDisplayText(action)}
+                                </p>
+                                <p className="mt-1 text-xs text-zinc-500 font-secondary">
+                                  {action.status}
+                                  {action.scheduled_time
+                                    ? ` · ${formatWhen(action.scheduled_time)}`
+                                    : ''}
+                                  {` · ${formatWhen(action.created_at)}`}
+                                </p>
+                              </div>
+                              <SplitDeleteToolbar
+                                armed={armedActionDeleteId === action.id}
+                                disabled={deleteActionMutation.isPending}
+                                onArm={() => {
+                                  setArmedActionDeleteId(action.id);
+                                }}
+                                onDisarm={() => setArmedActionDeleteId(null)}
+                                onConfirm={() => {
+                                  void handleDeleteAction(action.id);
+                                }}
+                                idleTitle="Delete action"
+                                idleAriaLabel="Delete action"
+                                idleVisibleClassName="group-hover/action:opacity-100"
+                              />
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   {!googleConnected ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-zinc-900/60 backdrop-blur-sm">

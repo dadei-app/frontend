@@ -6,8 +6,8 @@ export const queryKeys = {
   memoriesList: (limit: number) => [...queryKeys.memories, 'list', limit] as const,
   /** Prefix for action list queries. */
   actions: ['actions'] as const,
-  actionsList: (limit: number, offset: number) =>
-    [...queryKeys.actions, 'list', limit, offset] as const,
+  actionsList: (limit: number, offset: number, actionType?: string) =>
+    [...queryKeys.actions, 'list', limit, offset, actionType ?? 'all'] as const,
   interactions: ['interactions'] as const,
   /** Prefix for `conversationById`; use with `removeQueries` / `invalidateQueries` to affect all cached conversations. */
   conversations: ['conversations'] as const,

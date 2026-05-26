@@ -43,7 +43,9 @@ export default function InteractionCard({
               {formatLocalTime(interaction.timestamp)}
             </span>
           </div>
-          <p className="text-sm leading-relaxed text-zinc-200 wrap-anywhere">{interaction.text}</p>
+          <p className="text-sm leading-relaxed text-zinc-200 wrap-anywhere font-secondary">
+            {interaction.text}
+          </p>
         </div>
 
         <SplitDeleteToolbar
