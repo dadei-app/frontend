@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import { Bell, Brain, CalendarDays, CheckSquare, LogOut, Mail, Trash2, X } from 'lucide-react';
@@ -17,6 +18,7 @@ import {
 } from '@dadei/ui/lib/queryHooks';
 import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
+import { veilEase } from '@dadei/ui/lib/motion';
 
 type AssistantSettingsModalProps = {
   open: boolean;
@@ -85,6 +87,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
   const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<SidebarView>('memories');
+  const prefersReducedMotion = useReducedMotion();
 
   const profile = authMeQuery.data ?? user;
   const email = profile?.email ?? '—';
@@ -216,11 +219,48 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     };
   }, [armedActionDeleteId]);
 
+  const overlayTransition = prefersReducedMotion
+    ? { duration: 0.12 }
+    : { duration: 0.28, ease: veilEase };
+  const contentTransition = prefersReducedMotion
+    ? { duration: 0.12 }
+    : { duration: 0.32, ease: veilEase };
+  const contentInitial = prefersReducedMotion
+    ? { opacity: 0, x: '-50%', y: '-50%' }
+    : { opacity: 0, scale: 0.97, x: '-50%', y: 'calc(-50% + 10px)' };
+  const contentAnimate = { opacity: 1, scale: 1, x: '-50%', y: '-50%' };
+  const contentExit = prefersReducedMotion
+    ? { opacity: 0, x: '-50%', y: '-50%', transition: { duration: 0.1 } }
+    : {
+        opacity: 0,
+        scale: 0.97,
+        x: '-50%',
+        y: 'calc(-50% + 10px)',
+        transition: { duration: 0.2, ease: veilEase },
+      };
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-240 bg-zinc-950/65 backdrop-blur-md" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-250 flex h-[min(92dvh,52rem)] w-[min(95vw,80rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/94 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl focus:outline-none">
+      <AnimatePresence>
+        {open ? (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={overlayTransition}
+                className="fixed inset-0 z-240 bg-zinc-950/65 backdrop-blur-md"
+              />
+            </Dialog.Overlay>
+            <Dialog.Content asChild>
+              <motion.div
+                initial={contentInitial}
+                animate={contentAnimate}
+                exit={contentExit}
+                transition={contentTransition}
+                className="fixed left-1/2 top-1/2 z-250 flex h-[min(92dvh,52rem)] w-[min(95vw,80rem)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/94 shadow-[0_24px_80px_rgba(0,0,0,0.55)] backdrop-blur-xl focus:outline-none will-change-transform"
+              >
           <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-6">
             <div>
               <Dialog.Title className="text-lg font-semibold tracking-tight text-zinc-50">
@@ -437,8 +477,11 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               )}
             </section>
           </div>
-        </Dialog.Content>
-      </Dialog.Portal>
+              </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        ) : null}
+      </AnimatePresence>
 
       <AlertDialog.Root open={alertOpen} onOpenChange={setAlertOpen}>
         <AlertDialog.Portal>
