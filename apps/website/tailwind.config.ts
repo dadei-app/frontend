@@ -11,7 +11,7 @@ const config: Config = {
     extend: {
       fontFamily: {
         primary: ['Space Grotesk', 'system-ui', 'sans-serif'],
-        secondary: ['Josefin Sans', 'system-ui', 'sans-serif'],
+        secondary: ['Montserrat', 'system-ui', 'sans-serif'],
         brand: ['Poiret One', 'system-ui', 'sans-serif'],
       },
     },
