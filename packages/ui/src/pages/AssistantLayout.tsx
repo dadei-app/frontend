@@ -225,7 +225,7 @@ export default function AssistantLayout() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="pointer-events-none absolute inset-x-0 bottom-20 z-10 flex items-center justify-center gap-2 text-sm text-zinc-500 font-secondary"
+              className="pointer-events-none absolute inset-x-0 bottom-20 z-10 flex select-none items-center justify-center gap-2 text-sm text-zinc-500 font-secondary"
             >
               <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
                 Space

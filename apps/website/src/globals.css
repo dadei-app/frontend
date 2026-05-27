@@ -6,7 +6,7 @@
   }
 
   .font-secondary {
-    font-family: "Josefin Sans", system-ui, sans-serif;
+    font-family: "Montserrat", system-ui, sans-serif;
   }
 
   .font-brand {
@@ -27,6 +27,7 @@
 }
 
 html {
+  font-size: 17px;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -46,12 +47,17 @@ body::-webkit-scrollbar {
   display: none;
 }
 
-/* Prevent text selection on buttons */
+/* Pointer on interactive buttons; prevent text selection */
 button {
+  cursor: pointer;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 /* Animations */

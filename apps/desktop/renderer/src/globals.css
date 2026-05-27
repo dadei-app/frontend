@@ -6,7 +6,7 @@
   }
 
   .font-secondary {
-    font-family: "Josefin Sans", system-ui, sans-serif;
+    font-family: "Montserrat", system-ui, sans-serif;
   }
 
   .font-brand {
@@ -23,6 +23,10 @@
 
 :root {
   --accent-color: #00cc6a;
+}
+
+html {
+  font-size: 17px;
 }
 
 body {
@@ -49,10 +53,15 @@ body {
 }
 
 button {
+  cursor: pointer;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+}
+
+button:disabled {
+  cursor: not-allowed;
 }
 
 @keyframes pulse {

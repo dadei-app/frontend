@@ -137,11 +137,12 @@ export function memoriesListQueryOptions(limit = ASSISTANT_MEMORIES_LIST_LIMIT) 
 
 export function actionsListQueryOptions(
   limit = ASSISTANT_ACTIONS_LIST_LIMIT,
-  offset = 0
+  offset = 0,
+  actionType?: string
 ) {
   return {
-    queryKey: queryKeys.actionsList(limit, offset),
-    queryFn: () => actionsApi.list({ limit, offset }),
+    queryKey: queryKeys.actionsList(limit, offset, actionType),
+    queryFn: () => actionsApi.list({ limit, offset, action_type: actionType }),
     staleTime: 30_000,
     refetchOnMount: false,
   };
@@ -157,10 +158,11 @@ export function useMemoriesQuery(enabled = true, limit = ASSISTANT_MEMORIES_LIST
 export function useActionsQuery(
   enabled = true,
   limit = ASSISTANT_ACTIONS_LIST_LIMIT,
-  offset = 0
+  offset = 0,
+  actionType?: string
 ) {
   return useQuery({
-    ...actionsListQueryOptions(limit, offset),
+    ...actionsListQueryOptions(limit, offset, actionType),
     enabled,
   });
 }

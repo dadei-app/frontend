@@ -7,6 +7,7 @@ import { buildEndpoint } from './utils';
 export interface ListActionsParams {
   limit?: number;
   offset?: number;
+  action_type?: string;
 }
 
 export const actionsApi = {
@@ -15,6 +16,7 @@ export const actionsApi = {
       params: {
         limit: params?.limit ?? 100,
         offset: params?.offset ?? 0,
+        ...(params?.action_type ? { action_type: params.action_type } : {}),
       },
     });
     return data;

@@ -58,7 +58,7 @@ function CollapsibleConversationBody({
       onClick={onInnerClick}
     >
       <div ref={innerRef} className="min-w-0" {...(!expanded ? { inert: true as const } : {})}>
-        <div className="w-full min-w-0 space-y-2 bg-zinc-950/50 p-4">{children}</div>
+        <div className="w-full min-w-0 space-y-2 bg-zinc-900/25 p-4">{children}</div>
       </div>
     </motion.div>
   );
@@ -76,7 +76,6 @@ export default function ConversationCard({
   handleDeleteConversation,
   handleDeleteInteraction,
   getPersonDisplay,
-  getPersonColor,
 }: {
   group: ConversationGroupView;
   groupIndex: number;
@@ -89,7 +88,6 @@ export default function ConversationCard({
   handleDeleteConversation: (conversationId: string) => void;
   handleDeleteInteraction: (interactionId: string) => void;
   getPersonDisplay: (personId: string) => { label: string; index: number };
-  getPersonColor: (personIndex: number) => { background: string; border: string; text: string };
 }) {
   const conversationIdForActions =
     group.conversation?.id?.trim() ||
@@ -108,16 +106,16 @@ export default function ConversationCard({
           toggleConversation(groupIndex);
         }
       }}
-      className="group/conv w-full min-w-0 max-w-full cursor-pointer overflow-hidden rounded-xl border border-white/10 bg-zinc-900/50 shadow-sm transition-[border-color,box-shadow] duration-200 hover:border-emerald-500/35 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/30 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+      className="group/conv w-full min-w-0 max-w-full cursor-pointer overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-950/50 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] translate-y-0 transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-white/10 hover:shadow-[0_10px_32px_-12px_rgba(0,0,0,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/15 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
     >
-      <div className="flex w-full min-w-0 items-center gap-3 border-b border-white/8 bg-zinc-900/60 p-4">
+      <div className="flex w-full min-w-0 items-center gap-3 border-b border-white/[0.06] bg-zinc-950/95 p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span
-            className="flex h-5 w-5 shrink-0 items-center justify-center text-zinc-500 transition-colors group-hover/conv:text-emerald-400/90"
+            className="flex h-5 w-5 shrink-0 items-center justify-center text-zinc-600 transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/conv:text-zinc-400"
             aria-hidden
           >
             <i
-              className={`fas fa-chevron-down text-xs leading-none transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${group.isExpanded ? 'rotate-0' : '-rotate-90'}`}
+              className={`fas fa-chevron-down text-xs leading-none transition-[rotate] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${group.isExpanded ? 'rotate-0' : '-rotate-90'}`}
             />
           </span>
 
@@ -178,7 +176,6 @@ export default function ConversationCard({
             key={interaction.id}
             interaction={interaction}
             getPersonDisplay={getPersonDisplay}
-            getPersonColor={getPersonColor}
             armedInteractionDeleteId={armedInteractionDeleteId}
             setArmedInteractionDeleteId={setArmedInteractionDeleteId}
             setArmedConversationDeleteId={setArmedConversationDeleteId}

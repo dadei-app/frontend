@@ -17,7 +17,7 @@ import {
   useRecentConversationsQuery,
 } from '@dadei/ui/lib/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/queryKeys';
-import { ORPHAN_KEY, PERSON_COLOR_SHADES } from './constants';
+import { ORPHAN_KEY } from './constants';
 import { activeConversationKey, groupKey, parseInteractionDate } from './conversationUtils';
 import type { ConversationGroupState, ConversationGroupView } from './types';
 
@@ -470,10 +470,6 @@ export function useInteractionPanel() {
     return { label: 'Loading...', index: 1 };
   };
 
-  const getPersonColor = (personIndex: number) => {
-    return PERSON_COLOR_SHADES[personIndex % PERSON_COLOR_SHADES.length];
-  };
-
   return {
     containerRef,
     loading,
@@ -489,6 +485,5 @@ export function useInteractionPanel() {
     handleDeleteConversation,
     handleClearAll,
     getPersonDisplay,
-    getPersonColor,
   };
 }

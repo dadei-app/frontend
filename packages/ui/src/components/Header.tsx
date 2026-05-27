@@ -30,7 +30,7 @@ export default function Header({
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900/70 ring-1 ring-white/10">
           <Mic className="h-5 w-5 text-emerald-300" strokeWidth={2} aria-hidden="true" />
         </span>
-        <span className="hidden font-brand text-3xl font-extrabold tracking-widest sm:inline">
+        <span className="hidden select-none font-brand text-3xl font-extrabold tracking-widest sm:inline">
           dadei
         </span>
       </div>
@@ -66,10 +66,11 @@ export default function Header({
             await logout();
             navigate('/login', { replace: true });
           }}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-rose-400/90 transition-colors hover:border-rose-500/35 hover:bg-rose-950/40 hover:text-rose-300"
+          className="flex h-9 px-3 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-rose-400/90 transition-colors hover:border-rose-500/35 hover:bg-rose-950/40 hover:text-rose-300 text-sm font-display"
           title="Logout"
         >
-          <LogOut className="h-4 w-4" strokeWidth={2} />
+          Logout
+          <LogOut className="ml-2 h-4 w-4" strokeWidth={2} />
         </button>
 
         <PeoplePanel
