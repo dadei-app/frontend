@@ -30,7 +30,7 @@ export default function Header({
         <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-900/70 ring-1 ring-white/10">
           <Mic className="h-5 w-5 text-emerald-300" strokeWidth={2} aria-hidden="true" />
         </span>
-        <span className="hidden font-brand text-3xl font-extrabold tracking-widest sm:inline">
+        <span className="hidden select-none font-brand text-3xl font-extrabold tracking-widest sm:inline">
           dadei
         </span>
       </div>

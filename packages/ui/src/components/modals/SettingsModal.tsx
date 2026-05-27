@@ -61,6 +61,16 @@ const ACTION_TYPES_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string[]> =
   mail: ['email', 'message'],
 };
 
+const EMPTY_ACTION_COPY_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string> = {
+  events: 'No events yet. Calendar items will show up here when plans with dates get picked up from your chats.',
+  tasks:
+    'No tasks yet. This list fills in once conversations include concrete next steps to track.',
+  reminders:
+    'No reminders yet. Time-based nudges appear here after you ask for follow-ups or timed prompts.',
+  mail:
+    'No mail actions yet. Drafts and send actions appear here when a message is prepared from conversation context.',
+};
+
 function actionDisplayText(action: NetworkAction): string {
   const details = action.details?.trim();
   if (details) {
@@ -419,8 +429,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                       <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(actionsQuery.error)}</p>
                     ) : workspaceActionRows.length === 0 ? (
                       <p className="text-sm text-zinc-500 font-secondary">
-                        No {activeViewMeta.label.toLowerCase()} yet. They appear when conversations surface
-                        actionable {activeViewMeta.label.toLowerCase()}.
+                        {EMPTY_ACTION_COPY_BY_VIEW[activeView]}
                       </p>
                     ) : (
                       <ul className="space-y-2">
