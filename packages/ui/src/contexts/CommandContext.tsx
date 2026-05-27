@@ -43,6 +43,22 @@ const TOOL_LABELS: Record<string, string> = {
   get_current_time: 'Getting time',
   send_email: 'Sending email',
   web_search: 'Searching the web',
+  update_memory: 'Updating memory',
+  update_action: 'Updating action',
+  list_calendar_events: 'Checking calendar',
+  update_calendar_event: 'Updating event',
+  delete_calendar_event: 'Deleting event',
+  list_tasks: 'Checking tasks',
+  update_task: 'Updating task',
+  delete_task: 'Deleting task',
+  search_contacts: 'Finding contact',
+  read_email: 'Reading email',
+  search_email: 'Searching email',
+  search_interactions: 'Searching past conversations',
+  query_person_memory: 'Recalling about person',
+  assign_person_name: 'Saving name',
+  get_weather: 'Checking weather',
+  get_weather_forecast: 'Checking forecast',
 };
 
 function toolLabel(tool: string): string {
