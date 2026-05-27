@@ -33,7 +33,7 @@ export default function InteractionCard({
       <div className="min-w-0 flex-1 self-center py-0.5">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-secondary">
           <span
-            className={`text-xs font-medium uppercase tracking-wide ${isOwner ? 'text-emerald-300/80' : 'text-zinc-400'}`}
+            className={`text-xs font-medium tracking-wide ${isOwner ? 'text-emerald-300/80' : 'text-zinc-400'}`}
           >
             {person.label}
           </span>
