@@ -66,10 +66,11 @@ export default function Header({
             await logout();
             navigate('/login', { replace: true });
           }}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-rose-400/90 transition-colors hover:border-rose-500/35 hover:bg-rose-950/40 hover:text-rose-300"
+          className="flex h-9 px-3 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-rose-400/90 transition-colors hover:border-rose-500/35 hover:bg-rose-950/40 hover:text-rose-300 text-sm font-medium"
           title="Logout"
         >
-          <LogOut className="h-4 w-4" strokeWidth={2} />
+          Logout
+          <LogOut className="ml-2 h-4 w-4" strokeWidth={2} />
         </button>
 
         <PeoplePanel

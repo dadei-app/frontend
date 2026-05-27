@@ -266,7 +266,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               <Dialog.Title className="text-lg font-semibold tracking-tight text-zinc-50">
                 Settings
               </Dialog.Title>
-              <p className="mt-1 text-sm text-zinc-500 font-secondary">Memories and Google Workspace</p>
+              <p className="text-sm text-zinc-500 font-secondary">Memories and Google Workspace</p>
             </div>
             <Dialog.Close asChild>
               <button
