@@ -257,7 +257,7 @@ export default function PeoplePanel({ isOpen, onClose, excludeElement }: PeopleP
                                   armedContainerClassName="gap-0.5"
                                   idleButtonClassName="opacity-100 rounded-md hover:bg-rose-950/35"
                                   confirmButtonClassName="h-7 w-7 rounded-md"
-                                  cancelButtonClassName="h-7 w-7 rounded-md text-zinc-400 hover:bg-white/10 hover:text-zinc-200"
+                                  cancelButtonClassName="h-7 w-7 rounded-md"
                                   idleWidthPx={28}
                                   armedWidthPx={58}
                                 />

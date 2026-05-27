@@ -119,7 +119,7 @@ export default function SplitDeleteToolbar({
               onArm();
             }}
             className={cn(
-              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/90 opacity-0 transition-[opacity,background-color,color] duration-150 hover:bg-rose-950/70 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-45',
+              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/90 opacity-0 transition-[opacity,background-color,color] duration-150 hover:bg-rose-950/70 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45',
               idleVisibleClassName,
               idleButtonClassName
             )}
