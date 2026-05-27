@@ -25,6 +25,10 @@
   --accent-color: #00cc6a;
 }
 
+html {
+  font-size: 17px;
+}
+
 body {
   font-family: "Space Grotesk", system-ui, sans-serif;
   overflow-x: hidden;

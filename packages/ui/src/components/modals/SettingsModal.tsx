@@ -37,6 +37,13 @@ function formatWhen(iso: string | null | undefined): string {
   }
 }
 
+function formatMetaLine(parts: Array<string | null | undefined>): string {
+  return parts
+    .map((part) => (part ?? '').trim())
+    .filter((part) => part.length > 0)
+    .join(' · ');
+}
+
 type SidebarView = 'memories' | 'events' | 'tasks' | 'reminders' | 'mail';
 
 const viewMeta: Record<SidebarView, { label: string; Icon: typeof CalendarDays }> = {
@@ -266,7 +273,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               <Dialog.Title className="text-lg font-semibold tracking-tight text-zinc-50">
                 Settings
               </Dialog.Title>
-              <p className="text-sm text-zinc-500 font-secondary">Memories and Google Workspace</p>
+              <p className="text-sm text-zinc-500 font-secondary">Memories and Actions powered by the Google Workspace</p>
             </div>
             <Dialog.Close asChild>
               <button
@@ -376,7 +383,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                             <div className="min-w-0 flex-1">
                               <p className="text-sm leading-snug text-zinc-100">{m.canonical_text}</p>
                               <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                                {m.memory_type} · {m.status} · {formatWhen(m.created_at)}
+                                {formatMetaLine([m.memory_type, m.status, formatWhen(m.created_at)])}
                               </p>
                             </div>
                             <SplitDeleteToolbar

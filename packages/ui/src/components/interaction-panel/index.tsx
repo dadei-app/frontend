@@ -25,7 +25,7 @@ export default function InteractionPanel() {
         <div className="min-w-0">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Interactions</h2>
           <p className="text-xs leading-relaxed text-zinc-500 font-secondary">
-            Recent conversations and messages from each session.
+            Conversations and interactions captured by dadei
           </p>
         </div>
         <button
