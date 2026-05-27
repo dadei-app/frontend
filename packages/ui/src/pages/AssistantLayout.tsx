@@ -8,6 +8,7 @@ import { NotificationBannerSlot } from '@dadei/ui/contexts/NotificationContext';
 import ActionWebhookBanners from '@dadei/ui/components/ui/ActionWebhookBanners';
 import CommandBubble from '@dadei/ui/components/ui/CommandBubble';
 import NetworkMemoryRealtimeSync from '@dadei/ui/components/ui/NetworkMemoryRealtimeSync';
+import { ProposedActionTray } from '@dadei/ui/components/notifications/ProposedActionTray';
 import Header from '@dadei/ui/components/Header';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
@@ -139,6 +140,7 @@ export default function AssistantLayout() {
 
       <ActionWebhookBanners />
       <NetworkMemoryRealtimeSync />
+      <ProposedActionTray />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}

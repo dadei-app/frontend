@@ -33,11 +33,16 @@ export interface NetworkAction {
   status: string;
   scheduled_time: string | null;
   completed_time: string | null;
+  title: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  external_id: string | null;
+  external_service: string | null;
+  source_memory_id: string | null;
   created_at: string;
   updated_at: string;
-  person_id: string;
-  interaction_id: string;
-  conversation_id: string;
+  interaction_id: string | null;
+  conversation_id: string | null;
   network_id: string;
 }
 
