@@ -50,7 +50,7 @@ export function DesktopWindowControls() {
   }
 
   const btn =
-    'flex h-full w-10 items-center justify-center text-zinc-400 transition-colors hover:bg-white/8 hover:text-zinc-100 active:bg-white/[0.12]';
+    'flex h-full w-10 items-center justify-center text-zinc-400 transition-colors hover:bg-white/8 hover:text-zinc-100 active:bg-white/12';
 
   return (
     <div

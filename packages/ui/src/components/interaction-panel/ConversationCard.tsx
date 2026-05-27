@@ -106,9 +106,9 @@ export default function ConversationCard({
           toggleConversation(groupIndex);
         }
       }}
-      className="group/conv w-full min-w-0 max-w-full cursor-pointer overflow-hidden rounded-xl border border-white/[0.06] bg-zinc-950/50 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] translate-y-0 transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-white/10 hover:shadow-[0_10px_32px_-12px_rgba(0,0,0,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/15 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+      className="group/conv w-full min-w-0 max-w-full cursor-pointer overflow-hidden rounded-xl border border-white/6 bg-zinc-950/50 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] translate-y-0 transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-white/10 hover:shadow-[0_10px_32px_-12px_rgba(0,0,0,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/15 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
     >
-      <div className="flex w-full min-w-0 items-center gap-3 border-b border-white/[0.06] bg-zinc-950/95 p-4">
+      <div className="flex w-full min-w-0 items-center gap-3 border-b border-white/6 bg-zinc-950/95 p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span
             className="flex h-5 w-5 shrink-0 items-center justify-center text-zinc-600 transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/conv:text-zinc-400"

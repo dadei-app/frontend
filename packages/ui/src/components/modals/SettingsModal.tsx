@@ -387,7 +387,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                       {memoryRows.map((m: EpisodicMemory) => (
                         <li
                           key={m.id}
-                          className="group/memory rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
+                          className="group/memory rounded-lg border border-white/7 bg-zinc-950/40 px-3 py-2.5"
                         >
                           <div className="flex items-start gap-2">
                             <div className="min-w-0 flex-1">
@@ -436,7 +436,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                         {workspaceActionRows.map((action: NetworkAction) => (
                           <li
                             key={action.id}
-                            className="group/action rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
+                            className="group/action rounded-lg border border-white/7 bg-zinc-950/40 px-3 py-2.5"
                           >
                             <div className="flex items-start gap-2">
                               <div className="min-w-0 flex-1">

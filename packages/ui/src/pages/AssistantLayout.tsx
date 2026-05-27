@@ -234,7 +234,7 @@ export default function AssistantLayout() {
             </motion.div>
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col border-l border-white/[0.07] bg-zinc-950/40 backdrop-blur-sm">
+          <div className="flex min-w-0 flex-1 flex-col border-l border-white/7 bg-zinc-950/40 backdrop-blur-sm">
             <InteractionPanel />
           </div>
         </main>
