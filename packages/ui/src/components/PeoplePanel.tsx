@@ -175,6 +175,7 @@ export default function PeoplePanel({ isOpen, onClose, excludeElement }: PeopleP
                 <div className="space-y-2">
                   {persons.map((person) => {
                     const isEditing = editingId === person.id;
+                    const isOwner = person.index === 1;
 
                     return (
                       <div
@@ -182,7 +183,9 @@ export default function PeoplePanel({ isOpen, onClose, excludeElement }: PeopleP
                         className="group/person rounded-lg border border-white/10 bg-zinc-900/70 p-3 transition-[border-color,box-shadow] duration-200 hover:border-emerald-500/25 hover:shadow-sm"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-950/60 text-sm font-semibold text-emerald-300">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ${isOwner ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25' : 'bg-zinc-800 text-zinc-300 ring-white/5'}`}
+                          >
                             {person.name ? person.name[0].toUpperCase() : person.index}
                           </div>
 

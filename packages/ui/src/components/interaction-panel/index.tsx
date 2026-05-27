@@ -17,7 +17,6 @@ export default function InteractionPanel() {
     handleDeleteConversation,
     handleClearAll,
     getPersonDisplay,
-    getPersonColor,
   } = useInteractionPanel();
 
   return (
@@ -68,7 +67,6 @@ export default function InteractionPanel() {
                 handleDeleteConversation={handleDeleteConversation}
                 handleDeleteInteraction={handleDeleteInteraction}
                 getPersonDisplay={getPersonDisplay}
-                getPersonColor={getPersonColor}
               />
             </div>
           ))
