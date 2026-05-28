@@ -78,7 +78,8 @@ function ToastStackHost() {
   );
 }
 
-export function NotificationBannerSlot({ className }: { className?: string }) {
+export function NotificationBannerSlot
+({ className }: { className?: string }) {
   const ctx = useContext(NotificationsContext);
   const prefersReducedMotion = useReducedMotion();
   const banner = ctx?.banner ?? null;

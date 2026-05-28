@@ -12,7 +12,7 @@ import { useActionsQuery } from '@dadei/ui/lib/queryHooks';
 export function ProposedActionTray() {
   const { data: actions } = useActionsQuery(true);
   const proposed = useMemo<NetworkAction[]>(
-    () => (actions ?? []).filter(a => a.status === 'proposed'),
+    () => (actions ?? []).filter(a => a.status === 'proposed' && a.scheduled_at !== null),
     [actions],
   );
 

@@ -33,12 +33,6 @@ export const actionsApi = {
     await api.delete(endpoint);
   },
 
-  async accept(id: string): Promise<NetworkAction> {
-    const endpoint = `${buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId: id })}/accept`;
-    const { data } = await api.post<NetworkAction>(endpoint);
-    return data;
-  },
-
   async reject(id: string): Promise<NetworkAction> {
     const endpoint = `${buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId: id })}/reject`;
     const { data } = await api.post<NetworkAction>(endpoint);

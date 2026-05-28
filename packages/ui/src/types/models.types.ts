@@ -38,6 +38,8 @@ export interface NetworkAction {
   end_time: string | null;
   external_id: string | null;
   external_service: string | null;
+  scheduled_at: string | null;
+  scheduled_job_id: string | null;
   source_memory_id: string | null;
   created_at: string;
   updated_at: string;

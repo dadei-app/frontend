@@ -5,7 +5,6 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useCommand, type CommandMode } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { NotificationBannerSlot } from '@dadei/ui/contexts/NotificationContext';
-import ActionWebhookBanners from '@dadei/ui/components/ui/ActionWebhookBanners';
 import CommandBubble from '@dadei/ui/components/ui/CommandBubble';
 import NetworkMemoryRealtimeSync from '@dadei/ui/components/ui/NetworkMemoryRealtimeSync';
 import { ProposedActionTray } from '@dadei/ui/components/notifications/ProposedActionTray';
@@ -138,7 +137,6 @@ export default function AssistantLayout() {
         aria-hidden
       />
 
-      <ActionWebhookBanners />
       <NetworkMemoryRealtimeSync />
       <ProposedActionTray />
 
