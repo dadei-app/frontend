@@ -2,33 +2,39 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
+import Banner from '@dadei/ui/components/ui/Banner';
 import Toast from '@dadei/ui/components/ui/Toast';
-import { cn } from '@dadei/ui/lib/cn';
-import { teardropEnter, teardropExit } from '@dadei/ui/lib/motion';
 import { ToastType } from '@dadei/ui/types/models.types';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
 
 export type ShowBannerInput = {
   id?: string;
+  category?: string;
   title: string;
   body?: string;
   durationMs?: number;
+  showCountdown?: boolean;
+  countdownEndsAt?: string;
+  cancelLabel?: string;
+  onCancel?: () => Promise<void> | void;
 };
 
 export type BannerItem = {
   id: string;
+  category?: string;
   title: string;
   body?: string;
   durationMs: number;
+  showCountdown?: boolean;
+  countdownEndsAt?: string;
+  cancelLabel?: string;
+  onCancel?: () => Promise<void> | void;
 };
 
 type ToastMessage = {
@@ -41,9 +47,10 @@ type NotificationsContextValue = {
   toasts: ToastMessage[];
   showToast: (message: string, type: ToastType) => void;
   removeToast: (id: string) => void;
-  banner: BannerItem | null;
+  banners: BannerItem[];
   showBanner: (input: ShowBannerInput) => string;
-  dismissBanner: () => void;
+  dismissBanner: (id: string) => void;
+  dismissBannerById: (id: string) => void;
 };
 
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined);
@@ -78,71 +85,28 @@ function ToastStackHost() {
   );
 }
 
-export function NotificationBannerSlot
-({ className }: { className?: string }) {
+function BannerStackHost() {
   const ctx = useContext(NotificationsContext);
-  const prefersReducedMotion = useReducedMotion();
-  const banner = ctx?.banner ?? null;
-  const dismissBanner = ctx?.dismissBanner;
-
-  useEffect(() => {
-    if (!banner || !dismissBanner) return;
-    const t = window.setTimeout(dismissBanner, banner.durationMs);
-    return () => window.clearTimeout(t);
-  }, [banner?.id, banner?.durationMs, dismissBanner]);
-
-  if (!ctx) return null;
-
-  const enter = prefersReducedMotion ? { duration: 0.12 } : teardropEnter;
-  const exitTr = prefersReducedMotion ? { duration: 0.1 } : teardropExit;
+  if (!ctx || ctx.banners.length === 0) return null;
 
   return (
-    <div className={cn('min-h-0 shrink-0', className)} aria-live="polite">
-      <AnimatePresence initial={false} mode="wait">
-        {banner ? (
-          <motion.div
+    <div className="pointer-events-none fixed bottom-6 right-6 z-[260] flex w-[min(22rem,92vw)] flex-col gap-2" aria-live="polite">
+      <AnimatePresence initial={false}>
+        {ctx.banners.map((banner) => (
+          <Banner
             key={banner.id}
-            layout
-            initial={
-              prefersReducedMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: -8, scale: 0.98, transformOrigin: '50% 0%' }
-            }
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={
-              prefersReducedMotion
-                ? { opacity: 0, transition: exitTr }
-                : { opacity: 0, y: -6, scale: 0.98, transformOrigin: '50% 0%', transition: exitTr }
-            }
-            transition={enter}
-            className="mb-4 w-full"
-          >
-            <div className="relative flex w-full gap-3 overflow-hidden rounded-2xl border border-emerald-500/30 bg-zinc-900/88 px-4 py-3 pr-10 shadow-[0_16px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-              <div
-                className="mt-0.5 min-w-0 flex-1 pt-0.5"
-                role="status"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/85 font-secondary">
-                  Notification
-                </p>
-                <p className="mt-0.5 text-sm font-semibold leading-snug text-zinc-50">{banner.title}</p>
-                {banner.body ? (
-                  <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-zinc-400 font-secondary">
-                    {banner.body}
-                  </p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={dismissBanner}
-                className="absolute right-2 top-2 rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
-                aria-label="Dismiss"
-              >
-                <X className="h-4 w-4" strokeWidth={2} />
-              </button>
-            </div>
-          </motion.div>
-        ) : null}
+            id={banner.id}
+            category={banner.category}
+            title={banner.title}
+            body={banner.body}
+            durationMs={banner.durationMs}
+            showCountdown={banner.showCountdown}
+            countdownEndsAt={banner.countdownEndsAt}
+            cancelLabel={banner.cancelLabel}
+            onCancel={banner.onCancel}
+            onDismiss={() => ctx.dismissBannerById(banner.id)}
+          />
+        ))}
       </AnimatePresence>
     </div>
   );
@@ -150,10 +114,7 @@ export function NotificationBannerSlot
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  /** FIFO: only the head is shown; advancing is dismiss or duration expiry (see NotificationBannerSlot). */
-  const [bannerQueue, setBannerQueue] = useState<BannerItem[]>([]);
-
-  const banner = bannerQueue.length > 0 ? bannerQueue[0] : null;
+  const [banners, setBanners] = useState<BannerItem[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType) => {
     const id = newId();
@@ -164,16 +125,34 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const dismissBanner = useCallback(() => {
-    setBannerQueue((prev) => prev.slice(1));
+  const dismissBannerById = useCallback((id: string) => {
+    setBanners((prev) => prev.filter((b) => b.id !== id));
   }, []);
+
+  const dismissBanner = useCallback((id: string) => {
+    dismissBannerById(id);
+  }, [dismissBannerById]);
 
   const showBanner = useCallback((input: ShowBannerInput) => {
     const id = input.id ?? newId();
     const durationMs = input.durationMs ?? DEFAULT_BANNER_DURATION_MS;
-    setBannerQueue((prev) => {
-      if (prev.some((b) => b.id === id)) return prev;
-      return [...prev, { id, title: input.title, body: input.body, durationMs }];
+    setBanners((prev) => {
+      const next: BannerItem = {
+        id,
+        category: input.category,
+        title: input.title,
+        body: input.body,
+        durationMs,
+        showCountdown: input.showCountdown,
+        countdownEndsAt: input.countdownEndsAt,
+        cancelLabel: input.cancelLabel,
+        onCancel: input.onCancel,
+      };
+      const idx = prev.findIndex((b) => b.id === id);
+      if (idx === -1) return [...prev, next];
+      const updated = [...prev];
+      updated[idx] = next;
+      return updated;
     });
     return id;
   }, []);
@@ -183,16 +162,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       toasts,
       showToast,
       removeToast,
-      banner,
+      banners,
       showBanner,
       dismissBanner,
+      dismissBannerById,
     }),
-    [toasts, showToast, removeToast, banner, showBanner, dismissBanner]
+    [toasts, showToast, removeToast, banners, showBanner, dismissBanner, dismissBannerById]
   );
 
   return (
     <NotificationsContext.Provider value={value}>
       {children}
+      <BannerStackHost />
       <ToastStackHost />
     </NotificationsContext.Provider>
   );

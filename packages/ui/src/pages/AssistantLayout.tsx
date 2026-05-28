@@ -4,10 +4,9 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useCommand, type CommandMode } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { NotificationBannerSlot } from '@dadei/ui/contexts/NotificationContext';
 import CommandBubble from '@dadei/ui/components/ui/CommandBubble';
 import NetworkMemoryRealtimeSync from '@dadei/ui/components/ui/NetworkMemoryRealtimeSync';
-import { ProposedActionTray } from '@dadei/ui/components/notifications/ProposedActionTray';
+import { ActionNotificationsBridge } from '@dadei/ui/components/notifications/ActionNotificationsBridge';
 import Header from '@dadei/ui/components/Header';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
@@ -138,7 +137,7 @@ export default function AssistantLayout() {
       />
 
       <NetworkMemoryRealtimeSync />
-      <ProposedActionTray />
+      <ActionNotificationsBridge enabled={sessionDataEnabled} />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
@@ -157,7 +156,6 @@ export default function AssistantLayout() {
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
             }}
           >
-            <NotificationBannerSlot />
             <div className="relative flex min-h-0 flex-1 items-center justify-center">
               <div className="relative z-10">
                 <div className="relative">
