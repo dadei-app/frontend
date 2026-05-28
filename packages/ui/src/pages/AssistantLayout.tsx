@@ -158,7 +158,8 @@ export default function AssistantLayout() {
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
             }}
           >
-            <div className="pointer-events-none absolute top-4 left-10 z-30 w-[min(34rem,calc(100%-5rem))]">
+            <div className="pointer-events-none absolute top-4 left-10 z-30 w-[calc(100%-5rem)]">
+
               <BannerStackHost />
             </div>
             <ToastStackHost className="fixed right-5 bottom-5 z-180" />

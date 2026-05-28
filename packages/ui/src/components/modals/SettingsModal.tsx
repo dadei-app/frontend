@@ -71,20 +71,40 @@ const EMPTY_ACTION_COPY_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string
     'No mail actions yet. Drafts and send actions appear here when a message is prepared from conversation context.',
 };
 
+const ACTION_TYPE_LABELS: Record<string, string> = {
+  calendar: 'Calendar event',
+  calendar_event: 'Calendar event',
+  todo: 'Task',
+  task: 'Task',
+  reminder: 'Reminder',
+  email: 'Email',
+  message: 'Message',
+};
+
 function actionDisplayText(action: NetworkAction): string {
+  const title = action.title?.trim();
+  if (title) return title;
+
   const details = action.details?.trim();
   if (details) {
     try {
-      const parsed = JSON.parse(details) as { canonical_text?: unknown };
+      const parsed = JSON.parse(details) as {
+        canonical_text?: unknown;
+        tool_args?: { title?: string; subject?: string; description?: string };
+      };
       if (typeof parsed.canonical_text === 'string' && parsed.canonical_text.trim()) {
         return parsed.canonical_text.trim();
       }
+      const toolTitle = parsed.tool_args?.title?.trim() || parsed.tool_args?.subject?.trim();
+      if (toolTitle) return toolTitle;
+      const toolDescription = parsed.tool_args?.description?.trim();
+      if (toolDescription) return toolDescription;
     } catch {
       /* not JSON */
     }
     return details;
   }
-  return action.action_type;
+  return ACTION_TYPE_LABELS[action.action_type] ?? action.action_type;
 }
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
@@ -360,7 +380,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               </div>
             </aside>
 
-            <section className="flex min-h-0 flex-col p-5 sm:p-6">
+            <section className="flex min-h-0 flex-col overflow-hidden p-5 sm:p-6">
               <div className="mb-3 flex items-center gap-2">
                 <activeViewMeta.Icon className="h-4 w-4 text-emerald-400/90" aria-hidden />
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
@@ -417,7 +437,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   )}
                 </div>
               ) : (
-                <div className="relative min-h-0 flex-1">
+                <div className="relative flex min-h-0 flex-1 flex-col">
                   <div className={`min-h-0 flex-1 overflow-y-auto overscroll-none pr-1 ${googleConnected ? '' : 'opacity-35'}`}>
                     {!isConnected ? (
                       <p className="text-sm text-zinc-500 font-secondary">

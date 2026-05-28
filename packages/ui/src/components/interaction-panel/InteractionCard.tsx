@@ -30,8 +30,8 @@ export default function InteractionCard({
         {person.label[0].toUpperCase()}
       </div>
 
-      <div className="min-w-0 flex-1 self-center py-0.5">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 font-secondary">
+      <div className="min-w-0 flex-1 self-center py-0.5 font-secondary">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span
             className={`text-xs font-medium tracking-wide ${isOwner ? 'text-emerald-300/80' : 'text-zinc-400'}`}
           >
