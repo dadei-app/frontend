@@ -161,9 +161,7 @@ export default function AssistantLayout() {
             <div className="pointer-events-none absolute top-4 left-10 z-30 w-[min(34rem,calc(100%-5rem))]">
               <BannerStackHost />
             </div>
-            <div className="pointer-events-none absolute right-6 bottom-6 z-30">
-              <ToastStackHost />
-            </div>
+            <ToastStackHost className="fixed right-5 bottom-5 z-180" />
             <div className="relative flex min-h-0 flex-1 items-center justify-center">
               <div className="relative z-10">
                 <div className="relative">

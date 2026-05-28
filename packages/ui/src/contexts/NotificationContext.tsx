@@ -68,10 +68,7 @@ export function ToastStackHost({ className = '' }: { className?: string }) {
   const { toasts, removeToast } = ctx;
 
   return (
-    <div
-      className={`pointer-events-none flex max-w-sm flex-col-reverse gap-2 ${className}`}
-      aria-live="polite"
-    >
+    <div className={`pointer-events-none flex max-w-sm flex-col-reverse gap-2 ${className}`} aria-live="polite">
       {toasts.map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
           <Toast
@@ -91,7 +88,7 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
 
   return (
     <div
-      className={`pointer-events-none flex w-[min(32rem,95vw)] flex-col gap-2 ${className}`}
+      className={`pointer-events-none flex w-full flex-col gap-2 ${className}`}
       aria-live="polite"
     >
       <AnimatePresence initial={false}>
@@ -132,9 +129,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setBanners((prev) => prev.filter((b) => b.id !== id));
   }, []);
 
-  const dismissBanner = useCallback((id: string) => {
-    dismissBannerById(id);
-  }, [dismissBannerById]);
+  const dismissBanner = useCallback(
+    (id: string) => {
+      dismissBannerById(id);
+    },
+    [dismissBannerById]
+  );
 
   const showBanner = useCallback((input: ShowBannerInput) => {
     const id = input.id ?? newId();
