@@ -55,8 +55,8 @@ const viewMeta: Record<SidebarView, { label: string; Icon: typeof CalendarDays }
 };
 
 const ACTION_TYPES_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string[]> = {
-  events: ['calendar'],
-  tasks: ['todo'],
+  events: ['calendar', 'calendar_event'],
+  tasks: ['todo', 'task'],
   reminders: ['reminder'],
   mail: ['email', 'message'],
 };

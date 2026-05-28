@@ -37,7 +37,7 @@ export default function InteractionCard({
           >
             {person.label}
           </span>
-          <span className="text-[10px] tabular-nums text-zinc-600">
+          <span className="text-[10px] tabular-nums text-zinc-400">
             {formatLocalTime(interaction.timestamp)}
           </span>
         </div>

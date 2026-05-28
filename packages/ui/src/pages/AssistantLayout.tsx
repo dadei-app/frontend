@@ -7,6 +7,7 @@ import { useService } from '@dadei/ui/contexts/ServiceContext';
 import CommandBubble from '@dadei/ui/components/ui/CommandBubble';
 import NetworkMemoryRealtimeSync from '@dadei/ui/components/ui/NetworkMemoryRealtimeSync';
 import { ActionNotificationsBridge } from '@dadei/ui/components/notifications/ActionNotificationsBridge';
+import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
@@ -68,8 +69,9 @@ export default function AssistantLayout() {
 
   /** Same gate as interaction panel: list + realtime only after `/service/clients` registration. */
   const sessionDataEnabled = isAuthenticated && !isLoading && isConnected;
+  const actionBannerEnabled = isAuthenticated && !isLoading;
   useMemoriesQuery(sessionDataEnabled);
-  useActionsQuery(sessionDataEnabled);
+  useActionsQuery(actionBannerEnabled);
 
   /** Portaled overlays (e.g. PeoplePanel) read chrome offsets from `html`, not the assistant shell. */
   useLayoutEffect(() => {
@@ -137,7 +139,7 @@ export default function AssistantLayout() {
       />
 
       <NetworkMemoryRealtimeSync />
-      <ActionNotificationsBridge enabled={sessionDataEnabled} />
+      <ActionNotificationsBridge enabled={actionBannerEnabled} />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
@@ -156,6 +158,12 @@ export default function AssistantLayout() {
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
             }}
           >
+            <div className="pointer-events-none absolute top-4 left-10 z-30 w-[min(34rem,calc(100%-5rem))]">
+              <BannerStackHost />
+            </div>
+            <div className="pointer-events-none absolute right-6 bottom-6 z-30">
+              <ToastStackHost />
+            </div>
             <div className="relative flex min-h-0 flex-1 items-center justify-center">
               <div className="relative z-10">
                 <div className="relative">

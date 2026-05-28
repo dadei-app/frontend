@@ -9,7 +9,9 @@ import { useActionsQuery } from '@dadei/ui/lib/queryHooks';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 const ACTION_LABELS: Record<string, string> = {
+  calendar: 'Calendar event',
   calendar_event: 'Calendar event',
+  todo: 'Task',
   task: 'Task',
   reminder: 'Reminder',
   email: 'Email',

@@ -53,22 +53,22 @@ export default function Banner({
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 14, scale: 0.985 }}
+      initial={{ opacity: 0, y: -16, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 8, scale: 0.985 }}
+      exit={{ opacity: 0, y: -10, scale: 0.985 }}
       transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-      className="pointer-events-auto group relative w-full overflow-hidden rounded-2xl border border-white/[0.06] bg-zinc-950/95 backdrop-blur-2xl shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_24px_60px_-20px_rgba(0,0,0,0.7)] transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-px hover:border-white/[0.10] hover:shadow-[0_1px_0_rgba(255,255,255,0.05)_inset,0_28px_70px_-20px_rgba(0,0,0,0.78)]"
+      className="pointer-events-auto group relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900/82 backdrop-blur-xl shadow-[0_1px_0_rgba(255,255,255,0.03)_inset,0_16px_44px_-22px_rgba(0,0,0,0.72)] transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-white/14 hover:shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_18px_48px_-22px_rgba(0,0,0,0.78)]"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.10] to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-200/20 to-transparent" />
       {showCountdown ? <CountdownBar durationMs={durationMs} countdownEndsAt={countdownEndsAt} /> : null}
-      <div className="flex items-center gap-4 px-4 py-3.5 pt-4">
+      <div className="flex items-center gap-4 px-4 py-3.5">
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500/90 font-secondary">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400/90 font-secondary">
             {category || 'Notification'}
           </p>
           <p className="mt-1 truncate text-sm font-semibold leading-snug text-zinc-100">{title}</p>
           {body ? (
-            <p className="mt-0.5 truncate text-xs leading-relaxed text-zinc-400/90 font-secondary">
+            <p className="mt-0.5 truncate text-xs leading-relaxed text-zinc-400 font-secondary">
               {body}
             </p>
           ) : null}
@@ -118,8 +118,8 @@ function CountdownBar({ durationMs, countdownEndsAt }: { durationMs: number; cou
         initial={{ scaleX: initialScaleX, originX: 1 }}
         animate={{ scaleX: 0, originX: 1 }}
         transition={{ duration: remainingSec, ease: 'linear' }}
-        className="h-full origin-right bg-gradient-to-r from-zinc-500/40 via-zinc-200/80 to-zinc-100"
-        style={{ boxShadow: '0 0 10px rgba(255,255,255,0.18)' }}
+        className="h-full origin-right bg-gradient-to-r from-zinc-600/35 via-zinc-300/70 to-zinc-200/90"
+        style={{ boxShadow: '0 0 8px rgba(255,255,255,0.16)' }}
       />
     </div>
   );

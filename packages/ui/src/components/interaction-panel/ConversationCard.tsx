@@ -134,7 +134,7 @@ export default function ConversationCard({
             </h3>
           </div>
 
-          <div className="flex shrink-0 flex-col items-end justify-center gap-0.5 pl-5 text-sm text-zinc-500 font-secondary sm:flex-row sm:items-center sm:gap-4">
+          <div className="flex shrink-0 flex-col items-end justify-center gap-0.5 text-sm text-zinc-500 font-secondary sm:flex-row sm:items-center sm:gap-4">
             <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
               <i className="fas fa-comment text-[11px] opacity-80" aria-hidden />
               {group.interactions.length}

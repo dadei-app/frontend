@@ -1,7 +1,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import { startRealtimeClient, stopRealtimeClient, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
 import { getRealtimeSessionId } from '@dadei/ui/lib/realtimeClient';
@@ -30,7 +29,6 @@ const ENABLE_TIMEOUT_MS = 5000;
 
 export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading, getAccessToken } = useAuth();
-  const { showToast } = useNotifications();
   const queryClient = useQueryClient();
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
@@ -78,10 +76,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       } catch (error: unknown) {
         console.error('Failed to start realtime client:', error);
         setRegistrationConflict(true);
-        showToast(
-          'Could not start realtime connectivity. Try signing out and back in, or try again in a moment.',
-          'error'
-        );
         setIsConnected(false);
         stopRealtimeClient();
       }
@@ -92,7 +86,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, isAuthLoading, showToast]);
+  }, [isAuthenticated, isAuthLoading]);
 
   useEffect(() => {
     const handleServiceStatusChanged = (status: { enabled: boolean }) => {
@@ -159,10 +153,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const toggleService = useCallback(async () => {
     if (registrationConflict) {
-      showToast(
-        'This session is not registered with the assistant service. Try signing out and back in.',
-        'error'
-      );
+      console.warn('[Service] Registration conflict: cannot toggle service');
       return;
     }
 
@@ -177,15 +168,13 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         enableTimeoutRef.current = setTimeout(() => {
           console.error('[Service] Enable timeout - no status event received');
           setIsTogglingService(false);
-          showToast('Service failed to enable - no response from backend', 'error');
         }, ENABLE_TIMEOUT_MS);
       }
     } catch (error) {
       console.error('Failed to toggle service:', error);
       setIsTogglingService(false);
-      showToast('Failed to communicate with backend', 'error');
     }
-  }, [isServiceEnabled, showToast, registrationConflict]);
+  }, [isServiceEnabled, registrationConflict]);
 
   const realtimeSessionId = getRealtimeSessionId();
   const isAssistantOwner =

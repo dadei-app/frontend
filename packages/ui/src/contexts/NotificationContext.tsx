@@ -62,14 +62,14 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function ToastStackHost() {
+export function ToastStackHost({ className = '' }: { className?: string }) {
   const ctx = useContext(NotificationsContext);
   if (!ctx) return null;
   const { toasts, removeToast } = ctx;
 
   return (
     <div
-      className="pointer-events-none fixed bottom-5 right-5 z-180 flex max-w-sm flex-col-reverse gap-2"
+      className={`pointer-events-none flex max-w-sm flex-col-reverse gap-2 ${className}`}
       aria-live="polite"
     >
       {toasts.map((toast) => (
@@ -85,12 +85,15 @@ function ToastStackHost() {
   );
 }
 
-function BannerStackHost() {
+export function BannerStackHost({ className = '' }: { className?: string }) {
   const ctx = useContext(NotificationsContext);
   if (!ctx || ctx.banners.length === 0) return null;
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[260] flex w-[min(22rem,92vw)] flex-col gap-2" aria-live="polite">
+    <div
+      className={`pointer-events-none flex w-[min(32rem,95vw)] flex-col gap-2 ${className}`}
+      aria-live="polite"
+    >
       <AnimatePresence initial={false}>
         {ctx.banners.map((banner) => (
           <Banner
@@ -173,8 +176,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   return (
     <NotificationsContext.Provider value={value}>
       {children}
-      <BannerStackHost />
-      <ToastStackHost />
     </NotificationsContext.Provider>
   );
 }
