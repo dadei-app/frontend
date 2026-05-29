@@ -18,6 +18,7 @@ import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notificationConstants';
 import { playNotificationPing } from '@dadei/ui/lib/notificationSound';
 import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import { useActionsQuery } from '@dadei/ui/lib/queryHooks';
+import { parseApiDateTime } from '@dadei/ui/lib/parseApiDateTime';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
@@ -82,7 +83,7 @@ function newId(): string {
 
 function formatActionDateTime(iso: string): string {
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    return parseApiDateTime(iso).toLocaleString(undefined, {
       weekday: 'short',
       hour: 'numeric',
       minute: '2-digit',

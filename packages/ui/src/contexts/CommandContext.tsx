@@ -31,6 +31,8 @@ import {
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
   computeFollowUpMs,
 } from '@dadei/ui/lib/voice/voiceConstants';
+import { isSessionEndUtterance } from '@dadei/ui/lib/voice/sessionEndDetection';
+import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
 
 export type CommandState =
   | 'idle'
@@ -89,6 +91,7 @@ const TOOL_LABELS: Record<string, string> = {
   assign_person_name: 'Saving name',
   get_weather: 'Checking weather',
   get_weather_forecast: 'Checking forecast',
+  end_assistant_session: 'Ending session',
 };
 
 function toolLabel(tool: string): string {
@@ -127,6 +130,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const lastWakeInterimRef = useRef('');
   const assistantBubbleTextRef = useRef('');
   const followUpCaptureRef = useRef(false);
+  const sessionEndingRef = useRef(false);
 
   useEffect(() => {
     stateRef.current = state;
@@ -143,8 +147,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  /** Pause follow-up expiry while the user is speaking (do not go idle mid-utterance). */
-  const pauseFollowUpTimer = clearFollowUpTimer;
+  const onFollowUpSpeechStarted = useCallback(() => {
+    if (stateRef.current !== 'follow_up') return;
+    clearFollowUpTimer();
+    followUpCaptureRef.current = true;
+  }, [clearFollowUpTimer]);
 
   const clearWakeTimeout = useCallback(() => {
     if (wakeTimeoutRef.current != null) {
@@ -184,10 +191,30 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer();
     clearWakeTimeout();
     abortActiveStream();
+    sessionEndingRef.current = false;
     setBubbleHistory([]);
     setState('idle');
     resetLiveBubbles();
   }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
+
+  const endSession = useCallback(() => {
+    sessionEndingRef.current = true;
+    clearFollowUpTimer();
+    clearWakeTimeout();
+    abortActiveStream();
+    void (async () => {
+      if (localClaimRef.current) {
+        await releaseAssistantMode();
+      }
+      goIdle();
+    })();
+  }, [
+    abortActiveStream,
+    clearFollowUpTimer,
+    clearWakeTimeout,
+    goIdle,
+    releaseAssistantMode,
+  ]);
 
   const cancel = useCallback(() => {
     void (async () => {
@@ -236,19 +263,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }, WAKE_FALSE_POSITIVE_MS);
   }, [clearWakeTimeout, goIdle, releaseAssistantMode]);
 
-  const scheduleFollowUpExpiry = useCallback(
-    (responseChars: number) => {
-      clearFollowUpTimer();
-      const ms = computeFollowUpMs(responseChars);
-      followUpTimerRef.current = setTimeout(() => {
-        void (async () => {
-          await releaseAssistantMode();
-          goIdle();
-        })();
-      }, ms);
-    },
-    [clearFollowUpTimer, goIdle, releaseAssistantMode],
-  );
+  const scheduleFollowUpExpiry = useCallback((responseChars: number) => {
+    clearFollowUpTimer();
+    const ms = computeFollowUpMs(responseChars);
+    followUpTimerRef.current = setTimeout(() => {
+      void (async () => {
+        await releaseAssistantMode();
+        goIdle();
+      })();
+    }, ms);
+  }, [clearFollowUpTimer, goIdle, releaseAssistantMode]);
 
   const startNewTurn = useCallback(() => {
     clearFollowUpTimer();
@@ -290,7 +314,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           setState('follow_up');
           scheduleFollowUpExpiry(ev.message.length);
           break;
+        case 'session_end':
+          setAssistantBubbleStatus('done');
+          endSession();
+          break;
         case 'done':
+          if (stateRef.current === 'idle' || sessionEndingRef.current) break;
           setAssistantBubbleStatus('done');
           setUserBubbleText('');
           setState('follow_up');
@@ -301,7 +330,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [claimAssistantMode, scheduleFollowUpExpiry],
+    [claimAssistantMode, endSession, scheduleFollowUpExpiry],
   );
 
   const submitVisibleCommandText = useCallback(
@@ -310,6 +339,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       if (!cleaned) return;
       const visible = fromFollowUp ? cleaned.trim() : normalizeVisibleCommandText(cleaned);
       if (!visible) return;
+
+      if (fromFollowUp && isSessionEndUtterance(visible)) {
+        setUserBubbleText(visible);
+        endSession();
+        return;
+      }
+
       const nowMs = Date.now();
       const last = lastSubmittedTextRef.current;
       if (last && last.text === visible && nowMs - last.atMs < 1500) return;
@@ -389,6 +425,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       abortActiveStream,
       claimAssistantMode,
       clearFollowUpTimer,
+      endSession,
       getAccessToken,
       handleStreamEvent,
       isConnected,
@@ -428,7 +465,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         if (current === 'follow_up') {
           if (!text.trim()) return;
-          pauseFollowUpTimer();
+          onFollowUpSpeechStarted();
           followUpCaptureRef.current = true;
           const visible = text.trim();
           if (visible) setUserBubbleText(visible);
@@ -470,6 +507,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (current === 'follow_up') {
           if (!text.trim()) return;
           followUpCaptureRef.current = false;
+          if (isSessionEndUtterance(text.trim())) {
+            setUserBubbleText(text.trim());
+            endSession();
+            return;
+          }
           submitVisibleCommandText(text, true);
           return;
         }
@@ -479,11 +521,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [
     claimAssistantMode,
     clearWakeTimeout,
-    pauseFollowUpTimer,
+    endSession,
+    onFollowUpSpeechStarted,
     scheduleWakeFalsePositiveRelease,
     startNewTurn,
     submitVisibleCommandText,
   ]);
+
+  useEffect(() => subscribeVoiceSpeechActivity(onFollowUpSpeechStarted), [onFollowUpSpeechStarted]);
 
   useEffect(() => {
     if (isAssistantMode && !isAssistantOwner) {

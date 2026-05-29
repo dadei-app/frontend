@@ -2,10 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
+import { notifyVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
 
 const COMMAND_START_RETRY_MS = 500;
 const MIC_ANALYSER_FFT_SIZE = 256;
 const MIC_ANALYSER_SMOOTHING = 0.7;
+/** Normalized RMS above which we treat follow-up speech as started (before ASR interim). */
+const FOLLOW_UP_SPEECH_RMS = 0.06;
 
 interface AudioContextType {
   isProcessing: boolean;
@@ -86,6 +89,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const analyser = analyserRef.current;
     const buf = new Uint8Array(analyser.fftSize);
     let raf = 0;
+    let speechActive = false;
     const tick = () => {
       analyser.getByteTimeDomainData(buf);
       let sumSq = 0;
@@ -94,7 +98,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         sumSq += v * v;
       }
       const rms = Math.sqrt(sumSq / buf.length);
-      setMicLevel(Math.min(rms * 2.2, 1));
+      const level = Math.min(rms * 2.2, 1);
+      setMicLevel(level);
+
+      const speaking = level >= FOLLOW_UP_SPEECH_RMS;
+      if (speaking && !speechActive && stateRef.current === 'follow_up') {
+        notifyVoiceSpeechActivity();
+      }
+      speechActive = speaking;
+
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

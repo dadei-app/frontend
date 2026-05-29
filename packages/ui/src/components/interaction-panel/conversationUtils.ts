@@ -1,23 +1,10 @@
 import type { Conversation, Interaction } from '@dadei/ui/types/models.types';
+import { parseApiDateTime } from '@dadei/ui/lib/parseApiDateTime';
 import { ORPHAN_KEY } from './constants';
 import type { ConversationGroupState, ConversationGroupView } from './types';
 
-/**
- * Parse API datetimes for display and sorting. Strings without a timezone are treated as UTC
- * (common for SQLAlchemy/FastAPI naive UTC), then `toLocale*` shows the user's local time.
- */
 export function parseInteractionDate(iso: string | undefined | null): Date {
-  if (iso == null || String(iso).trim() === '') {
-    return new Date(NaN);
-  }
-  const s = String(iso).trim();
-  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?$/.test(s)) {
-    return new Date(`${s}Z`);
-  }
-  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,9})?$/.test(s)) {
-    return new Date(`${s.replace(' ', 'T')}Z`);
-  }
-  return new Date(s);
+  return parseApiDateTime(iso);
 }
 
 export function formatLocalTime(iso: string | undefined | null): string {

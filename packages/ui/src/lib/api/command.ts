@@ -8,6 +8,7 @@ export type CommandSSEEvent =
   | { type: 'tool_call'; tool: string; status: string }
   | { type: 'tool_result'; tool: string; ok: boolean; summary?: string }
   | { type: 'error'; message: string }
+  | { type: 'session_end' }
   | { type: 'done' };
 
 /** Fetch / ReadableStream abort — browsers vary (AbortError vs "body stream buffer was aborted"). */

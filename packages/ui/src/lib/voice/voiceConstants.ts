@@ -1,8 +1,13 @@
-export const FOLLOW_UP_MIN_MS = 5_000;
-export const FOLLOW_UP_MAX_MS = 10_000;
+/**
+ * Idle time after the assistant finishes before ending the session.
+ * The user must START speaking within this window; once they do, the timer is cleared
+ * until the next response completes.
+ */
+export const FOLLOW_UP_MIN_MS = 7_000;
+export const FOLLOW_UP_MAX_MS = 15_000;
 export const FOLLOW_UP_PER_CHAR_MS = 50;
 
-/** Follow-up window: 5–10s from assistant response length (`min(MAX, MIN + chars × PER_CHAR_MS)`). */
+/** Follow-up idle window: 7–15s from assistant response length (`min(MAX, MIN + chars × PER_CHAR_MS)`). */
 export function computeFollowUpMs(responseChars: number): number {
   const raw = FOLLOW_UP_MIN_MS + responseChars * FOLLOW_UP_PER_CHAR_MS;
   return Math.min(FOLLOW_UP_MAX_MS, Math.max(FOLLOW_UP_MIN_MS, raw));
