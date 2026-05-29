@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
@@ -27,13 +28,16 @@ import { triggerGoogleOAuth } from '@dadei/ui/lib/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import {
   useAuthMeQuery,
+  useIntegrationsStatusQuery,
   useMemoriesQuery,
   useDeleteMemoryMutation,
   useActionsQuery,
   useDeleteActionMutation,
 } from '@dadei/ui/lib/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
 import { veilEase } from '@dadei/ui/lib/motion';
 
 type AssistantSettingsModalProps = {
@@ -93,70 +97,15 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   message: 'Message',
 };
 
-const GOOGLE_SCOPE_LABELS: Record<string, string> = {
-  'https://www.googleapis.com/auth/gmail.modify': 'Gmail modify',
-  'https://www.googleapis.com/auth/gmail.readonly': 'Gmail read',
-  'https://www.googleapis.com/auth/gmail.send': 'Gmail send',
-  'https://www.googleapis.com/auth/calendar.events': 'Calendar events',
-  'https://www.googleapis.com/auth/calendar.readonly': 'Calendar read',
-  'https://www.googleapis.com/auth/contacts.readonly': 'Contacts read',
-  'https://www.googleapis.com/auth/tasks': 'Tasks',
-  'https://www.googleapis.com/auth/tasks.readonly': 'Tasks read',
-  'https://www.googleapis.com/auth/documents': 'Docs',
-  'https://www.googleapis.com/auth/drive.readonly': 'Drive read',
-  'https://www.googleapis.com/auth/drive.file': 'Drive files',
-  'https://www.googleapis.com/auth/spreadsheets': 'Sheets',
+const INTEGRATION_ICONS: Record<string, typeof CalendarDays> = {
+  gmail: Mail,
+  calendar: CalendarDays,
+  contacts: Users,
+  tasks: CheckSquare,
+  docs: FileText,
+  drive: HardDrive,
+  sheets: Table,
 };
-
-const GOOGLE_INTEGRATIONS: Array<{
-  id: string;
-  name: string;
-  Icon: typeof CalendarDays;
-  requiredScopes: string[];
-}> = [
-  {
-    id: 'gmail',
-    name: 'Gmail',
-    Icon: Mail,
-    requiredScopes: ['https://www.googleapis.com/auth/gmail.modify'],
-  },
-  {
-    id: 'calendar',
-    name: 'Calendar',
-    Icon: CalendarDays,
-    requiredScopes: ['https://www.googleapis.com/auth/calendar.events'],
-  },
-  {
-    id: 'contacts',
-    name: 'Contacts',
-    Icon: Users,
-    requiredScopes: ['https://www.googleapis.com/auth/contacts.readonly'],
-  },
-  {
-    id: 'tasks',
-    name: 'Tasks',
-    Icon: CheckSquare,
-    requiredScopes: ['https://www.googleapis.com/auth/tasks'],
-  },
-  {
-    id: 'docs',
-    name: 'Docs',
-    Icon: FileText,
-    requiredScopes: ['https://www.googleapis.com/auth/documents'],
-  },
-  {
-    id: 'drive',
-    name: 'Drive',
-    Icon: HardDrive,
-    requiredScopes: ['https://www.googleapis.com/auth/drive.readonly'],
-  },
-  {
-    id: 'sheets',
-    name: 'Sheets',
-    Icon: Table,
-    requiredScopes: ['https://www.googleapis.com/auth/spreadsheets'],
-  },
-];
 
 const REALTIME_DATA_SOURCES: Array<{ name: string; detail: string; Icon: typeof CalendarDays }> = [
   { name: 'Weather', detail: 'Live conditions and short-term forecast lookups.', Icon: CloudSun },
@@ -165,10 +114,14 @@ const REALTIME_DATA_SOURCES: Array<{ name: string; detail: string; Icon: typeof 
   { name: 'Current Time', detail: 'Timezone-aware clock checks without extra auth.', Icon: Clock3 },
 ];
 
-function toScopeChipLabel(scope: string): string {
-  if (GOOGLE_SCOPE_LABELS[scope]) return GOOGLE_SCOPE_LABELS[scope];
-  const short = scope.split('/').pop() ?? scope;
-  return short.replaceAll('.', ' ').replaceAll('_', ' ');
+function accessBadgeClass(granted: boolean, googleConnected: boolean): string {
+  if (granted) {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
+  }
+  if (googleConnected) {
+    return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
+  }
+  return 'border-zinc-700 bg-zinc-800/80 text-zinc-500';
 }
 
 function actionDisplayText(action: NetworkAction): string {
@@ -198,10 +151,12 @@ function actionDisplayText(action: NetworkAction): string {
 }
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
+  const queryClient = useQueryClient();
   const { user, refreshUser, logout, saveTokens } = useAuth();
   const { isConnected } = useService();
   const { showToast } = useNotifications();
   const authMeQuery = useAuthMeQuery(open);
+  const integrationsStatusQuery = useIntegrationsStatusQuery(open);
   const memoriesQuery = useMemoriesQuery(isConnected);
   const actionsQuery = useActionsQuery(open && isConnected);
   const deleteMemoryMutation = useDeleteMemoryMutation();
@@ -220,28 +175,19 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const email = profile?.email ?? '—';
   const canDelete =
     !!profile && deletePhrase.trim().toLowerCase() === profile.email.trim().toLowerCase();
-  const googleConnected = Boolean(profile?.google_connected);
-  const grantedScopes = profile?.google_granted_scopes ?? [];
-  const grantedScopeSet = new Set(grantedScopes);
-  const googleScopesStale = Boolean(profile?.google_scopes_stale);
+  const integrationsStatus = integrationsStatusQuery.data;
+  const googleConnected =
+    integrationsStatus?.google_connected ?? Boolean(profile?.google_connected);
   const activeViewMeta = viewMeta[activeView];
 
-  const integrationCards = GOOGLE_INTEGRATIONS.map((integration) => {
-    const grantedForCard = integration.requiredScopes.filter((scope) => grantedScopeSet.has(scope));
-    const missingForCard = integration.requiredScopes.filter((scope) => !grantedScopeSet.has(scope));
-    const needsReauth = googleConnected && (googleScopesStale || missingForCard.length > 0);
-    const status: 'connected' | 'needs_reauth' | 'disconnected' = !googleConnected
-      ? 'disconnected'
-      : needsReauth
-        ? 'needs_reauth'
-        : 'connected';
-    return {
-      ...integration,
-      grantedForCard,
-      missingForCard,
-      status,
-    };
-  });
+  const integrationCards = useMemo(
+    () =>
+      (integrationsStatus?.integrations ?? []).map((integration) => ({
+        ...integration,
+        Icon: INTEGRATION_ICONS[integration.id] ?? Plug,
+      })),
+    [integrationsStatus?.integrations]
+  );
 
   const handleSignOut = async () => {
     onOpenChange(false);
@@ -257,9 +203,12 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     try {
       await triggerGoogleOAuth({
         saveTokens,
-        onSuccess: () => void refreshUser(),
+        onSuccess: () => {
+          void refreshUser();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
+        },
         onError: (msg) => setGoogleConnectError(msg),
-        webNextPath: '/auth/callback',
+        webNextPath: ASSISTANT_PATH,
       });
     } finally {
       if (isElectron) {
@@ -541,6 +490,13 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                     {googleConnectError ? (
                       <p className="mt-3 text-xs text-rose-300/90 font-secondary">{googleConnectError}</p>
                     ) : null}
+                    {integrationsStatusQuery.isLoading ? (
+                      <p className="mt-4 text-xs text-zinc-500 font-secondary">Loading integrations…</p>
+                    ) : integrationsStatusQuery.isError ? (
+                      <p className="mt-4 text-xs text-rose-300/90 font-secondary">
+                        Could not load integration scope status.
+                      </p>
+                    ) : null}
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       {integrationCards.map((integration) => {
                         const isConnectedStatus = integration.status === 'connected';
@@ -573,48 +529,28 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                             </div>
 
                             <div className="mt-3 flex flex-wrap gap-1.5">
-                              {integration.grantedForCard.length > 0 ? (
-                                integration.grantedForCard.map((scope) => (
-                                  <span
-                                    key={`${integration.id}-granted-${scope}`}
-                                    className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200 font-secondary"
-                                  >
-                                    {toScopeChipLabel(scope)}
-                                  </span>
-                                ))
-                              ) : (
-                                <span className="rounded-md border border-zinc-700 bg-zinc-800/80 px-2 py-1 text-[11px] text-zinc-400 font-secondary">
-                                  No granted scopes
+                              {integration.access.map((badge) => (
+                                <span
+                                  key={`${integration.id}-${badge.kind}`}
+                                  className={`rounded-md border px-2 py-1 text-[11px] font-medium font-secondary ${accessBadgeClass(
+                                    badge.granted,
+                                    googleConnected
+                                  )}`}
+                                >
+                                  {badge.kind === 'read' ? 'Read' : 'Write'}
                                 </span>
-                              )}
+                              ))}
                             </div>
 
-                            {integration.missingForCard.length > 0 ? (
-                              <div className="mt-3">
-                                <p className="mb-1 text-[11px] uppercase tracking-wide text-zinc-500 font-secondary">
-                                  Missing scopes
-                                </p>
-                                <div className="flex flex-wrap gap-1.5">
-                                  {integration.missingForCard.map((scope) => (
-                                    <span
-                                      key={`${integration.id}-missing-${scope}`}
-                                      className="rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200 font-secondary"
-                                    >
-                                      {toScopeChipLabel(scope)}
-                                    </span>
-                                  ))}
-                                </div>
-                                {googleConnected ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleGoogleConnect()}
-                                    disabled={connectingGoogle}
-                                    className="mt-3 inline-flex items-center justify-center rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {connectingGoogle ? 'Re-authorizing…' : 'Re-authorize'}
-                                  </button>
-                                ) : null}
-                              </div>
+                            {isReauthStatus && googleConnected ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleGoogleConnect()}
+                                disabled={connectingGoogle}
+                                className="mt-3 inline-flex items-center justify-center rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {connectingGoogle ? 'Re-authorizing…' : 'Re-authorize'}
+                              </button>
                             ) : null}
                           </article>
                         );

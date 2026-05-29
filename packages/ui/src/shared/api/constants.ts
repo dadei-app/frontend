@@ -24,6 +24,9 @@ export const ENDPOINTS = {
   AUTH_GOOGLE_WEB_LOGIN: '/auth/google/web/login',
   AUTH_ME: '/auth/me',
 
+  // Integrations (scope verification for settings; v2 when BETA=true)
+  INTEGRATIONS_STATUS: '/integrations/status',
+
   // Service
   SERVICE_CLIENTS: '/service/clients',
   SERVICE_CLIENT_BY_ID: '/service/clients/:clientId',

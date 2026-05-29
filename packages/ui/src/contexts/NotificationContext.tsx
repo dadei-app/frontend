@@ -28,7 +28,6 @@ const ACTION_LABELS: Record<string, string> = {
   calendar_event: 'Calendar event',
   todo: 'Task',
   task: 'Task',
-  reminder: 'Reminder',
   email: 'Email',
 };
 

@@ -19,4 +19,5 @@ export const queryKeys = {
     [...queryKeys.conversations, conversationId] as readonly ['conversations', string],
   serviceClients: ['service', 'clients'] as const,
   authMe: ['auth', 'me'] as const,
+  integrationsStatus: ['integrations', 'status'] as const,
 };

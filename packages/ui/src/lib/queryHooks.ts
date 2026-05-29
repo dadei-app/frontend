@@ -7,8 +7,10 @@ import { personsApi } from '@dadei/ui/lib/api/persons';
 import { interactionsApi } from '@dadei/ui/lib/api/interactions';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { authApi } from '@dadei/ui/lib/api/auth';
+import { integrationsApi } from '@dadei/ui/lib/api/integrations';
 import type { Conversation, Person } from '@dadei/ui/types/models.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
+import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
 import { queryKeys } from '@dadei/ui/lib/queryKeys';
 
 const CONVERSATION_STALE_MS = 5 * 60_000;
@@ -233,6 +235,14 @@ export function useAuthMeQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.authMe,
     queryFn: (): Promise<UserMe> => authApi.me(),
+    enabled,
+  });
+}
+
+export function useIntegrationsStatusQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.integrationsStatus,
+    queryFn: (): Promise<IntegrationsStatusResponse> => integrationsApi.status(),
     enabled,
   });
 }

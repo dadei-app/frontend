@@ -8,7 +8,13 @@ const COMMAND_START_RETRY_MS = 500;
 const MIC_ANALYSER_FFT_SIZE = 256;
 const MIC_ANALYSER_SMOOTHING = 0.7;
 /** Normalized RMS above which we treat follow-up speech as started (before ASR interim). */
-const FOLLOW_UP_SPEECH_RMS = 0.06;
+const FOLLOW_UP_SPEECH_RMS = 0.14;
+
+/** States where mic PCM is forwarded to the realtime command pipeline. */
+const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
+
+/** Assistant is generating — do not capture or forward user audio. */
+const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
 
 interface AudioContextType {
   isProcessing: boolean;
@@ -41,8 +47,6 @@ function downsampleTo16k(input: Float32Array, inputSampleRate: number): Float32A
   return output;
 }
 
-const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
-
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
@@ -74,9 +78,16 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const prev = prevStateRef.current;
-    if (prev === 'listening' && state === 'thinking') {
+    if (prev === 'listening' && ASSISTANT_BUSY_STATES.includes(state)) {
       sendRealtimeMessage({ type: 'command_audio_end' });
+    } else if (
+      (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
+      (state === 'follow_up' && ASSISTANT_BUSY_STATES.includes(prev))
+    ) {
+      // Drop in-progress noise buffers — do not finalize into a transcript.
+      sendRealtimeMessage({ type: 'command_audio_discard' });
     }
+    prevStateRef.current = state;
   }, [state]);
 
   useEffect(() => {

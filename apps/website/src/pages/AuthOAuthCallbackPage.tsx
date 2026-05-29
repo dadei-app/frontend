@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+import { resolvePostOAuthPath } from '@dadei/ui/lib/assistantPaths';
 
 /**
  * Handles redirect return from server-side web OAuth.
@@ -38,10 +38,7 @@ export default function AuthOAuthCallbackPage() {
       try {
         await saveTokens({ accessToken: access, refreshToken: refresh });
         if (cancelled) return;
-        const next = searchParams.get('next');
-        const safeNext =
-          next && next.startsWith('/') && !next.startsWith('//') ? next : ASSISTANT_PATH;
-        navigate(safeNext, { replace: true });
+        navigate(resolvePostOAuthPath(searchParams.get('next')), { replace: true });
       } catch {
         if (cancelled) return;
         setMessage('Could not save session.');

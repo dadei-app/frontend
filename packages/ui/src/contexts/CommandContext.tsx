@@ -23,6 +23,7 @@ import {
   sanitizeCommandTranscript,
 } from '@dadei/ui/lib/commandTranscriptSanitize';
 import {
+  normalizeTranscriptForWake,
   normalizeVisibleCommandText,
   transcriptStartsWithWakeCommand,
 } from '@dadei/ui/lib/wakeWordDetection';
@@ -31,8 +32,12 @@ import {
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
   computeFollowUpMs,
 } from '@dadei/ui/lib/voice/voiceConstants';
+import { commandToolLabel } from '@dadei/ui/lib/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/sessionEndDetection';
 import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
+
+const ACTIVITY_REQUEST = '_request';
+const ACTIVITY_ANSWER = '_answer';
 
 export type CommandState =
   | 'idle'
@@ -43,6 +48,16 @@ export type CommandState =
   | 'locked';
 
 export type AssistantBubbleStatus = 'pending' | 'streaming' | 'done';
+
+export type CommandActivityStatus = 'running' | 'done' | 'error';
+
+export interface CommandActivityStep {
+  id: string;
+  tool: string;
+  label: string;
+  status: CommandActivityStatus;
+  detail?: string;
+}
 
 export interface CommandTurnHistory {
   id: string;
@@ -55,7 +70,8 @@ interface CommandContextValue {
   userBubbleText: string;
   assistantBubbleText: string;
   assistantBubbleStatus: AssistantBubbleStatus;
-  activeToolCall: string | undefined;
+  /** Live tool / prep steps from the voice command SSE stream. */
+  commandActivitySteps: CommandActivityStep[];
   bubbleHistory: CommandTurnHistory[];
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
@@ -64,44 +80,54 @@ interface CommandContextValue {
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
 
-const WAKE_FALSE_POSITIVE_MS = 4_000;
+/** Release wake-only capture if user never continues with a command. */
+const WAKE_FALSE_POSITIVE_MS = 12_000;
+/** Minimum interim length before arming a follow-up (filters ASR noise). */
+const MIN_FOLLOW_UP_INTERIM_CHARS = 4;
 
-const TOOL_LABELS: Record<string, string> = {
-  create_calendar_event: 'Creating calendar event',
-  create_reminder: 'Creating reminder',
-  create_task: 'Creating task',
-  store_memory: 'Saving memory',
-  search_memory: 'Searching memory',
-  get_current_time: 'Getting time',
-  send_email: 'Sending email',
-  web_search: 'Searching the web',
-  update_memory: 'Updating memory',
-  update_action: 'Updating action',
-  list_calendar_events: 'Checking calendar',
-  update_calendar_event: 'Updating event',
-  delete_calendar_event: 'Deleting event',
-  list_tasks: 'Checking tasks',
-  update_task: 'Updating task',
-  delete_task: 'Deleting task',
-  search_contacts: 'Finding contact',
-  read_email: 'Reading email',
-  search_email: 'Searching email',
-  search_interactions: 'Searching past conversations',
-  query_person_memory: 'Recalling about person',
-  assign_person_name: 'Saving name',
-  get_weather: 'Checking weather',
-  get_weather_forecast: 'Checking forecast',
-  end_assistant_session: 'Ending session',
-};
-
-function toolLabel(tool: string): string {
-  return TOOL_LABELS[tool] ?? tool;
+function formatToolSummarySnippet(summary: string, ok: boolean): string {
+  if (!summary.trim()) return ok ? 'Done.' : 'Something went wrong.';
+  try {
+    const parsed = JSON.parse(summary) as Record<string, unknown>;
+    if (!ok) {
+      const err = parsed.error;
+      return typeof err === 'string' && err.trim() ? err.trim() : 'Something went wrong.';
+    }
+    const data =
+      parsed.data && typeof parsed.data === 'object'
+        ? (parsed.data as Record<string, unknown>)
+        : parsed;
+    const current =
+      data.current && typeof data.current === 'object'
+        ? (data.current as Record<string, unknown>)
+        : null;
+    if (current && typeof current.temperature_2m === 'number') {
+      const cond = typeof data.condition === 'string' ? data.condition.trim() : '';
+      const temp = `About ${Math.round(current.temperature_2m)}°`;
+      return cond ? `${temp}, ${cond}.` : `${temp} right now.`;
+    }
+    const message = parsed.message;
+    if (typeof message === 'string' && message.trim()) return message.trim();
+  } catch {
+    /* use raw summary */
+  }
+  const trimmed = summary.trim();
+  return trimmed.length > 280 ? `${trimmed.slice(0, 277)}…` : trimmed;
 }
 
 function cleanTranscript(raw: string): string {
   const cleaned = sanitizeCommandTranscript(raw);
   if (!cleaned || isInstructionalTranscriptBleed(cleaned)) return '';
   return cleaned;
+}
+
+/** Live caption: show command text; keep wake word visible until stripped on submit. */
+function bubbleCaptionText(text: string, fromFollowUp: boolean): string {
+  const cleaned = cleanTranscript(text);
+  if (!cleaned) return '';
+  if (fromFollowUp) return cleaned.trim();
+  const visible = normalizeVisibleCommandText(cleaned);
+  return visible || normalizeTranscriptForWake(cleaned);
 }
 
 export function CommandProvider({ children }: { children: ReactNode }) {
@@ -118,7 +144,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const [assistantBubbleText, setAssistantBubbleText] = useState('');
   const [assistantBubbleStatus, setAssistantBubbleStatus] =
     useState<AssistantBubbleStatus>('pending');
-  const [activeToolCall, setActiveToolCall] = useState<string | undefined>(undefined);
+  const [commandActivitySteps, setCommandActivitySteps] = useState<CommandActivityStep[]>([]);
+  const activityStepSeqRef = useRef(0);
   const [bubbleHistory, setBubbleHistory] = useState<CommandTurnHistory[]>([]);
 
   const stateRef = useRef(state);
@@ -129,8 +156,24 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const lastSubmittedTextRef = useRef<{ text: string; atMs: number } | null>(null);
   const lastWakeInterimRef = useRef('');
   const assistantBubbleTextRef = useRef('');
+  const userBubbleTextRef = useRef('');
   const followUpCaptureRef = useRef(false);
   const sessionEndingRef = useRef(false);
+  const pendingNewResponseRef = useRef(false);
+  const commandStreamInFlightRef = useRef(false);
+  const streamHadOutputRef = useRef(false);
+  const lastToolBubbleSnippetRef = useRef('');
+
+  const setAssistantBubbleTextSynced = useCallback(
+    (value: string | ((prev: string) => string)) => {
+      setAssistantBubbleText((prev) => {
+        const next = typeof value === 'function' ? value(prev) : value;
+        assistantBubbleTextRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     stateRef.current = state;
@@ -140,6 +183,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     assistantBubbleTextRef.current = assistantBubbleText;
   }, [assistantBubbleText]);
 
+  useEffect(() => {
+    userBubbleTextRef.current = userBubbleText;
+  }, [userBubbleText]);
+
   const clearFollowUpTimer = useCallback(() => {
     if (followUpTimerRef.current != null) {
       clearTimeout(followUpTimerRef.current);
@@ -147,10 +194,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const onFollowUpSpeechStarted = useCallback(() => {
+  const onFollowUpSpeechActivity = useCallback(() => {
     if (stateRef.current !== 'follow_up') return;
     clearFollowUpTimer();
-    followUpCaptureRef.current = true;
   }, [clearFollowUpTimer]);
 
   const clearWakeTimeout = useCallback(() => {
@@ -180,12 +226,28 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const resetLiveBubbles = useCallback(() => {
-    setUserBubbleText('');
-    setAssistantBubbleText('');
-    setAssistantBubbleStatus('pending');
-    setActiveToolCall(undefined);
+  const startRequestActivity = useCallback(() => {
+    activityStepSeqRef.current = 0;
+    setCommandActivitySteps([
+      {
+        id: 'step-0',
+        tool: ACTIVITY_REQUEST,
+        label: 'Understanding your request',
+        status: 'running',
+      },
+    ]);
   }, []);
+
+  const resetLiveBubbles = useCallback(() => {
+    followUpCaptureRef.current = false;
+    pendingNewResponseRef.current = false;
+    lastToolBubbleSnippetRef.current = '';
+    activityStepSeqRef.current = 0;
+    setCommandActivitySteps([]);
+    setUserBubbleText('');
+    setAssistantBubbleTextSynced('');
+    setAssistantBubbleStatus('pending');
+  }, [setAssistantBubbleTextSynced]);
 
   const goIdle = useCallback(() => {
     clearFollowUpTimer();
@@ -263,6 +325,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }, WAKE_FALSE_POSITIVE_MS);
   }, [clearWakeTimeout, goIdle, releaseAssistantMode]);
 
+  const clearWakeFalsePositiveIfCommandInProgress = useCallback((text: string) => {
+    const cleaned = cleanTranscript(text);
+    if (!cleaned) return;
+    if (normalizeVisibleCommandText(cleaned).trim()) {
+      clearWakeTimeout();
+    }
+  }, [clearWakeTimeout]);
+
   const scheduleFollowUpExpiry = useCallback((responseChars: number) => {
     clearFollowUpTimer();
     const ms = computeFollowUpMs(responseChars);
@@ -280,15 +350,35 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     resetLiveBubbles();
   }, [clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
 
+  /** Claim assistant mode, enter listening; does not wipe in-progress caption text. */
+  const armWakeListening = useCallback(async (): Promise<boolean> => {
+    clearWakeTimeout();
+    clearFollowUpTimer();
+    followUpCaptureRef.current = false;
+    pendingNewResponseRef.current = false;
+    setAssistantBubbleTextSynced('');
+    setAssistantBubbleStatus('pending');
+    setCommandActivitySteps([]);
+
+    const claimed = await claimAssistantMode();
+    if (!claimed) return false;
+
+    setState('listening');
+    scheduleWakeFalsePositiveRelease();
+    return true;
+  }, [
+    claimAssistantMode,
+    clearFollowUpTimer,
+    clearWakeTimeout,
+    scheduleWakeFalsePositiveRelease,
+    setAssistantBubbleTextSynced,
+  ]);
+
   const startListening = useCallback(() => {
     if (stateRef.current !== 'idle') return;
     startNewTurn();
-    setState('listening');
-    void (async () => {
-      await claimAssistantMode();
-      scheduleWakeFalsePositiveRelease();
-    })();
-  }, [claimAssistantMode, scheduleWakeFalsePositiveRelease, startNewTurn]);
+    void armWakeListening();
+  }, [armWakeListening, startNewTurn]);
 
   const handleStreamEvent = useCallback(
     (ev: CommandSSEEvent) => {
@@ -296,20 +386,92 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         case 'transcript':
           break;
         case 'token':
+          streamHadOutputRef.current = true;
           setState((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('streaming');
-          setAssistantBubbleText((prev) => prev + ev.text);
+          setCommandActivitySteps((prev) =>
+            prev.filter((s) => !(s.tool === ACTIVITY_ANSWER && s.status === 'running')),
+          );
+          setAssistantBubbleTextSynced((prev) => {
+            if (pendingNewResponseRef.current) {
+              pendingNewResponseRef.current = false;
+              return ev.text;
+            }
+            return prev + ev.text;
+          });
           break;
         case 'tool_call':
+          streamHadOutputRef.current = true;
           setState((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('streaming');
-          setActiveToolCall(toolLabel(ev.tool));
+          pendingNewResponseRef.current = false;
+          setCommandActivitySteps((prev) => {
+            const label = commandToolLabel(ev.tool);
+            const withPrepDone = prev.map((s) =>
+              s.tool === ACTIVITY_REQUEST && s.status === 'running'
+                ? { ...s, status: 'done' as const }
+                : s,
+            );
+            if (withPrepDone.some((s) => s.tool === ev.tool && s.status === 'running')) {
+              return withPrepDone;
+            }
+            return [
+              ...withPrepDone,
+              {
+                id: `step-${++activityStepSeqRef.current}`,
+                tool: ev.tool,
+                label,
+                status: 'running' as const,
+              },
+            ];
+          });
           break;
         case 'tool_result':
-          setActiveToolCall(undefined);
+          if (ev.summary) {
+            streamHadOutputRef.current = true;
+            const snippet = formatToolSummarySnippet(ev.summary, ev.ok);
+            const detail =
+              snippet.length > 100 ? `${snippet.slice(0, 97)}…` : snippet;
+            lastToolBubbleSnippetRef.current = snippet;
+            setCommandActivitySteps((prev) => {
+              let next = prev.map((s) =>
+                s.tool === ev.tool && s.status === 'running'
+                  ? {
+                      ...s,
+                      status: ev.ok ? ('done' as const) : ('error' as const),
+                      detail: ev.ok ? undefined : detail,
+                    }
+                  : s,
+              );
+              if (
+                ev.ok &&
+                !assistantBubbleTextRef.current.trim() &&
+                !next.some((s) => s.tool === ACTIVITY_ANSWER)
+              ) {
+                next = [
+                  ...next.filter(
+                    (s) => !(s.tool === ACTIVITY_ANSWER && s.status === 'running'),
+                  ),
+                  {
+                    id: `step-${++activityStepSeqRef.current}`,
+                    tool: ACTIVITY_ANSWER,
+                    label: 'Putting answer together',
+                    status: 'running',
+                  },
+                ];
+              }
+              return next;
+            });
+            if (!ev.ok || !assistantBubbleTextRef.current.trim()) {
+              setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
+            }
+            setAssistantBubbleStatus(ev.ok ? 'streaming' : 'done');
+            setState((s) => (s === 'thinking' ? 'responding' : s));
+          }
           break;
         case 'error':
-          setAssistantBubbleText(ev.message);
+          streamHadOutputRef.current = true;
+          setAssistantBubbleTextSynced(ev.message);
           setAssistantBubbleStatus('done');
           setState('follow_up');
           scheduleFollowUpExpiry(ev.message.length);
@@ -320,8 +482,25 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
         case 'done':
           if (stateRef.current === 'idle' || sessionEndingRef.current) break;
+          followUpCaptureRef.current = false;
+          pendingNewResponseRef.current = false;
+          setCommandActivitySteps((prev) =>
+            prev
+              .filter((s) => s.tool !== ACTIVITY_ANSWER || s.status !== 'running')
+              .map((s) =>
+                s.status === 'running' ? { ...s, status: 'done' as const } : s,
+              ),
+          );
+          if (!assistantBubbleTextRef.current.trim()) {
+            const fallback =
+              lastToolBubbleSnippetRef.current.trim() || 'No response from Dadei. Try again.';
+            setAssistantBubbleTextSynced(fallback);
+            setAssistantBubbleStatus('done');
+            setState('follow_up');
+            scheduleFollowUpExpiry(fallback.length);
+            break;
+          }
           setAssistantBubbleStatus('done');
-          setUserBubbleText('');
           setState('follow_up');
           void claimAssistantMode();
           scheduleFollowUpExpiry(assistantBubbleTextRef.current.length);
@@ -330,7 +509,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [claimAssistantMode, endSession, scheduleFollowUpExpiry],
+    [claimAssistantMode, endSession, scheduleFollowUpExpiry, setAssistantBubbleTextSynced],
   );
 
   const submitVisibleCommandText = useCallback(
@@ -338,7 +517,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const cleaned = cleanTranscript(raw);
       if (!cleaned) return;
       const visible = fromFollowUp ? cleaned.trim() : normalizeVisibleCommandText(cleaned);
-      if (!visible) return;
+      if (!visible) {
+        if (!fromFollowUp && transcriptStartsWithWakeCommand(cleaned)) {
+          clearWakeTimeout();
+          void (async () => {
+            if (localClaimRef.current) await releaseAssistantMode();
+            goIdle();
+          })();
+        }
+        return;
+      }
 
       if (fromFollowUp && isSessionEndUtterance(visible)) {
         setUserBubbleText(visible);
@@ -349,14 +537,19 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const nowMs = Date.now();
       const last = lastSubmittedTextRef.current;
       if (last && last.text === visible && nowMs - last.atMs < 1500) return;
+      if (commandStreamInFlightRef.current) return;
       lastSubmittedTextRef.current = { text: visible, atMs: nowMs };
 
       clearWakeTimeout();
       clearFollowUpTimer();
-      setUserBubbleText(visible);
-      setAssistantBubbleText('');
+      followUpCaptureRef.current = false;
+      streamHadOutputRef.current = false;
+      lastToolBubbleSnippetRef.current = '';
+      setAssistantBubbleTextSynced('');
       setAssistantBubbleStatus('pending');
-      setActiveToolCall(undefined);
+      pendingNewResponseRef.current = true;
+      startRequestActivity();
+      setUserBubbleText(visible);
       setState('thinking');
 
       void (async () => {
@@ -365,7 +558,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           const msg = fromFollowUp
             ? 'Could not keep assistant mode for follow-up'
             : 'Could not claim assistant mode';
-          setAssistantBubbleText(msg);
+          setAssistantBubbleTextSynced(msg);
           setAssistantBubbleStatus('done');
           setState(fromFollowUp ? 'follow_up' : 'idle');
           if (fromFollowUp) scheduleFollowUpExpiry(0);
@@ -374,7 +567,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          setAssistantBubbleText('Not authenticated');
+          setAssistantBubbleTextSynced('Not authenticated');
           setAssistantBubbleStatus('done');
           setState('follow_up');
           scheduleFollowUpExpiry(0);
@@ -382,13 +575,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         }
 
         if (!isConnected || !getRealtimeSessionToken()) {
-          setAssistantBubbleText('Not connected to the assistant service yet');
+          setAssistantBubbleTextSynced('Not connected to the assistant service yet');
           setAssistantBubbleStatus('done');
           setState('follow_up');
           scheduleFollowUpExpiry(0);
           return;
         }
 
+        commandStreamInFlightRef.current = true;
         abortActiveStream();
         const abortController = new AbortController();
         streamAbortRef.current = abortController;
@@ -410,14 +604,28 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             handleStreamEvent({ type: 'done' });
           }
         } catch (e) {
-          if (isAbortError(e) || abortController.signal.aborted) return;
+          if (isAbortError(e) || abortController.signal.aborted) {
+            if (
+              stateRef.current === 'thinking' &&
+              !streamHadOutputRef.current &&
+              !assistantBubbleTextRef.current.trim()
+            ) {
+              setAssistantBubbleTextSynced('Request cancelled');
+              setAssistantBubbleStatus('done');
+              setState('follow_up');
+              scheduleFollowUpExpiry(0);
+            }
+            return;
+          }
           const message = e instanceof Error ? e.message : 'Command failed';
-          setAssistantBubbleText(message);
+          streamHadOutputRef.current = true;
+          setAssistantBubbleTextSynced(message);
           setAssistantBubbleStatus('done');
           setState('follow_up');
           scheduleFollowUpExpiry(message.length);
         } finally {
           streamAbortRef.current = null;
+          commandStreamInFlightRef.current = false;
         }
       })();
     },
@@ -427,9 +635,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       clearFollowUpTimer,
       endSession,
       getAccessToken,
+      goIdle,
       handleStreamEvent,
       isConnected,
+      releaseAssistantMode,
       scheduleFollowUpExpiry,
+      setAssistantBubbleTextSynced,
+      startNewTurn,
+      startRequestActivity,
     ],
   );
 
@@ -444,31 +657,42 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         if (current === 'idle' && transcriptStartsWithWakeCommand(text)) {
           lastWakeInterimRef.current = text;
-          startNewTurn();
-          setState('listening');
           void (async () => {
-            await claimAssistantMode();
+            const armed = await armWakeListening();
+            if (!armed) return;
+            const caption = bubbleCaptionText(text, false);
+            if (caption) setUserBubbleText(caption);
           })();
-          scheduleWakeFalsePositiveRelease();
-          const visible = normalizeVisibleCommandText(text);
-          if (visible) setUserBubbleText(visible);
           return;
         }
 
         if (current === 'listening') {
-          const visible = followUpCaptureRef.current
-            ? text.trim()
-            : normalizeVisibleCommandText(text);
-          if (visible) setUserBubbleText(visible);
+          clearWakeFalsePositiveIfCommandInProgress(text);
+          const caption = bubbleCaptionText(text, followUpCaptureRef.current);
+          if (caption) setUserBubbleText(caption);
           return;
         }
 
         if (current === 'follow_up') {
-          if (!text.trim()) return;
-          onFollowUpSpeechStarted();
-          followUpCaptureRef.current = true;
           const visible = text.trim();
-          if (visible) setUserBubbleText(visible);
+          if (visible.length < MIN_FOLLOW_UP_INTERIM_CHARS) return;
+          onFollowUpSpeechActivity();
+          followUpCaptureRef.current = true;
+          setUserBubbleText(visible);
+        }
+        return;
+      }
+
+      if (msg.event === 'command_transcript_done') {
+        if (current !== 'listening') return;
+        clearWakeTimeout();
+        const caption = userBubbleTextRef.current.trim();
+        const submitted = lastSubmittedTextRef.current != null;
+        if (!caption && !submitted) {
+          void (async () => {
+            if (localClaimRef.current) await releaseAssistantMode();
+            goIdle();
+          })();
         }
         return;
       }
@@ -476,22 +700,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       if (msg.event === 'command_transcript_final') {
         if (current === 'thinking' || current === 'responding') return;
         const finalRaw = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
-        const text = finalRaw || lastWakeInterimRef.current;
+        const text = finalRaw || cleanTranscript(lastWakeInterimRef.current);
         lastWakeInterimRef.current = '';
         clearWakeTimeout();
 
         if (current === 'idle') {
           if (!text.trim() || !transcriptStartsWithWakeCommand(text)) return;
-          startNewTurn();
-          setState('listening');
           void (async () => {
-            const claimed = await claimAssistantMode();
-            if (!claimed) return;
-            scheduleWakeFalsePositiveRelease();
-            const visible = normalizeVisibleCommandText(text);
-            if (visible) {
-              submitVisibleCommandText(text, false);
-            }
+            const armed = await armWakeListening();
+            if (!armed) return;
+            submitVisibleCommandText(text, false);
           })();
           return;
         }
@@ -500,18 +718,23 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           if (!text.trim()) return;
           const fromFollowUp = followUpCaptureRef.current;
           followUpCaptureRef.current = false;
+          const caption = bubbleCaptionText(text, fromFollowUp);
+          if (caption) setUserBubbleText(caption);
           submitVisibleCommandText(text, fromFollowUp);
           return;
         }
 
         if (current === 'follow_up') {
-          if (!text.trim()) return;
-          followUpCaptureRef.current = false;
-          if (isSessionEndUtterance(text.trim())) {
-            setUserBubbleText(text.trim());
+          const trimmed = text.trim();
+          if (!trimmed) return;
+          if (isSessionEndUtterance(trimmed)) {
+            followUpCaptureRef.current = false;
+            setUserBubbleText(trimmed);
             endSession();
             return;
           }
+          if (!followUpCaptureRef.current) return;
+          followUpCaptureRef.current = false;
           submitVisibleCommandText(text, true);
           return;
         }
@@ -519,16 +742,17 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     });
     return off;
   }, [
-    claimAssistantMode,
+    armWakeListening,
+    clearWakeFalsePositiveIfCommandInProgress,
     clearWakeTimeout,
     endSession,
-    onFollowUpSpeechStarted,
-    scheduleWakeFalsePositiveRelease,
-    startNewTurn,
+    goIdle,
+    onFollowUpSpeechActivity,
+    releaseAssistantMode,
     submitVisibleCommandText,
   ]);
 
-  useEffect(() => subscribeVoiceSpeechActivity(onFollowUpSpeechStarted), [onFollowUpSpeechStarted]);
+  useEffect(() => subscribeVoiceSpeechActivity(onFollowUpSpeechActivity), [onFollowUpSpeechActivity]);
 
   useEffect(() => {
     if (isAssistantMode && !isAssistantOwner) {
@@ -599,7 +823,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     userBubbleText,
     assistantBubbleText,
     assistantBubbleStatus,
-    activeToolCall,
+    commandActivitySteps,
     bubbleHistory,
     cancel,
     startListening,
