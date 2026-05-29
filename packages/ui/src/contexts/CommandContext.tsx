@@ -73,6 +73,8 @@ const CommandContext = createContext<CommandContextValue | undefined>(undefined)
 const WAKE_FALSE_POSITIVE_MS = 12_000;
 /** Minimum interim length before arming a follow-up (filters ASR noise). */
 const MIN_FOLLOW_UP_INTERIM_CHARS = 4;
+const INTERIM_SHRINK_GUARD_RATIO = 0.7;
+const VOICE_DEBUG_STORAGE_KEY = 'dadei.voice.debug';
 
 function formatToolSummarySnippet(summary: string, ok: boolean): string {
   if (!summary.trim()) return ok ? 'Done.' : 'Something went wrong.';
@@ -119,6 +121,70 @@ function bubbleCaptionText(text: string, fromFollowUp: boolean): string {
   return visible || normalizeTranscriptForWake(cleaned);
 }
 
+function normalizeInterimCaption(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function longestCommonPrefixLen(a: string, b: string): number {
+  const max = Math.min(a.length, b.length);
+  let idx = 0;
+  while (idx < max && a[idx] === b[idx]) idx += 1;
+  return idx;
+}
+
+function isVoiceDebugEnabled(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return window.localStorage.getItem(VOICE_DEBUG_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export interface InterimCaptionState {
+  utteranceId: number | null;
+  interimSeq: number;
+  caption: string;
+}
+
+export function stabilizeInterimCaptionState(
+  prev: InterimCaptionState,
+  rawCaption: string,
+  utteranceId: number | null,
+  interimSeq: number | null,
+): InterimCaptionState {
+  const candidate = rawCaption.trim();
+  if (!candidate) return prev;
+  const seq = typeof interimSeq === 'number' && Number.isFinite(interimSeq) ? interimSeq : null;
+  const hasUtteranceId = typeof utteranceId === 'number' && Number.isFinite(utteranceId);
+  const changedUtterance = hasUtteranceId && prev.utteranceId !== utteranceId;
+  const base: InterimCaptionState = changedUtterance
+    ? { utteranceId: utteranceId!, interimSeq: 0, caption: '' }
+    : {
+        utteranceId: hasUtteranceId ? utteranceId : prev.utteranceId,
+        interimSeq: prev.interimSeq,
+        caption: prev.caption,
+      };
+
+  if (seq != null && seq <= base.interimSeq) return base;
+  const nextSeq = seq ?? base.interimSeq;
+  const prevCaption = base.caption.trim();
+  if (!prevCaption) return { ...base, interimSeq: nextSeq, caption: candidate };
+  const prevNorm = normalizeInterimCaption(prevCaption);
+  const nextNorm = normalizeInterimCaption(candidate);
+  if (!nextNorm || nextNorm === prevNorm) return { ...base, interimSeq: nextSeq };
+  if (nextNorm.startsWith(prevNorm)) return { ...base, interimSeq: nextSeq, caption: candidate };
+  if (prevNorm.startsWith(nextNorm)) {
+    const minAllowed = Math.max(4, Math.floor(prevNorm.length * INTERIM_SHRINK_GUARD_RATIO));
+    if (nextNorm.length < minAllowed) return { ...base, interimSeq: nextSeq };
+  } else {
+    const lcp = longestCommonPrefixLen(prevNorm, nextNorm);
+    const weakAlignment = lcp < Math.max(3, Math.floor(Math.min(prevNorm.length, nextNorm.length) * 0.45));
+    if (weakAlignment && nextNorm.length < prevNorm.length) return { ...base, interimSeq: nextSeq };
+  }
+  return { ...base, interimSeq: nextSeq, caption: candidate };
+}
+
 export function CommandProvider({ children }: { children: ReactNode }) {
   const { getAccessToken } = useAuth();
   const {
@@ -151,6 +217,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const commandStreamInFlightRef = useRef(false);
   const streamHadOutputRef = useRef(false);
   const lastToolBubbleSnippetRef = useRef('');
+  const interimCaptionRef = useRef('');
+  const interimSeqRef = useRef<number>(0);
+  const interimUtteranceIdRef = useRef<number | null>(null);
 
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
@@ -228,15 +297,55 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setAssistantBubbleStatus('pending');
   }, [setAssistantBubbleTextSynced]);
 
+  const resetInterimCaptionState = useCallback(() => {
+    interimCaptionRef.current = '';
+    interimSeqRef.current = 0;
+    interimUtteranceIdRef.current = null;
+  }, []);
+
+  const stableInterimCaption = useCallback(
+    (rawCaption: string, utteranceId: number | null, interimSeq: number | null): string => {
+      const prevCaption = interimCaptionRef.current;
+      const next = stabilizeInterimCaptionState(
+        {
+          utteranceId: interimUtteranceIdRef.current,
+          interimSeq: interimSeqRef.current,
+          caption: interimCaptionRef.current,
+        },
+        rawCaption,
+        utteranceId,
+        interimSeq,
+      );
+      interimUtteranceIdRef.current = next.utteranceId;
+      interimSeqRef.current = next.interimSeq;
+      interimCaptionRef.current = next.caption;
+      if (isVoiceDebugEnabled()) {
+        const accepted = next.caption.trim() !== prevCaption.trim() || !prevCaption.trim();
+        // eslint-disable-next-line no-console
+        console.debug('[Voice][Interim]', {
+          utteranceId: next.utteranceId,
+          interimSeq: next.interimSeq,
+          rawChars: rawCaption.trim().length,
+          stableChars: next.caption.trim().length,
+          accepted,
+        });
+      }
+      return next.caption;
+    },
+    [],
+  );
+
   const goIdle = useCallback(() => {
     clearFollowUpTimer();
     clearWakeTimeout();
     abortActiveStream();
     sessionEndingRef.current = false;
+    lastSubmittedTextRef.current = null;
+    resetInterimCaptionState();
     setBubbleHistory([]);
     setState('idle');
     resetLiveBubbles();
-  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
+  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetInterimCaptionState, resetLiveBubbles]);
 
   const endSession = useCallback(() => {
     sessionEndingRef.current = true;
@@ -335,6 +444,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer();
     followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
+    lastSubmittedTextRef.current = null;
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
     setAssistantStatusLine(null);
@@ -444,11 +554,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const visible = fromFollowUp ? cleaned.trim() : normalizeVisibleCommandText(cleaned);
       if (!visible) {
         if (!fromFollowUp && transcriptStartsWithWakeCommand(cleaned)) {
-          clearWakeTimeout();
-          void (async () => {
-            if (localClaimRef.current) await releaseAssistantMode();
-            goIdle();
-          })();
+          // Wake-only final (e.g. just "assistant") should keep listening for the
+          // rest of the command instead of tearing down assistant mode.
+          if (stateRef.current !== 'listening') {
+            setState('listening');
+          }
+          scheduleWakeFalsePositiveRelease();
         }
         return;
       }
@@ -468,6 +579,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       clearWakeTimeout();
       clearFollowUpTimer();
       followUpCaptureRef.current = false;
+      resetInterimCaptionState();
       streamHadOutputRef.current = false;
       lastToolBubbleSnippetRef.current = '';
       setAssistantBubbleTextSynced('');
@@ -564,6 +676,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       handleStreamEvent,
       isConnected,
       releaseAssistantMode,
+      resetInterimCaptionState,
       scheduleFollowUpExpiry,
       setAssistantBubbleTextSynced,
       startNewTurn,
@@ -594,11 +707,23 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (current === 'listening') {
           clearWakeFalsePositiveIfCommandInProgress(text);
           const caption = bubbleCaptionText(text, followUpCaptureRef.current);
-          if (caption) setUserBubbleText(caption);
+          const utteranceId =
+            typeof msg.utterance_id === 'number' && Number.isFinite(msg.utterance_id)
+              ? msg.utterance_id
+              : null;
+          const interimSeq =
+            typeof msg.interim_seq === 'number' && Number.isFinite(msg.interim_seq)
+              ? msg.interim_seq
+              : null;
+          const stableCaption = caption
+            ? stableInterimCaption(caption, utteranceId, interimSeq)
+            : '';
+          if (stableCaption) setUserBubbleText(stableCaption);
           return;
         }
 
         if (current === 'follow_up') {
+          if (commandStreamInFlightRef.current) return;
           const visible = text.trim();
           if (visible.length < MIN_FOLLOW_UP_INTERIM_CHARS) return;
           onFollowUpSpeechActivity();
@@ -612,7 +737,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (current !== 'listening') return;
         clearWakeTimeout();
         const caption = userBubbleTextRef.current.trim();
-        const submitted = lastSubmittedTextRef.current != null;
+        const submitted =
+          lastSubmittedTextRef.current != null &&
+          Date.now() - lastSubmittedTextRef.current.atMs < 3_000;
         if (!caption && !submitted) {
           void (async () => {
             if (localClaimRef.current) await releaseAssistantMode();
@@ -626,8 +753,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (current === 'thinking' || current === 'responding') return;
         const finalRaw = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         const text = finalRaw || cleanTranscript(lastWakeInterimRef.current);
+        resetInterimCaptionState();
         lastWakeInterimRef.current = '';
-        clearWakeTimeout();
 
         if (current === 'idle') {
           if (!text.trim() || !transcriptStartsWithWakeCommand(text)) return;
@@ -650,6 +777,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         }
 
         if (current === 'follow_up') {
+          if (commandStreamInFlightRef.current) return;
           const trimmed = text.trim();
           if (!trimmed) return;
           if (isSessionEndUtterance(trimmed)) {
@@ -673,7 +801,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     endSession,
     goIdle,
     onFollowUpSpeechActivity,
+    resetInterimCaptionState,
     releaseAssistantMode,
+    scheduleWakeFalsePositiveRelease,
+    stableInterimCaption,
     submitVisibleCommandText,
   ]);
 

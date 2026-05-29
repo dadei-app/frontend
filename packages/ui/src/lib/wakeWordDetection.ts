@@ -13,6 +13,7 @@ const LEADING_DISFLUENCY =
 
 /** Max leading filler words to strip before wake-token detection. */
 const MAX_DISFLUENCY_STRIPS = 4;
+const INTERIM_SHRINK_GUARD_RATIO = 0.7;
 
 /**
  * Strips a bounded chain of leading hesitation words (e.g. "Um, uh, Dadei").
@@ -62,6 +63,10 @@ const ASSISTANT_WAKE_FIRST_WORDS = new Set([
   'assisted',
   'assisting',
   'assistive',
+  'assist',
+  'assists',
+  'assistance',
+  'system',
 ]);
 
 const DADEI_WAKE_FIRST_WORDS = new Set([
@@ -116,7 +121,11 @@ function startsWithAssistantWake(lead: string, firstWord: string, collapsedLead:
     /^assistant\b/i.test(lead) ||
     /^assisted\b/i.test(lead) ||
     /^assisting\b/i.test(lead) ||
-    /^assistive\b/i.test(lead)
+    /^assistive\b/i.test(lead) ||
+    /^assist\b/i.test(lead) ||
+    /^assists\b/i.test(lead) ||
+    /^assistance\b/i.test(lead) ||
+    /^system\b/i.test(lead)
   ) {
     const follow = lead.match(/^[\w'-]+\b[,.:]?\s*(\S+)/i);
     if (follow) {
@@ -192,6 +201,65 @@ export function normalizeVisibleCommandText(text: string): string {
   out = out.replace(/^\s*assisted\b[,.:]?\s*/i, '');
   out = out.replace(/^\s*assisting\b[,.:]?\s*/i, '');
   out = out.replace(/^\s*assistive\b[,.:]?\s*/i, '');
+  out = out.replace(/^\s*assist\b[,.:]?\s*/i, '');
+  out = out.replace(/^\s*assists\b[,.:]?\s*/i, '');
+  out = out.replace(/^\s*assistance\b[,.:]?\s*/i, '');
+  out = out.replace(/^\s*system\b[,.:]?\s*/i, '');
   out = out.replace(/\s+/g, ' ').trim();
   return out;
+}
+
+export interface InterimCaptionState {
+  utteranceId: number | null;
+  interimSeq: number;
+  caption: string;
+}
+
+function normalizeInterimCaption(text: string): string {
+  return text.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function longestCommonPrefixLen(a: string, b: string): number {
+  const max = Math.min(a.length, b.length);
+  let idx = 0;
+  while (idx < max && a[idx] === b[idx]) idx += 1;
+  return idx;
+}
+
+export function stabilizeInterimCaptionState(
+  prev: InterimCaptionState,
+  rawCaption: string,
+  utteranceId: number | null,
+  interimSeq: number | null,
+): InterimCaptionState {
+  const candidate = rawCaption.trim();
+  if (!candidate) return prev;
+  const seq = typeof interimSeq === 'number' && Number.isFinite(interimSeq) ? interimSeq : null;
+  const hasUtteranceId = typeof utteranceId === 'number' && Number.isFinite(utteranceId);
+  const changedUtterance = hasUtteranceId && prev.utteranceId !== utteranceId;
+  const base: InterimCaptionState = changedUtterance
+    ? { utteranceId: utteranceId!, interimSeq: 0, caption: '' }
+    : {
+        utteranceId: hasUtteranceId ? utteranceId : prev.utteranceId,
+        interimSeq: prev.interimSeq,
+        caption: prev.caption,
+      };
+
+  if (seq != null && seq <= base.interimSeq) return base;
+  const nextSeq = seq ?? base.interimSeq;
+  const prevCaption = base.caption.trim();
+  if (!prevCaption) return { ...base, interimSeq: nextSeq, caption: candidate };
+  const prevNorm = normalizeInterimCaption(prevCaption);
+  const nextNorm = normalizeInterimCaption(candidate);
+  if (!nextNorm || nextNorm === prevNorm) return { ...base, interimSeq: nextSeq };
+  if (nextNorm.startsWith(prevNorm)) return { ...base, interimSeq: nextSeq, caption: candidate };
+  if (prevNorm.startsWith(nextNorm)) {
+    const minAllowed = Math.max(4, Math.floor(prevNorm.length * INTERIM_SHRINK_GUARD_RATIO));
+    if (nextNorm.length < minAllowed) return { ...base, interimSeq: nextSeq };
+  } else {
+    const lcp = longestCommonPrefixLen(prevNorm, nextNorm);
+    const weakAlignment = lcp < Math.max(3, Math.floor(Math.min(prevNorm.length, nextNorm.length) * 0.45));
+    if (weakAlignment && nextNorm.length < prevNorm.length) return { ...base, interimSeq: nextSeq };
+  }
+  return { ...base, interimSeq: nextSeq, caption: candidate };
 }

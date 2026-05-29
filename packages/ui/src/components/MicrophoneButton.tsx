@@ -210,7 +210,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
             <motion.div
               key="mic-ripples"
               aria-hidden
-              className="pointer-events-none absolute inset-0"
+              className="pointer-events-none absolute inset-0 z-0 overflow-visible"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

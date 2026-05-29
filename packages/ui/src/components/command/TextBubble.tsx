@@ -17,7 +17,7 @@ const STATE_TINT: Record<CommandState, string> = {
   locked: 'transparent',
 };
 
-function CommandBubbleGlassFilter() {
+function TextBubbleGlassFilter() {
   return (
     <svg
       aria-hidden
@@ -26,7 +26,7 @@ function CommandBubbleGlassFilter() {
       className="pointer-events-none absolute"
     >
       <defs>
-        <filter id="dadei-command-bubble-glass" x="-4%" y="-4%" width="108%" height="108%">
+        <filter id="dadei-text-bubble-glass" x="-4%" y="-4%" width="108%" height="108%">
           <feTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="2" seed="3" />
           <feDisplacementMap in="SourceGraphic" scale="3" />
         </filter>
@@ -42,7 +42,7 @@ const glassShellStyle: CSSProperties = {
   border: '1px solid rgba(255, 255, 255, 0.09)',
   boxShadow:
     'inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 10px 28px -14px rgba(0, 0, 0, 0.4)',
-  filter: 'url(#dadei-command-bubble-glass)',
+  filter: 'url(#dadei-text-bubble-glass)',
 };
 
 interface GlassBubbleProps {
@@ -134,7 +134,7 @@ function GlassBubble({
   );
 }
 
-export default function CommandBubble() {
+export default function TextBubble() {
   const {
     state,
     userBubbleText,
@@ -147,6 +147,8 @@ export default function CommandBubble() {
   if (state === 'idle' || state === 'locked') return null;
 
   const showUser = state === 'listening' || state === 'thinking' || state === 'responding' || state === 'follow_up';
+  const showUserMicPlaceholder =
+    (state === 'listening' || state === 'follow_up') && !userBubbleText.trim();
   const assistantHasText = assistantBubbleText.trim().length > 0;
   const assistantIsBusy = state === 'thinking' || state === 'responding';
   const showAssistant =
@@ -154,44 +156,60 @@ export default function CommandBubble() {
     assistantHasText ||
     !!assistantStatusLine ||
     (state === 'follow_up' && assistantBubbleStatus === 'done');
+  const placeUserBubbleBelowAssistant = state === 'follow_up' && showAssistant;
+
+  const userBubble = showUser && (userBubbleText.trim() || showUserMicPlaceholder) ? (
+    <GlassBubble
+      role="user"
+      label="You"
+      text={userBubbleText}
+      state={state}
+      showListeningMic={state === 'listening' || state === 'follow_up'}
+      micLevel={micLevel}
+    />
+  ) : null;
+
+  const assistantBubble = (
+    <AnimatePresence>
+      {showAssistant ? (
+        <motion.div
+          key="assistant-command-bubble"
+          layout
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          transition={{ duration: 0.36, ease: VOICE_EASE }}
+          className="w-full"
+        >
+          <GlassBubble
+            role="assistant"
+            label="Dadei"
+            text={assistantBubbleText}
+            state={state}
+            assistantStatus={assistantBubbleStatus}
+            statusLine={assistantStatusLine}
+            animateEntry={false}
+          />
+        </motion.div>
+      ) : null}
+    </AnimatePresence>
+  );
 
   return (
     <>
-      <CommandBubbleGlassFilter />
+      <TextBubbleGlassFilter />
       <motion.div layout className="flex w-full max-w-[640px] flex-col gap-3">
-        {showUser && userBubbleText.trim() ? (
-          <GlassBubble
-            role="user"
-            label="You"
-            text={userBubbleText}
-            state={state}
-            showListeningMic={state === 'listening'}
-            micLevel={micLevel}
-          />
-        ) : null}
-        <AnimatePresence>
-          {showAssistant ? (
-            <motion.div
-              key="assistant-command-bubble"
-              layout
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              transition={{ duration: 0.36, ease: VOICE_EASE }}
-              className="w-full"
-            >
-              <GlassBubble
-                role="assistant"
-                label="Dadei"
-                text={assistantBubbleText}
-                state={state}
-                assistantStatus={assistantBubbleStatus}
-                statusLine={assistantStatusLine}
-                animateEntry={false}
-              />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        {placeUserBubbleBelowAssistant ? (
+          <>
+            {assistantBubble}
+            {userBubble}
+          </>
+        ) : (
+          <>
+            {userBubble}
+            {assistantBubble}
+          </>
+        )}
       </motion.div>
     </>
   );

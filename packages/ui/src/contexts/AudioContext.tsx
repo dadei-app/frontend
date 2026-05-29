@@ -92,8 +92,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const active = state === 'listening' || state === 'follow_up';
-    if (!active || !streamAnalyserReady || !analyserRef.current) {
+    if (!active) {
       setMicLevel(0);
+      return;
+    }
+    if (!streamAnalyserReady || !analyserRef.current) {
       return;
     }
 
