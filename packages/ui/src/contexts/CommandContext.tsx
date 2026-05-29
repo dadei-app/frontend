@@ -9,30 +9,55 @@ import {
 } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
+import axios from 'axios';
 import {
-  streamCommand,
   streamCommandFromText,
   type CommandSSEEvent,
 } from '@dadei/ui/lib/api/command';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import { getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
+import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
+import {
+  normalizeVisibleCommandText,
+  transcriptStartsWithWakeCommand,
+} from '@dadei/ui/lib/wakeWordDetection';
+import {
+  CLAIM_HOLD_SECONDS,
+  CLAIM_RENEW_BEFORE_EXPIRE_MS,
+  computeFollowUpMs,
+} from '@dadei/ui/lib/voice/voiceConstants';
 
-export type CommandMode = 'passive' | 'capturing' | 'streaming' | 'done';
+export type CommandState =
+  | 'idle'
+  | 'listening'
+  | 'thinking'
+  | 'responding'
+  | 'follow_up'
+  | 'locked';
+
+export type AssistantBubbleStatus = 'pending' | 'streaming' | 'done';
+
+export interface CommandTurnHistory {
+  id: string;
+  userText: string;
+  assistantText: string;
+}
 
 interface CommandContextValue {
-  mode: CommandMode;
-  transcript: string;
-  responseTokens: string[];
+  state: CommandState;
+  userBubbleText: string;
+  assistantBubbleText: string;
+  assistantBubbleStatus: AssistantBubbleStatus;
   activeToolCall: string | undefined;
-  submitCommandAudio: (wav: ArrayBuffer, options?: { claimAssistantMode?: boolean }) => void;
-  submitCommandText: (text: string, options?: { claimAssistantMode?: boolean }) => void;
-  setInterimTranscript: (text: string) => void;
-  dismiss: () => void;
+  bubbleHistory: CommandTurnHistory[];
+  cancel: () => void;
+  /** Manual command start without wake word (idle → listening). */
+  startListening: () => void;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
-const ASSISTANT_WINDOW_MS = 12000;
-const ASSISTANT_HOLD_SECONDS = 12;
+
+const WAKE_FALSE_POSITIVE_MS = 4_000;
 
 const TOOL_LABELS: Record<string, string> = {
   create_calendar_event: 'Creating calendar event',
@@ -69,32 +94,47 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const { getAccessToken } = useAuth();
   const {
     isConnected,
-    isServiceEnabled,
     isAssistantMode,
     isAssistantOwner,
+    assistantModeExpiresAt,
   } = useService();
 
-  const [mode, setMode] = useState<CommandMode>('passive');
-  const [transcript, setTranscript] = useState('');
-  const [responseTokens, setResponseTokens] = useState<string[]>([]);
+  const [state, setState] = useState<CommandState>('idle');
+  const [userBubbleText, setUserBubbleText] = useState('');
+  const [assistantBubbleText, setAssistantBubbleText] = useState('');
+  const [assistantBubbleStatus, setAssistantBubbleStatus] =
+    useState<AssistantBubbleStatus>('pending');
   const [activeToolCall, setActiveToolCall] = useState<string | undefined>(undefined);
+  const [bubbleHistory, setBubbleHistory] = useState<CommandTurnHistory[]>([]);
 
-  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const assistantReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateRef = useRef(state);
+  const followUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
-  const localAssistantOwnershipRef = useRef(false);
+  const localClaimRef = useRef(false);
+  const lastSubmittedTextRef = useRef<{ text: string; atMs: number } | null>(null);
+  const lastWakeInterimRef = useRef('');
+  const assistantBubbleTextRef = useRef('');
 
-  const clearDismissTimer = useCallback(() => {
-    if (dismissTimerRef.current != null) {
-      clearTimeout(dismissTimerRef.current);
-      dismissTimerRef.current = null;
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    assistantBubbleTextRef.current = assistantBubbleText;
+  }, [assistantBubbleText]);
+
+  const clearFollowUpTimer = useCallback(() => {
+    if (followUpTimerRef.current != null) {
+      clearTimeout(followUpTimerRef.current);
+      followUpTimerRef.current = null;
     }
   }, []);
 
-  const clearAssistantReleaseTimer = useCallback(() => {
-    if (assistantReleaseTimerRef.current != null) {
-      clearTimeout(assistantReleaseTimerRef.current);
-      assistantReleaseTimerRef.current = null;
+  const clearWakeTimeout = useCallback(() => {
+    if (wakeTimeoutRef.current != null) {
+      clearTimeout(wakeTimeoutRef.current);
+      wakeTimeoutRef.current = null;
     }
   }, []);
 
@@ -110,7 +150,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!sessionToken) return false;
     try {
       await serviceApi.releaseAssistantMode(sessionToken);
-      localAssistantOwnershipRef.current = false;
+      localClaimRef.current = false;
       return true;
     } catch (error) {
       console.warn('[Command] Failed to release assistant mode', error);
@@ -118,146 +158,193 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const dismiss = useCallback(() => {
-    clearDismissTimer();
-    clearAssistantReleaseTimer();
-    abortActiveStream();
-    localAssistantOwnershipRef.current = false;
-    setMode('passive');
-    setTranscript('');
-    setResponseTokens([]);
+  const resetLiveBubbles = useCallback(() => {
+    setUserBubbleText('');
+    setAssistantBubbleText('');
+    setAssistantBubbleStatus('pending');
     setActiveToolCall(undefined);
-  }, [abortActiveStream, clearAssistantReleaseTimer, clearDismissTimer]);
+  }, []);
 
-  const schedulePostDoneCleanup = useCallback(() => {
-    clearDismissTimer();
-    clearAssistantReleaseTimer();
+  const goIdle = useCallback(() => {
+    clearFollowUpTimer();
+    clearWakeTimeout();
+    abortActiveStream();
+    setBubbleHistory([]);
+    setState('idle');
+    resetLiveBubbles();
+  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
 
-    if (localAssistantOwnershipRef.current || (isAssistantMode && isAssistantOwner)) {
-      assistantReleaseTimerRef.current = setTimeout(() => {
-        void (async () => {
-          await releaseAssistantMode();
-          dismiss();
-        })();
-      }, ASSISTANT_WINDOW_MS);
-      return;
-    }
-
-    dismissTimerRef.current = setTimeout(() => {
-      dismiss();
-    }, ASSISTANT_WINDOW_MS);
+  const cancel = useCallback(() => {
+    void (async () => {
+      clearFollowUpTimer();
+      clearWakeTimeout();
+      abortActiveStream();
+      if (localClaimRef.current) {
+        await releaseAssistantMode();
+      }
+      goIdle();
+    })();
   }, [
-    clearAssistantReleaseTimer,
-    clearDismissTimer,
-    dismiss,
-    isAssistantMode,
-    isAssistantOwner,
+    abortActiveStream,
+    clearFollowUpTimer,
+    clearWakeTimeout,
+    goIdle,
     releaseAssistantMode,
   ]);
 
-  const handleEvent = useCallback(
+  const claimAssistantMode = useCallback(async (): Promise<boolean> => {
+    const sessionToken = getRealtimeSessionToken();
+    if (!sessionToken) return false;
+    try {
+      await serviceApi.claimAssistantMode(sessionToken, CLAIM_HOLD_SECONDS);
+      localClaimRef.current = true;
+      return true;
+    } catch (e) {
+      if (axios.isAxiosError(e) && e.response?.status === 409) {
+        setState('locked');
+        resetLiveBubbles();
+        return false;
+      }
+      console.warn('[Command] claim failed', e);
+      return false;
+    }
+  }, [resetLiveBubbles]);
+
+  const scheduleWakeFalsePositiveRelease = useCallback(() => {
+    clearWakeTimeout();
+    wakeTimeoutRef.current = setTimeout(() => {
+      if (stateRef.current !== 'listening') return;
+      void (async () => {
+        await releaseAssistantMode();
+        goIdle();
+      })();
+    }, WAKE_FALSE_POSITIVE_MS);
+  }, [clearWakeTimeout, goIdle, releaseAssistantMode]);
+
+  const scheduleFollowUpExpiry = useCallback(
+    (responseChars: number) => {
+      clearFollowUpTimer();
+      const ms = computeFollowUpMs(responseChars);
+      followUpTimerRef.current = setTimeout(() => {
+        void (async () => {
+          await releaseAssistantMode();
+          goIdle();
+        })();
+      }, ms);
+    },
+    [clearFollowUpTimer, goIdle, releaseAssistantMode],
+  );
+
+  const startNewTurn = useCallback(() => {
+    clearFollowUpTimer();
+    clearWakeTimeout();
+    resetLiveBubbles();
+  }, [clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
+
+  const startListening = useCallback(() => {
+    if (stateRef.current !== 'idle') return;
+    startNewTurn();
+    setState('listening');
+    void claimAssistantMode();
+    scheduleWakeFalsePositiveRelease();
+  }, [claimAssistantMode, scheduleWakeFalsePositiveRelease, startNewTurn]);
+
+  const handleStreamEvent = useCallback(
     (ev: CommandSSEEvent) => {
       switch (ev.type) {
         case 'transcript':
-          setTranscript(ev.text);
-          setMode('streaming');
+          setUserBubbleText(ev.text);
           break;
         case 'token':
-          setResponseTokens((prev) => [...prev, ev.text]);
+          setState((s) => (s === 'thinking' ? 'responding' : s));
+          setAssistantBubbleStatus('streaming');
+          setAssistantBubbleText((prev) => prev + ev.text);
           break;
         case 'tool_call':
+          setState((s) => (s === 'thinking' ? 'responding' : s));
+          setAssistantBubbleStatus('streaming');
           setActiveToolCall(toolLabel(ev.tool));
           break;
         case 'tool_result':
           setActiveToolCall(undefined);
           break;
         case 'error':
-          setTranscript(ev.message);
-          setMode('done');
+          setAssistantBubbleText(ev.message);
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(ev.message.length);
           break;
         case 'done':
-          setMode('done');
-          schedulePostDoneCleanup();
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(assistantBubbleTextRef.current.length);
           break;
         default:
           break;
       }
     },
-    [schedulePostDoneCleanup],
+    [scheduleFollowUpExpiry],
   );
 
-  const runCommandPipeline = useCallback(
-    (
-      request:
-        | { kind: 'audio'; wav: ArrayBuffer }
-        | { kind: 'text'; text: string },
-      options?: { claimAssistantMode?: boolean },
-    ) => {
-      abortActiveStream();
-      clearAssistantReleaseTimer();
-      clearDismissTimer();
-      setMode('capturing');
-      setTranscript('');
-      setResponseTokens([]);
+  const submitVisibleCommandText = useCallback(
+    (raw: string, fromFollowUp: boolean) => {
+      const visible = fromFollowUp ? raw.trim() : normalizeVisibleCommandText(raw);
+      if (!visible) return;
+      const nowMs = Date.now();
+      const last = lastSubmittedTextRef.current;
+      if (last && last.text === visible && nowMs - last.atMs < 1500) return;
+      lastSubmittedTextRef.current = { text: visible, atMs: nowMs };
+
+      clearWakeTimeout();
+      setUserBubbleText(visible);
+      setAssistantBubbleText('');
+      setAssistantBubbleStatus('pending');
       setActiveToolCall(undefined);
+      setState('thinking');
 
       void (async () => {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          setTranscript('Not authenticated');
-          setMode('done');
-          schedulePostDoneCleanup();
+          setAssistantBubbleText('Not authenticated');
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(0);
           return;
         }
 
-        const sessionToken = getRealtimeSessionToken();
-        if (!isConnected || !sessionToken) {
-          handleEvent({ type: 'error', message: 'Not connected to the assistant service yet' });
+        if (!isConnected || !getRealtimeSessionToken()) {
+          setAssistantBubbleText('Not connected to the assistant service yet');
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(0);
           return;
         }
 
-        if (options?.claimAssistantMode) {
-          try {
-            await serviceApi.claimAssistantMode(sessionToken, ASSISTANT_HOLD_SECONDS);
-            localAssistantOwnershipRef.current = true;
-          } catch (e) {
-            const message = e instanceof Error ? e.message : 'Another device owns assistant mode';
-            handleEvent({ type: 'error', message });
-            handleEvent({ type: 'done' });
-            return;
-          }
-        } else if (isAssistantMode && isAssistantOwner) {
-          // Follow-up turns inside the same 5s conversational window should still release service.
-          localAssistantOwnershipRef.current = true;
-        } else if (isAssistantMode && !isAssistantOwner) {
-          handleEvent({
-            type: 'error',
-            message: 'Another device is currently handling assistant mode',
-          });
-          handleEvent({ type: 'done' });
-          return;
-        }
+        abortActiveStream();
+        const abortController = new AbortController();
+        streamAbortRef.current = abortController;
 
         try {
-          const abortController = new AbortController();
-          streamAbortRef.current = abortController;
-          const stream =
-            request.kind === 'audio'
-              ? streamCommand(request.wav, accessToken, {
-                  signal: abortController.signal,
-                })
-              : streamCommandFromText(request.text, accessToken, {
-                  signal: abortController.signal,
-                });
-          for await (const ev of stream) {
-            handleEvent(ev);
+          let sawDone = false;
+          for await (const ev of streamCommandFromText(visible, accessToken, {
+            signal: abortController.signal,
+          })) {
+            if (ev.type === 'done') sawDone = true;
+            handleStreamEvent(ev);
+          }
+          if (
+            !sawDone &&
+            (stateRef.current === 'responding' || stateRef.current === 'thinking')
+          ) {
+            handleStreamEvent({ type: 'done' });
           }
         } catch (e) {
-          if (e instanceof DOMException && e.name === 'AbortError') {
-            return;
-          }
+          if (e instanceof DOMException && e.name === 'AbortError') return;
           const message = e instanceof Error ? e.message : 'Command failed';
-          handleEvent({ type: 'error', message });
+          setAssistantBubbleText(message);
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(message.length);
         } finally {
           streamAbortRef.current = null;
         }
@@ -265,71 +352,147 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     },
     [
       abortActiveStream,
-      clearAssistantReleaseTimer,
-      clearDismissTimer,
       getAccessToken,
-      handleEvent,
-      isAssistantMode,
-      isAssistantOwner,
+      handleStreamEvent,
       isConnected,
-      schedulePostDoneCleanup,
+      scheduleFollowUpExpiry,
     ],
   );
 
-  const submitCommandAudio = useCallback(
-    (wav: ArrayBuffer, options?: { claimAssistantMode?: boolean }) => {
-      runCommandPipeline({ kind: 'audio', wav }, options);
-    },
-    [runCommandPipeline],
-  );
+  useEffect(() => {
+    const off = subscribeRealtimeMessages((msg) => {
+      const current = stateRef.current;
 
-  const submitCommandText = useCallback(
-    (text: string, options?: { claimAssistantMode?: boolean }) => {
-      runCommandPipeline({ kind: 'text', text }, options);
-    },
-    [runCommandPipeline],
-  );
+      if (msg.event === 'command_transcript_interim') {
+        if (current === 'thinking' || current === 'responding') return;
+        const text = typeof msg.text === 'string' ? msg.text : '';
+        if (!text) return;
 
-  const setInterimTranscript = useCallback((text: string) => {
-    if (!text.trim()) return;
-    setMode((prev) => (prev === 'passive' ? 'capturing' : prev));
-    setTranscript(text);
-  }, []);
+        if (current === 'idle' && transcriptStartsWithWakeCommand(text)) {
+          lastWakeInterimRef.current = text;
+          startNewTurn();
+          setState('listening');
+          void claimAssistantMode();
+          scheduleWakeFalsePositiveRelease();
+          const visible = normalizeVisibleCommandText(text);
+          if (visible) setUserBubbleText(visible);
+          return;
+        }
+
+        if (current === 'listening') {
+          const visible = normalizeVisibleCommandText(text);
+          if (visible) setUserBubbleText(visible);
+          return;
+        }
+
+        if (current === 'follow_up') {
+          setUserBubbleText(text.trim());
+        }
+        return;
+      }
+
+      if (msg.event === 'command_transcript_final') {
+        if (current === 'thinking' || current === 'responding') return;
+        const finalRaw = typeof msg.text === 'string' ? msg.text : '';
+        const text = finalRaw || lastWakeInterimRef.current;
+        lastWakeInterimRef.current = '';
+        clearWakeTimeout();
+
+        if (current === 'listening') {
+          if (!text.trim()) return;
+          submitVisibleCommandText(text, false);
+          return;
+        }
+
+        if (current === 'follow_up') {
+          if (!text.trim()) return;
+          startNewTurn();
+          submitVisibleCommandText(text, true);
+        }
+      }
+    });
+    return off;
+  }, [
+    claimAssistantMode,
+    clearWakeTimeout,
+    scheduleWakeFalsePositiveRelease,
+    startNewTurn,
+    submitVisibleCommandText,
+  ]);
 
   useEffect(() => {
-    if (mode === 'passive') return;
     if (isAssistantMode && !isAssistantOwner) {
       abortActiveStream();
-      dismiss();
+      clearFollowUpTimer();
+      clearWakeTimeout();
+      setState('locked');
+      setBubbleHistory([]);
+      resetLiveBubbles();
+      return;
     }
-  }, [abortActiveStream, dismiss, isAssistantMode, isAssistantOwner, mode]);
+    if (stateRef.current === 'locked' && (!isAssistantMode || isAssistantOwner)) {
+      goIdle();
+    }
+  }, [
+    abortActiveStream,
+    clearFollowUpTimer,
+    clearWakeTimeout,
+    goIdle,
+    isAssistantMode,
+    isAssistantOwner,
+    resetLiveBubbles,
+  ]);
 
   useEffect(() => {
-    if (mode === 'passive') return;
-    if (isAssistantMode && isServiceEnabled) {
-      abortActiveStream();
-      dismiss();
-    }
-  }, [abortActiveStream, dismiss, isAssistantMode, isServiceEnabled, mode]);
+    if (!localClaimRef.current || !assistantModeExpiresAt) return;
+    const statesWithClaim: CommandState[] = [
+      'listening',
+      'thinking',
+      'responding',
+      'follow_up',
+    ];
+    if (!statesWithClaim.includes(state)) return;
+
+    const tick = () => {
+      const expiresAtMs = Date.parse(assistantModeExpiresAt);
+      if (!Number.isFinite(expiresAtMs)) return;
+      const remaining = expiresAtMs - Date.now();
+      if (remaining > 0 && remaining < CLAIM_RENEW_BEFORE_EXPIRE_MS) {
+        void claimAssistantMode();
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [assistantModeExpiresAt, claimAssistantMode, state]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [cancel]);
 
   useEffect(
     () => () => {
-      clearDismissTimer();
-      clearAssistantReleaseTimer();
+      clearFollowUpTimer();
+      clearWakeTimeout();
       abortActiveStream();
     },
-    [abortActiveStream, clearAssistantReleaseTimer, clearDismissTimer],
+    [abortActiveStream, clearFollowUpTimer, clearWakeTimeout],
   );
 
   const value: CommandContextValue = {
-    mode,
-    transcript,
-    responseTokens,
+    state,
+    userBubbleText,
+    assistantBubbleText,
+    assistantBubbleStatus,
     activeToolCall,
-    submitCommandAudio,
-    submitCommandText,
-    setInterimTranscript,
-    dismiss,
+    bubbleHistory,
+    cancel,
+    startListening,
   };
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;
@@ -342,3 +505,6 @@ export function useCommand(): CommandContextValue {
   }
   return ctx;
 }
+
+/** @deprecated Use CommandState */
+export type CommandMode = CommandState;

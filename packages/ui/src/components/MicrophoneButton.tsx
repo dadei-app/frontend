@@ -16,36 +16,36 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     registrationConflict,
     isAssistantMode,
   } = useService();
-  const { mode, dismiss } = useCommand();
+  const { state, cancel } = useCommand();
 
-  const micBlocked = isTogglingService || registrationConflict;
-  const isCommandProcessing = mode === 'capturing' || mode === 'streaming';
-  const isAssistantFollowupReady = mode === 'done';
+  const micBlocked = isTogglingService || registrationConflict || state === 'locked';
+  const isIdle = state === 'idle';
+  const isCommandProcessing =
+    state === 'listening' || state === 'thinking' || state === 'responding';
+  const isAssistantFollowupReady = state === 'follow_up';
 
-  // Spacebar activation
-  // Spacebar activation (disabled when panel open)
   useEffect(() => {
     if (disableSpaceToggle) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code === 'Space' && !micBlocked) {
         e.preventDefault();
-        if (mode !== 'passive' || isAssistantMode) {
-          dismiss();
+        if (!isIdle || isAssistantMode) {
+          cancel();
         } else {
-          toggleService();
+          void toggleService();
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [micBlocked, toggleService, disableSpaceToggle, mode, dismiss, isAssistantMode]);
+  }, [micBlocked, toggleService, disableSpaceToggle, isIdle, cancel, isAssistantMode]);
 
   const handleClick = async () => {
     if (micBlocked) return;
-    if (mode !== 'passive' || isAssistantMode) {
-      dismiss();
+    if (!isIdle || isAssistantMode) {
+      cancel();
       return;
     }
     await toggleService();
@@ -69,21 +69,16 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
             ? 'cursor-not-allowed border-white/15 bg-zinc-700 opacity-60'
             : isCommandProcessing || isAssistantFollowupReady
               ? 'cursor-pointer border-sky-100/35 bg-[linear-gradient(132deg,rgba(37,99,235,0.28),rgba(14,165,233,0.25)_45%,rgba(186,230,253,0.22))] shadow-[0_0_32px_rgba(37,99,235,0.35),0_0_68px_rgba(14,165,233,0.22)] ring-1 ring-sky-200/35 backdrop-blur-xl'
-            : isAssistantMode
-              ? 'cursor-pointer border-emerald-100/35 bg-[linear-gradient(132deg,rgba(20,184,166,0.24),rgba(16,185,129,0.22)_45%,rgba(167,243,208,0.22))] shadow-[0_0_32px_rgba(16,185,129,0.35),0_0_68px_rgba(16,185,129,0.22)] ring-1 ring-emerald-200/35 backdrop-blur-xl'
-            : isServiceEnabled
-              ? 'cursor-pointer border-white/15 bg-linear-to-br from-rose-500 to-rose-700 shadow-[0_0_32px_rgba(225,29,72,0.5),0_0_64px_rgba(225,29,72,0.22)]'
-              : 'cursor-pointer border-white/15 bg-linear-to-br from-emerald-500 to-emerald-700 shadow-[0_0_28px_rgba(16,185,129,0.4)] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)]'
+              : isAssistantMode
+                ? 'cursor-pointer border-emerald-100/35 bg-[linear-gradient(132deg,rgba(20,184,166,0.24),rgba(16,185,129,0.22)_45%,rgba(167,243,208,0.22))] shadow-[0_0_32px_rgba(16,185,129,0.35),0_0_68px_rgba(16,185,129,0.22)] ring-1 ring-emerald-200/35 backdrop-blur-xl'
+                : isServiceEnabled
+                  ? 'cursor-pointer border-white/15 bg-linear-to-br from-rose-500 to-rose-700 shadow-[0_0_32px_rgba(225,29,72,0.5),0_0_64px_rgba(225,29,72,0.22)]'
+                  : 'cursor-pointer border-white/15 bg-linear-to-br from-emerald-500 to-emerald-700 shadow-[0_0_28px_rgba(16,185,129,0.4)] hover:shadow-[0_0_40px_rgba(16,185,129,0.5)]',
         )}
       >
-        {/* Red Ripple Waves - when service enabled */}
-        {isServiceEnabled && !micBlocked && mode === 'passive' && !isAssistantMode && (
+        {isServiceEnabled && !micBlocked && isIdle && !isAssistantMode && (
           <>
-            {[
-              { delay: 0 },
-              { delay: 0.4 },
-              { delay: 0.8 },
-            ].map(({ delay }) => (
+            {[{ delay: 0 }, { delay: 0.4 }, { delay: 0.8 }].map(({ delay }) => (
               <div
                 key={delay}
                 className="pointer-events-none absolute inset-0 flex items-center justify-center"
@@ -106,14 +101,9 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           </>
         )}
 
-        {/* Blue Ripple Waves - assistant follow-up window ready */}
         {isAssistantFollowupReady && !micBlocked && (
           <>
-            {[
-              { delay: 0 },
-              { delay: 0.4 },
-              { delay: 0.8 },
-            ].map(({ delay }) => (
+            {[{ delay: 0 }, { delay: 0.4 }, { delay: 0.8 }].map(({ delay }) => (
               <div
                 key={`blue-${delay}`}
                 className="pointer-events-none absolute inset-0 flex items-center justify-center"
@@ -136,23 +126,22 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           </>
         )}
 
-        {/* Green pulse effect when disabled (inactive) */}
-        {!isServiceEnabled && !micBlocked && mode === 'passive' && !isAssistantMode && (
+        {!isServiceEnabled && !micBlocked && isIdle && !isAssistantMode && (
           <motion.div
             className="absolute inset-0 rounded-full bg-linear-to-br from-emerald-400 to-emerald-600 opacity-0"
             animate={{
               opacity: [0, 0.3, 0],
-              scale: [1, 1.1, 1]
+              scale: [1, 1.1, 1],
             }}
             transition={{
               duration: 2,
               repeat: Infinity,
-              ease: "easeInOut"
+              ease: 'easeInOut',
             }}
           />
         )}
 
-        {isAssistantMode && !micBlocked && mode === 'passive' && (
+        {isAssistantMode && !micBlocked && isIdle && (
           <>
             <div
               className="pointer-events-none absolute inset-0 rounded-full bg-[radial-gradient(ellipse_90%_90%_at_50%_0%,rgba(236,253,245,0.5),transparent_50%),radial-gradient(ellipse_80%_85%_at_50%_100%,rgba(16,185,129,0.25),transparent_75%)]"
@@ -167,8 +156,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           </>
         )}
 
-        {/* Microphone Icon - static when enabled */}
-        <div className="relative z-10 text-white flex items-center justify-center">
+        <div className="relative z-10 flex items-center justify-center text-white">
           <svg
             className="h-16 w-16 drop-shadow-[0_0_3px_rgba(0,0,0,0.35)]"
             viewBox="0 0 24 24"
@@ -178,7 +166,6 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           </svg>
         </div>
 
-        {/* Spinning ring when toggling */}
         {(isTogglingService || isCommandProcessing) && (
           <motion.div
             className="absolute inset-0 rounded-full border-4 border-t-white border-r-transparent border-b-transparent border-l-transparent"
@@ -186,26 +173,11 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
             transition={{
               duration: 1,
               repeat: Infinity,
-              ease: "linear"
+              ease: 'linear',
             }}
           />
         )}
       </motion.button>
-
-      {/* <motion.p
-        className="text-base font-medium text-[#6b7280]"
-        animate={{
-          opacity: [0.7, 1, 0.7]
-        }}
-        transition={{
-          duration: 2,
-          repeat: Infinity,
-          ease: "easeInOut"
-        }}
-      >
-        {getStatusText()}
-      </motion.p> */}
-
     </div>
   );
 }
