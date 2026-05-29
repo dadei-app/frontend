@@ -10,6 +10,13 @@ export type CommandSSEEvent =
   | { type: 'error'; message: string }
   | { type: 'done' };
 
+/** Fetch / ReadableStream abort — browsers vary (AbortError vs "body stream buffer was aborted"). */
+export function isAbortError(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === 'AbortError') return true;
+  if (e instanceof Error && /abort/i.test(e.message)) return true;
+  return false;
+}
+
 function parseDataLine(line: string): CommandSSEEvent | null {
   const trimmed = line.trim();
   if (!trimmed.startsWith('data:')) return null;
@@ -53,7 +60,7 @@ export async function* streamCommand(
       signal: options?.signal,
     });
   } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') {
+    if (isAbortError(e) || options?.signal?.aborted) {
       yield { type: 'done' };
       return;
     }
@@ -128,6 +135,10 @@ export async function* streamCommand(
       yield { type: 'done' };
     }
   } catch (e) {
+    if (isAbortError(e) || options?.signal?.aborted) {
+      yield { type: 'done' };
+      return;
+    }
     const message = e instanceof Error ? e.message : 'Stream read failed';
     yield { type: 'error', message };
     yield { type: 'done' };
@@ -166,7 +177,7 @@ export async function* streamCommandFromText(
       signal: options?.signal,
     });
   } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') {
+    if (isAbortError(e) || options?.signal?.aborted) {
       yield { type: 'done' };
       return;
     }
@@ -241,6 +252,10 @@ export async function* streamCommandFromText(
       yield { type: 'done' };
     }
   } catch (e) {
+    if (isAbortError(e) || options?.signal?.aborted) {
+      yield { type: 'done' };
+      return;
+    }
     const message = e instanceof Error ? e.message : 'Stream read failed';
     yield { type: 'error', message };
     yield { type: 'done' };

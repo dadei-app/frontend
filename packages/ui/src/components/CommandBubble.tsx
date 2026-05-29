@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import type { CommandState, AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useAudio } from '@dadei/ui/contexts/AudioContext';
@@ -8,12 +8,12 @@ import { VOICE_EASE } from '@dadei/ui/lib/voice/voiceConstants';
 const STATE_TINT: Record<CommandState, string> = {
   idle: 'transparent',
   listening:
-    'radial-gradient(circle at 50% 100%, rgba(34,211,238,0.10), transparent 70%)',
-  thinking: 'radial-gradient(circle at 50% 50%, rgba(251,191,36,0.08), transparent 70%)',
+    'radial-gradient(circle at 50% 100%, rgba(34,211,238,0.06), transparent 70%)',
+  thinking: 'radial-gradient(circle at 50% 50%, rgba(251,191,36,0.05), transparent 70%)',
   responding:
-    'radial-gradient(circle at 50% 50%, rgba(96,165,250,0.09), transparent 70%)',
+    'radial-gradient(circle at 50% 50%, rgba(96,165,250,0.06), transparent 70%)',
   follow_up:
-    'radial-gradient(circle at 50% 0%, rgba(110,231,183,0.08), transparent 70%)',
+    'radial-gradient(circle at 50% 0%, rgba(110,231,183,0.05), transparent 70%)',
   locked: 'transparent',
 };
 
@@ -26,9 +26,9 @@ function CommandBubbleGlassFilter() {
       className="pointer-events-none absolute"
     >
       <defs>
-        <filter id="dadei-command-bubble-glass" x="-8%" y="-8%" width="116%" height="116%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="3" />
-          <feDisplacementMap in="SourceGraphic" scale="8" />
+        <filter id="dadei-command-bubble-glass" x="-4%" y="-4%" width="108%" height="108%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="2" seed="3" />
+          <feDisplacementMap in="SourceGraphic" scale="3" />
         </filter>
       </defs>
     </svg>
@@ -36,29 +36,14 @@ function CommandBubbleGlassFilter() {
 }
 
 const glassShellStyle: CSSProperties = {
-  backdropFilter: 'blur(10px) saturate(115%)',
-  WebkitBackdropFilter: 'blur(10px) saturate(115%)',
-  background: 'rgba(24, 24, 27, 0.62)',
-  border: '1px solid rgba(255, 255, 255, 0.06)',
+  backdropFilter: 'blur(12px) saturate(108%)',
+  WebkitBackdropFilter: 'blur(12px) saturate(108%)',
+  background: 'rgba(24, 24, 27, 0.88)',
+  border: '1px solid rgba(255, 255, 255, 0.09)',
   boxShadow:
-    'inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 10px 28px -14px rgba(0, 0, 0, 0.45)',
+    'inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 10px 28px -14px rgba(0, 0, 0, 0.4)',
   filter: 'url(#dadei-command-bubble-glass)',
 };
-
-function ThinkingDots() {
-  return (
-    <div className="mt-2 flex gap-1.5" aria-hidden>
-      {[0, 1, 2].map((i) => (
-        <motion.span
-          key={i}
-          className="h-2 w-2 rounded-full bg-white/30"
-          animate={{ opacity: [0.35, 1, 0.35] }}
-          transition={{ duration: 1.1, repeat: Infinity, delay: i * 0.22 }}
-        />
-      ))}
-    </div>
-  );
-}
 
 interface GlassBubbleProps {
   role: 'user' | 'assistant';
@@ -68,6 +53,8 @@ interface GlassBubbleProps {
   assistantStatus?: AssistantBubbleStatus;
   activeToolCall?: string;
   micLevel?: number;
+  showMicLevel?: boolean;
+  animateEntry?: boolean;
 }
 
 function GlassBubble({
@@ -78,17 +65,18 @@ function GlassBubble({
   assistantStatus,
   activeToolCall,
   micLevel = 0,
+  showMicLevel = false,
+  animateEntry = true,
 }: GlassBubbleProps) {
   const isAssistant = role === 'assistant';
+  const hasText = text.trim().length > 0;
   const showCursor =
-    isAssistant && assistantStatus === 'streaming' && text.length > 0;
-  const showThinking =
-    isAssistant && state === 'thinking' && assistantStatus === 'pending';
-  const showMicBar = !isAssistant && state === 'listening';
+    isAssistant && assistantStatus === 'streaming' && hasText;
+  const showMicBar = showMicLevel && !hasText;
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12, scale: 0.97 }}
+      initial={animateEntry ? { opacity: 0, y: 12, scale: 0.97 } : false}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.42, ease: VOICE_EASE }}
       className="relative w-full max-w-[640px]"
@@ -103,26 +91,29 @@ function GlassBubble({
           <p className="font-secondary text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
             {label}
           </p>
-          <p className="font-primary mt-1 text-[15px] leading-relaxed text-zinc-100">
-            {text || (isAssistant ? '' : '…')}
-            {showCursor ? (
-              <span className="ml-0.5 inline-block w-[2px] animate-pulse bg-sky-300/90 align-middle">
-                &nbsp;
-              </span>
-            ) : null}
-          </p>
-          {activeToolCall && isAssistant ? (
+          {hasText ? (
+            <p className="font-primary mt-1 text-[15px] leading-relaxed text-zinc-100">
+              {text}
+              {showCursor ? (
+                <span className="ml-0.5 inline-block w-[2px] animate-pulse bg-sky-300/90 align-middle">
+                  &nbsp;
+                </span>
+              ) : null}
+            </p>
+          ) : null}
+          {activeToolCall && isAssistant && hasText ? (
             <p className="mt-2 font-secondary text-[11px] font-medium tracking-wide text-white/55">
               {activeToolCall}…
             </p>
           ) : null}
-          {showThinking ? <ThinkingDots /> : null}
           {showMicBar ? (
-            <div className="mt-3 h-0.5 overflow-hidden rounded-full bg-white/10">
-              <div
-                className="h-full rounded-full bg-cyan-400/80 transition-[width] duration-75"
-                style={{ width: `${Math.round(micLevel * 100)}%` }}
-              />
+            <div className={hasText ? 'mt-3' : 'mt-2'}>
+              <div className="h-0.5 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-cyan-400/80 transition-[width] duration-75"
+                  style={{ width: `${Math.round(micLevel * 100)}%` }}
+                />
+              </div>
             </div>
           ) : null}
         </div>
@@ -143,13 +134,15 @@ export default function CommandBubble() {
 
   if (state === 'idle' || state === 'locked') return null;
 
+  const capturingUser = state === 'listening' || state === 'follow_up';
   const showUser =
-    state === 'listening' ||
-    state === 'thinking' ||
-    state === 'responding' ||
-    state === 'follow_up';
+    capturingUser || state === 'thinking' || state === 'responding';
+  const assistantHasText = assistantBubbleText.trim().length > 0;
   const showAssistant =
-    state === 'thinking' || state === 'responding' || state === 'follow_up';
+    assistantHasText &&
+    (state === 'responding' ||
+      state === 'thinking' ||
+      (state === 'follow_up' && assistantBubbleStatus === 'done'));
 
   return (
     <>
@@ -157,12 +150,6 @@ export default function CommandBubble() {
       <motion.div
         layout
         className="mb-6 flex w-full max-w-[640px] flex-col gap-3"
-        animate={
-          state === 'follow_up' && assistantBubbleStatus === 'done'
-            ? { opacity: [1, 0.92] }
-            : { opacity: 1 }
-        }
-        transition={{ duration: 0.5 }}
       >
         {showUser ? (
           <GlassBubble
@@ -171,18 +158,32 @@ export default function CommandBubble() {
             text={userBubbleText}
             state={state}
             micLevel={micLevel}
+            showMicLevel={capturingUser}
           />
         ) : null}
-        {showAssistant ? (
-          <GlassBubble
-            role="assistant"
-            label="Dadei"
-            text={assistantBubbleText}
-            state={state}
-            assistantStatus={assistantBubbleStatus}
-            activeToolCall={activeToolCall}
-          />
-        ) : null}
+        <AnimatePresence>
+          {showAssistant ? (
+            <motion.div
+              key="assistant-command-bubble"
+              layout
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              transition={{ duration: 0.36, ease: VOICE_EASE }}
+              className="w-full"
+            >
+              <GlassBubble
+                role="assistant"
+                label="Dadei"
+                text={assistantBubbleText}
+                state={state}
+                assistantStatus={assistantBubbleStatus}
+                activeToolCall={activeToolCall}
+                animateEntry={false}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </motion.div>
     </>
   );

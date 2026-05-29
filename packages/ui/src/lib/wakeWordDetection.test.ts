@@ -44,11 +44,32 @@ describe('transcriptStartsWithWakeCommand', () => {
   it('rejects mid-sentence wake', () => {
     expect(transcriptStartsWithWakeCommand('I said and Dadei earlier')).toBe(false);
     expect(transcriptStartsWithWakeCommand('talk to my assistant, please')).toBe(false);
+    expect(transcriptStartsWithWakeCommand('I really like my assistant')).toBe(false);
   });
 
-  it('rejects leading daddy alone', () => {
-    expect(transcriptStartsWithWakeCommand('daddy')).toBe(false);
-    expect(transcriptStartsWithWakeCommand('Daddy, turn on')).toBe(false);
+  it('accepts phonetic assistant and dadei mishearings at start', () => {
+    expect(transcriptStartsWithWakeCommand('assisted')).toBe(true);
+    expect(transcriptStartsWithWakeCommand('Assisted, hello')).toBe(true);
+    expect(transcriptStartsWithWakeCommand('daddy')).toBe(true);
+    expect(transcriptStartsWithWakeCommand('Daddy, turn on')).toBe(true);
+  });
+
+  it('rejects ASR prompt bleed starting with assistant', () => {
+    expect(
+      transcriptStartsWithWakeCommand(
+        'Assistant means the voice assistant, not assist.',
+      ),
+    ).toBe(false);
+  });
+
+  it('accepts bare assistant wake', () => {
+    expect(transcriptStartsWithWakeCommand('Assistant')).toBe(true);
+    expect(transcriptStartsWithWakeCommand('assistant please')).toBe(true);
+  });
+
+  it('rejects instructional transcribe bleed as first word', () => {
+    expect(transcriptStartsWithWakeCommand('Transcribe the problem')).toBe(false);
+    expect(transcriptStartsWithWakeCommand('transcribe exactly what is spoken')).toBe(false);
   });
 });
 

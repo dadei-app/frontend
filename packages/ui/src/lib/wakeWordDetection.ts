@@ -3,6 +3,11 @@
  * and accept several plausible spellings / “dah dee” phonetic outputs, plus “Assistant”.
  */
 
+import {
+  isInstructionalTranscriptBleed,
+  sanitizeCommandTranscript,
+} from './commandTranscriptSanitize';
+
 const LEADING_DISFLUENCY =
   /^[\s,.;:!?'"`]+|^(?:um|uh|ugh|erm|er|hm+|hmm+|hey|hi|hello|ok|okay|so|well)\b[\s,.;:!?'"`]*/iu;
 
@@ -26,18 +31,55 @@ export function normalizeTranscriptForWake(text: string): string {
   return stripLeadingWakeDisfluencies(text.trim());
 }
 
-export const WAKE_WORD_INITIAL_PROMPT = [
-  'Dadei.',
-  'Wake words: Dadei, Assistant.',
-  'Spelled D-A-D-E-I.',
-  'Pronounced dah-dee, like "dah dee" or "da dee".',
-  'Not "daddy". Not "day day". Not "diddy".',
-  'Assistant means the voice assistant, not "assist".',
-].join(' ');
+/** Short bias only — long prompts bleed into transcripts and the command bubble. */
+export const WAKE_WORD_INITIAL_PROMPT = 'Dadei. Wake words: Dadei, Assistant.';
+
+const ASSISTANT_WAKE_BAD_FOLLOW = new Set([
+  'means',
+  'is',
+  'was',
+  'will',
+  'has',
+  'had',
+  'are',
+  'were',
+  'can',
+  'could',
+  'should',
+  'would',
+]);
+
+/** Instructional ASR hallucinations only — not spoken wake words. */
+const WAKE_REJECT_FIRST_WORDS = new Set([
+  'transcribe',
+  'transcribed',
+  'transcript',
+  'transcribing',
+]);
+
+const ASSISTANT_WAKE_FIRST_WORDS = new Set([
+  'assistant',
+  'assisted',
+  'assisting',
+  'assistive',
+]);
+
+const DADEI_WAKE_FIRST_WORDS = new Set([
+  'dadei',
+  'dadey',
+  'dadee',
+  'daday',
+  'dah-dee',
+  'dahdee',
+  'da-dee',
+  'daddy',
+  'daddies',
+  'dadai',
+  'dadeh',
+]);
 
 /**
  * True when the transcript is plausibly the user saying a wake word.
- * Intentionally stricter on "daddy" alone to avoid accidental triggers.
  */
 export function transcriptLikelyContainsWakeWord(text: string): boolean {
   const raw = text.trim();
@@ -64,18 +106,32 @@ export function transcriptLikelyContainsWakeWord(text: string): boolean {
   if (/dadei|dadey|dadee|daday|dahdee|dadai|dadeh/.test(collapsed)) return true;
   if (/assistant/.test(collapsed)) return true;
 
-  if (/\bdaddy\b/.test(lower)) return false;
-
   return false;
 }
 
-function startsWithAssistantWake(lead: string, collapsedLead: string): boolean {
-  if (/^assistant\b/i.test(lead)) return true;
-  return /^assistant/i.test(collapsedLead);
+function startsWithAssistantWake(lead: string, firstWord: string, collapsedLead: string): boolean {
+  if (/\bvoice assistant\b/i.test(lead)) return false;
+
+  if (
+    /^assistant\b/i.test(lead) ||
+    /^assisted\b/i.test(lead) ||
+    /^assisting\b/i.test(lead) ||
+    /^assistive\b/i.test(lead)
+  ) {
+    const follow = lead.match(/^[\w'-]+\b[,.:]?\s*(\S+)/i);
+    if (follow) {
+      const nextWord = (follow[1] ?? '').toLowerCase().replace(/[,.:;]+$/, '');
+      if (nextWord && ASSISTANT_WAKE_BAD_FOLLOW.has(nextWord)) return false;
+    }
+    return true;
+  }
+
+  if (ASSISTANT_WAKE_FIRST_WORDS.has(firstWord)) return true;
+  return /^assistant/.test(collapsedLead);
 }
 
 function startsWithDadeiWake(lead: string, collapsedLead: string, firstWord: string): boolean {
-  if (firstWord === 'daddy') return false;
+  if (DADEI_WAKE_FIRST_WORDS.has(firstWord)) return true;
 
   const startsShape =
     /^dadei\b/i.test(lead) ||
@@ -86,11 +142,12 @@ function startsWithDadeiWake(lead: string, collapsedLead: string, firstWord: str
     /^da[-\s]?dee\b/i.test(lead) ||
     /^da\s+d[eiy]\b/i.test(lead) ||
     /^da[-\s]?dei\b/i.test(lead) ||
-    /^dade\s*[-]?\s*i\b/i.test(lead);
+    /^dade\s*[-]?\s*i\b/i.test(lead) ||
+    /^daddy\b/i.test(lead);
 
   if (startsShape) return true;
 
-  return /^(dadei|dadey|dadee|daday|dahdee|dadai|dadeh)/.test(collapsedLead);
+  return /^(dadei|dadey|dadee|daday|dahdee|dadai|dadeh|daddy)/.test(collapsedLead);
 }
 
 /**
@@ -106,11 +163,11 @@ export function transcriptStartsWithWakeCommand(text: string): boolean {
   if (!lead) return false;
 
   const firstWord = lead.match(/^[\p{L}\p{N}'-]+/u)?.[0]?.toLowerCase() ?? '';
-  if (firstWord === 'daddy') return false;
+  if (!firstWord || WAKE_REJECT_FIRST_WORDS.has(firstWord)) return false;
 
   const collapsedLead = lead.replace(/[^a-z]/g, '');
 
-  if (startsWithAssistantWake(lead, collapsedLead)) return true;
+  if (startsWithAssistantWake(lead, firstWord, collapsedLead)) return true;
   if (startsWithDadeiWake(lead, collapsedLead, firstWord)) return true;
 
   return false;
@@ -121,12 +178,20 @@ export function transcriptStartsWithWakeCommand(text: string): boolean {
  * This output should be rendered in UI and sent as payload verbatim.
  */
 export function normalizeVisibleCommandText(text: string): string {
-  const normalized = normalizeTranscriptForWake(text);
+  const cleaned = sanitizeCommandTranscript(text);
+  if (!cleaned || isInstructionalTranscriptBleed(cleaned)) return '';
+
+  const normalized = normalizeTranscriptForWake(cleaned);
   if (!normalized) return '';
 
   let out = normalized;
-  out = out.replace(/^\s*da[- ]?dei[,.]?\s*/i, '');
+  out = out.replace(/^\s*da[- ]?dei\b[,.]?\s*/i, '');
+  out = out.replace(/^\s*dadei\b[,.]?\s*/i, '');
+  out = out.replace(/^\s*daddy\b[,.]?\s*/i, '');
   out = out.replace(/^\s*assistant\b[,.:]?\s*/i, '');
+  out = out.replace(/^\s*assisted\b[,.:]?\s*/i, '');
+  out = out.replace(/^\s*assisting\b[,.:]?\s*/i, '');
+  out = out.replace(/^\s*assistive\b[,.:]?\s*/i, '');
   out = out.replace(/\s+/g, ' ').trim();
   return out;
 }

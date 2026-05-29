@@ -74,16 +74,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (prev === 'listening' && state === 'thinking') {
       sendRealtimeMessage({ type: 'command_audio_end' });
     }
-    if (prev === 'responding' && state === 'follow_up') {
-      sendRealtimeMessage({ type: 'command_audio_start', sample_rate: 16000 });
-      commandStreamReadyRef.current = false;
-      lastCommandStartAttemptMsRef.current = 0;
-    }
-    prevStateRef.current = state;
   }, [state]);
 
   useEffect(() => {
-    const active = state === 'listening';
+    const active = state === 'listening' || state === 'follow_up';
     if (!active || !streamAnalyserReady || !analyserRef.current) {
       setMicLevel(0);
       return;
@@ -209,7 +203,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         commandStreamReadyRef.current = true;
       }
       if (msg.event === 'command_transcript_done' || msg.event === 'command_transcript_error') {
-        commandStreamReadyRef.current = false;
+        // Keep forwarding mic while idle/listening/follow_up — done is per-utterance, not end of session.
+        if (CHUNK_FORWARD_STATES.includes(stateRef.current)) {
+          commandStreamReadyRef.current = true;
+        } else {
+          commandStreamReadyRef.current = false;
+        }
       }
     });
     return off;

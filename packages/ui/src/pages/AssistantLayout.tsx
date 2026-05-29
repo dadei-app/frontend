@@ -14,7 +14,44 @@ import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
 import { useMemoriesQuery, useActionsQuery } from '@dadei/ui/lib/queryHooks';
 import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS, isElectronDesktop } from '@dadei/ui/lib/electronWindowChrome';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+import { cn } from '@dadei/ui/lib/cn';
 import { Mic } from 'lucide-react';
+
+const ASSISTANT_HINT_ROW =
+  'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
+
+const KEY_HINT_CLASS =
+  'rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40';
+
+function SpokenWakeWord({
+  children,
+  variant,
+}: {
+  children: string;
+  variant: 'dadei' | 'assistant';
+}) {
+  const quoteClass =
+    variant === 'dadei' ? 'text-emerald-400/55' : 'text-sky-400/55';
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-0.5 rounded-lg border px-2.5 py-1 font-primary text-[15px] font-semibold tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
+        variant === 'dadei'
+          ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-50'
+          : 'border-sky-400/25 bg-sky-500/10 text-sky-50',
+      )}
+    >
+      <span className={cn('select-none text-[13px] font-normal leading-none', quoteClass)} aria-hidden>
+        {'\u201c'}
+      </span>
+      {children}
+      <span className={cn('select-none text-[13px] font-normal leading-none', quoteClass)} aria-hidden>
+        {'\u201d'}
+      </span>
+    </span>
+  );
+}
 
 /**
  * Authenticated assistant shell: layout, theme tokens, overlays (settings), and realtime hooks.
@@ -146,34 +183,28 @@ export default function AssistantLayout() {
               animate={{ opacity: 1 }}
               className="pointer-events-none absolute inset-x-0 bottom-20 z-10 flex select-none flex-col items-center gap-2.5 text-sm text-zinc-500 font-secondary"
             >
-              <AnimatePresence>
+              <AnimatePresence initial={false}>
                 {showWakeHint ? (
-                  <motion.div
+                  <motion.p
                     key="wake-hint"
-                    initial={{ opacity: 0, y: 6 }}
+                    initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 6 }}
+                    exit={{ opacity: 0, y: 4 }}
                     transition={{ duration: 0.2 }}
-                    className="flex flex-wrap items-center justify-center gap-2"
+                    className={ASSISTANT_HINT_ROW}
                   >
                     <span>Say</span>
-                    <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-3 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
-                      Dadei
-                    </kbd>
+                    <SpokenWakeWord variant="dadei">Dadei</SpokenWakeWord>
                     <span>or</span>
-                    <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-3 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
-                      Assistant
-                    </kbd>
+                    <SpokenWakeWord variant="assistant">Assistant</SpokenWakeWord>
                     <span>to start a command</span>
-                  </motion.div>
+                  </motion.p>
                 ) : null}
               </AnimatePresence>
-              <div className="flex items-center gap-2">
-                <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
-                  Space
-                </kbd>
+              <p className={ASSISTANT_HINT_ROW}>
+                <kbd className={KEY_HINT_CLASS}>Space</kbd>
                 <span>to toggle</span>
-              </div>
+              </p>
             </motion.div>
           </div>
 
