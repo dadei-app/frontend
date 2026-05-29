@@ -2,8 +2,24 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import { Bell, Brain, CalendarDays, CheckSquare, LogOut, Mail, Trash2, X } from 'lucide-react';
-import { FcGoogle } from 'react-icons/fc';
+import {
+  Brain,
+  CalendarDays,
+  CheckSquare,
+  Clock3,
+  CloudSun,
+  FileText,
+  Globe,
+  HardDrive,
+  LogOut,
+  Mail,
+  Map,
+  Plug,
+  Table,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
@@ -44,29 +60,26 @@ function formatMetaLine(parts: Array<string | null | undefined>): string {
     .join(' · ');
 }
 
-type SidebarView = 'memories' | 'events' | 'tasks' | 'reminders' | 'mail';
+type SidebarView = 'integrations' | 'memories' | 'events' | 'tasks' | 'mail';
 
 const viewMeta: Record<SidebarView, { label: string; Icon: typeof CalendarDays }> = {
+  integrations: { label: 'Integrations', Icon: Plug },
   memories: { label: 'Memories', Icon: Brain },
   events: { label: 'Events', Icon: CalendarDays },
   tasks: { label: 'Tasks', Icon: CheckSquare },
-  reminders: { label: 'Reminders', Icon: Bell },
   mail: { label: 'Mail', Icon: Mail },
 };
 
-const ACTION_TYPES_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string[]> = {
+const ACTION_TYPES_BY_VIEW: Record<Extract<SidebarView, 'events' | 'tasks' | 'mail'>, string[]> = {
   events: ['calendar', 'calendar_event'],
   tasks: ['todo', 'task'],
-  reminders: ['reminder'],
   mail: ['email', 'message'],
 };
 
-const EMPTY_ACTION_COPY_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string> = {
+const EMPTY_ACTION_COPY_BY_VIEW: Record<Extract<SidebarView, 'events' | 'tasks' | 'mail'>, string> = {
   events: 'No events yet. Calendar items will show up here when plans with dates get picked up from your chats.',
   tasks:
     'No tasks yet. This list fills in once conversations include concrete next steps to track.',
-  reminders:
-    'No reminders yet. Time-based nudges appear here after you ask for follow-ups or timed prompts.',
   mail:
     'No mail actions yet. Drafts and send actions appear here when a message is prepared from conversation context.',
 };
@@ -76,10 +89,87 @@ const ACTION_TYPE_LABELS: Record<string, string> = {
   calendar_event: 'Calendar event',
   todo: 'Task',
   task: 'Task',
-  reminder: 'Reminder',
   email: 'Email',
   message: 'Message',
 };
+
+const GOOGLE_SCOPE_LABELS: Record<string, string> = {
+  'https://www.googleapis.com/auth/gmail.modify': 'Gmail modify',
+  'https://www.googleapis.com/auth/gmail.readonly': 'Gmail read',
+  'https://www.googleapis.com/auth/gmail.send': 'Gmail send',
+  'https://www.googleapis.com/auth/calendar.events': 'Calendar events',
+  'https://www.googleapis.com/auth/calendar.readonly': 'Calendar read',
+  'https://www.googleapis.com/auth/contacts.readonly': 'Contacts read',
+  'https://www.googleapis.com/auth/tasks': 'Tasks',
+  'https://www.googleapis.com/auth/tasks.readonly': 'Tasks read',
+  'https://www.googleapis.com/auth/documents': 'Docs',
+  'https://www.googleapis.com/auth/drive.readonly': 'Drive read',
+  'https://www.googleapis.com/auth/drive.file': 'Drive files',
+  'https://www.googleapis.com/auth/spreadsheets': 'Sheets',
+};
+
+const GOOGLE_INTEGRATIONS: Array<{
+  id: string;
+  name: string;
+  Icon: typeof CalendarDays;
+  requiredScopes: string[];
+}> = [
+  {
+    id: 'gmail',
+    name: 'Gmail',
+    Icon: Mail,
+    requiredScopes: ['https://www.googleapis.com/auth/gmail.modify'],
+  },
+  {
+    id: 'calendar',
+    name: 'Calendar',
+    Icon: CalendarDays,
+    requiredScopes: ['https://www.googleapis.com/auth/calendar.events'],
+  },
+  {
+    id: 'contacts',
+    name: 'Contacts',
+    Icon: Users,
+    requiredScopes: ['https://www.googleapis.com/auth/contacts.readonly'],
+  },
+  {
+    id: 'tasks',
+    name: 'Tasks',
+    Icon: CheckSquare,
+    requiredScopes: ['https://www.googleapis.com/auth/tasks'],
+  },
+  {
+    id: 'docs',
+    name: 'Docs',
+    Icon: FileText,
+    requiredScopes: ['https://www.googleapis.com/auth/documents'],
+  },
+  {
+    id: 'drive',
+    name: 'Drive',
+    Icon: HardDrive,
+    requiredScopes: ['https://www.googleapis.com/auth/drive.readonly'],
+  },
+  {
+    id: 'sheets',
+    name: 'Sheets',
+    Icon: Table,
+    requiredScopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  },
+];
+
+const REALTIME_DATA_SOURCES: Array<{ name: string; detail: string; Icon: typeof CalendarDays }> = [
+  { name: 'Weather', detail: 'Live conditions and short-term forecast lookups.', Icon: CloudSun },
+  { name: 'Maps', detail: 'Place and routing lookups for local context.', Icon: Map },
+  { name: 'Web Search', detail: 'Fresh web answers and source retrieval.', Icon: Globe },
+  { name: 'Current Time', detail: 'Timezone-aware clock checks without extra auth.', Icon: Clock3 },
+];
+
+function toScopeChipLabel(scope: string): string {
+  if (GOOGLE_SCOPE_LABELS[scope]) return GOOGLE_SCOPE_LABELS[scope];
+  const short = scope.split('/').pop() ?? scope;
+  return short.replaceAll('.', ' ').replaceAll('_', ' ');
+}
 
 function actionDisplayText(action: NetworkAction): string {
   const title = action.title?.trim();
@@ -123,7 +213,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
   const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<SidebarView>('memories');
+  const [activeView, setActiveView] = useState<SidebarView>('integrations');
   const prefersReducedMotion = useReducedMotion();
 
   const profile = authMeQuery.data ?? user;
@@ -131,7 +221,27 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const canDelete =
     !!profile && deletePhrase.trim().toLowerCase() === profile.email.trim().toLowerCase();
   const googleConnected = Boolean(profile?.google_connected);
+  const grantedScopes = profile?.google_granted_scopes ?? [];
+  const grantedScopeSet = new Set(grantedScopes);
+  const googleScopesStale = Boolean(profile?.google_scopes_stale);
   const activeViewMeta = viewMeta[activeView];
+
+  const integrationCards = GOOGLE_INTEGRATIONS.map((integration) => {
+    const grantedForCard = integration.requiredScopes.filter((scope) => grantedScopeSet.has(scope));
+    const missingForCard = integration.requiredScopes.filter((scope) => !grantedScopeSet.has(scope));
+    const needsReauth = googleConnected && (googleScopesStale || missingForCard.length > 0);
+    const status: 'connected' | 'needs_reauth' | 'disconnected' = !googleConnected
+      ? 'disconnected'
+      : needsReauth
+        ? 'needs_reauth'
+        : 'connected';
+    return {
+      ...integration,
+      grantedForCard,
+      missingForCard,
+      status,
+    };
+  });
 
   const handleSignOut = async () => {
     onOpenChange(false);
@@ -186,11 +296,16 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const memoryRows = memoriesQuery.data ?? [];
   const workspaceActionRows =
-    activeView === 'memories'
+    activeView === 'memories' || activeView === 'integrations'
       ? []
       : (actionsQuery.data ?? []).filter((action) =>
           ACTION_TYPES_BY_VIEW[activeView].includes(action.action_type)
         );
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveView('integrations');
+  }, [open]);
 
   const handleDeleteMemory = async (memoryId: string) => {
     try {
@@ -303,7 +418,9 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               <Dialog.Title className="text-lg font-semibold tracking-tight text-zinc-50">
                 Settings
               </Dialog.Title>
-              <p className="text-sm text-zinc-500 font-secondary">Memories and Actions powered by the Google Workspace</p>
+              <p className="text-sm text-zinc-500 font-secondary">
+                Integrations, memories, and workspace data
+              </p>
             </div>
             <Dialog.Close asChild>
               <button
@@ -321,6 +438,18 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               <nav className="space-y-1">
                 <button
                   type="button"
+                  onClick={() => setActiveView('integrations')}
+                  className={`inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-secondary transition-colors ${
+                    activeView === 'integrations'
+                      ? 'bg-emerald-500/15 text-emerald-300'
+                      : 'text-zinc-300 hover:bg-white/5 hover:text-zinc-100'
+                  }`}
+                >
+                  <Plug className="h-4 w-4" />
+                  Integrations
+                </button>
+                <button
+                  type="button"
                   onClick={() => setActiveView('memories')}
                   className={`inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-secondary transition-colors ${
                     activeView === 'memories'
@@ -335,10 +464,10 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
               <div className="mt-5 border-t border-white/10 pt-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
-                  Google Workspace
+                  Workspace data
                 </p>
                 <nav className="space-y-1">
-                  {(['events', 'tasks', 'reminders', 'mail'] as SidebarView[]).map((view) => {
+                  {(['events', 'tasks', 'mail'] as SidebarView[]).map((view) => {
                     const { label, Icon } = viewMeta[view];
                     const isActive = activeView === view;
                     return (
@@ -388,7 +517,138 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 </h3>
               </div>
 
-              {activeView === 'memories' ? (
+              {activeView === 'integrations' ? (
+                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-none pr-1">
+                  <div className="rounded-xl border border-white/10 bg-zinc-950/45 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm text-zinc-100">Google Workspace</h4>
+                        <p className="mt-1 text-xs text-zinc-500 font-secondary">
+                          Connect once, then re-authorize services when scopes change.
+                        </p>
+                      </div>
+                      {!googleConnected ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleGoogleConnect()}
+                          disabled={connectingGoogle}
+                          className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-zinc-800/85 px-3 py-1.5 text-xs text-zinc-100 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {connectingGoogle ? 'Connecting…' : 'Connect Google'}
+                        </button>
+                      ) : null}
+                    </div>
+                    {googleConnectError ? (
+                      <p className="mt-3 text-xs text-rose-300/90 font-secondary">{googleConnectError}</p>
+                    ) : null}
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {integrationCards.map((integration) => {
+                        const isConnectedStatus = integration.status === 'connected';
+                        const isReauthStatus = integration.status === 'needs_reauth';
+                        return (
+                          <article
+                            key={integration.id}
+                            className="rounded-xl border border-white/8 bg-zinc-900/75 p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <integration.Icon className="h-4 w-4 text-emerald-300/90" aria-hidden />
+                                <p className="text-sm text-zinc-100">{integration.name}</p>
+                              </div>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[11px] font-secondary ${
+                                  isConnectedStatus
+                                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                                    : isReauthStatus
+                                      ? 'border-amber-500/40 bg-amber-500/15 text-amber-300'
+                                      : 'border-zinc-600/80 bg-zinc-800/80 text-zinc-400'
+                                }`}
+                              >
+                                {isConnectedStatus
+                                  ? 'Connected'
+                                  : isReauthStatus
+                                    ? 'Needs re-auth'
+                                    : 'Disconnected'}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {integration.grantedForCard.length > 0 ? (
+                                integration.grantedForCard.map((scope) => (
+                                  <span
+                                    key={`${integration.id}-granted-${scope}`}
+                                    className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-200 font-secondary"
+                                  >
+                                    {toScopeChipLabel(scope)}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="rounded-md border border-zinc-700 bg-zinc-800/80 px-2 py-1 text-[11px] text-zinc-400 font-secondary">
+                                  No granted scopes
+                                </span>
+                              )}
+                            </div>
+
+                            {integration.missingForCard.length > 0 ? (
+                              <div className="mt-3">
+                                <p className="mb-1 text-[11px] uppercase tracking-wide text-zinc-500 font-secondary">
+                                  Missing scopes
+                                </p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {integration.missingForCard.map((scope) => (
+                                    <span
+                                      key={`${integration.id}-missing-${scope}`}
+                                      className="rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-200 font-secondary"
+                                    >
+                                      {toScopeChipLabel(scope)}
+                                    </span>
+                                  ))}
+                                </div>
+                                {googleConnected ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleGoogleConnect()}
+                                    disabled={connectingGoogle}
+                                    className="mt-3 inline-flex items-center justify-center rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {connectingGoogle ? 'Re-authorizing…' : 'Re-authorize'}
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-zinc-950/45 p-4">
+                    <h4 className="text-sm text-zinc-100">Realtime Data</h4>
+                    <p className="mt-1 text-xs text-zinc-500 font-secondary">
+                      Always available. These sources do not require account authorization.
+                    </p>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {REALTIME_DATA_SOURCES.map((source) => (
+                        <article
+                          key={source.name}
+                          className="rounded-xl border border-white/8 bg-zinc-900/75 p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <source.Icon className="h-4 w-4 text-emerald-300/90" aria-hidden />
+                              <p className="text-sm text-zinc-100">{source.name}</p>
+                            </div>
+                            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-300 font-secondary">
+                              Always on
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs text-zinc-500 font-secondary">{source.detail}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : activeView === 'memories' ? (
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
                   {!isConnected ? (
                     <p className="text-sm text-zinc-500 font-secondary">
@@ -438,7 +698,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 </div>
               ) : (
                 <div className="relative flex min-h-0 flex-1 flex-col">
-                  <div className={`min-h-0 flex-1 overflow-y-auto overscroll-none pr-1 ${googleConnected ? '' : 'opacity-35'}`}>
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
                     {!isConnected ? (
                       <p className="text-sm text-zinc-500 font-secondary">
                         Actions load after this device registers as a client.
@@ -491,24 +751,6 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                       </ul>
                     )}
                   </div>
-                  {!googleConnected ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-zinc-900/60 backdrop-blur-sm">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white">
-                        <FcGoogle className="h-6 w-6" aria-hidden />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleGoogleConnect()}
-                        disabled={connectingGoogle}
-                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-zinc-800/85 px-4 py-2 text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {connectingGoogle ? 'Connecting…' : 'Connect Google'}
-                      </button>
-                      {googleConnectError ? (
-                        <p className="text-xs text-rose-300/90 font-secondary">{googleConnectError}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
               )}
             </section>
