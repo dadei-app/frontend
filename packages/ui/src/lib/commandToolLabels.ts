@@ -9,6 +9,7 @@ const TOOL_LABELS: Record<string, string> = {
   update_memory: 'Updating memory',
   update_action: 'Updating action',
   list_calendar_events: 'Checking your calendar',
+  calendar_list_events: 'Checking your calendar',
   update_calendar_event: 'Updating event',
   delete_calendar_event: 'Deleting event',
   list_tasks: 'Checking tasks',

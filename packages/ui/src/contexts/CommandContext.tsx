@@ -36,8 +36,7 @@ import { commandToolLabel } from '@dadei/ui/lib/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/sessionEndDetection';
 import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
 
-const ACTIVITY_REQUEST = '_request';
-const ACTIVITY_ANSWER = '_answer';
+const ASSISTANT_STATUS_THINKING = 'Thinking…';
 
 export type CommandState =
   | 'idle'
@@ -48,16 +47,6 @@ export type CommandState =
   | 'locked';
 
 export type AssistantBubbleStatus = 'pending' | 'streaming' | 'done';
-
-export type CommandActivityStatus = 'running' | 'done' | 'error';
-
-export interface CommandActivityStep {
-  id: string;
-  tool: string;
-  label: string;
-  status: CommandActivityStatus;
-  detail?: string;
-}
 
 export interface CommandTurnHistory {
   id: string;
@@ -70,8 +59,8 @@ interface CommandContextValue {
   userBubbleText: string;
   assistantBubbleText: string;
   assistantBubbleStatus: AssistantBubbleStatus;
-  /** Live tool / prep steps from the voice command SSE stream. */
-  commandActivitySteps: CommandActivityStep[];
+  /** Single in-bubble status while processing (Thinking… / current tool); cleared when text streams. */
+  assistantStatusLine: string | null;
   bubbleHistory: CommandTurnHistory[];
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
@@ -144,8 +133,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const [assistantBubbleText, setAssistantBubbleText] = useState('');
   const [assistantBubbleStatus, setAssistantBubbleStatus] =
     useState<AssistantBubbleStatus>('pending');
-  const [commandActivitySteps, setCommandActivitySteps] = useState<CommandActivityStep[]>([]);
-  const activityStepSeqRef = useRef(0);
+  const [assistantStatusLine, setAssistantStatusLine] = useState<string | null>(null);
   const [bubbleHistory, setBubbleHistory] = useState<CommandTurnHistory[]>([]);
 
   const stateRef = useRef(state);
@@ -227,23 +215,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startRequestActivity = useCallback(() => {
-    activityStepSeqRef.current = 0;
-    setCommandActivitySteps([
-      {
-        id: 'step-0',
-        tool: ACTIVITY_REQUEST,
-        label: 'Understanding your request',
-        status: 'running',
-      },
-    ]);
+    setAssistantStatusLine(ASSISTANT_STATUS_THINKING);
   }, []);
 
   const resetLiveBubbles = useCallback(() => {
     followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
     lastToolBubbleSnippetRef.current = '';
-    activityStepSeqRef.current = 0;
-    setCommandActivitySteps([]);
+    setAssistantStatusLine(null);
     setUserBubbleText('');
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
@@ -358,7 +337,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     pendingNewResponseRef.current = false;
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
-    setCommandActivitySteps([]);
+    setAssistantStatusLine(null);
 
     const claimed = await claimAssistantMode();
     if (!claimed) return false;
@@ -389,9 +368,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamHadOutputRef.current = true;
           setState((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('streaming');
-          setCommandActivitySteps((prev) =>
-            prev.filter((s) => !(s.tool === ACTIVITY_ANSWER && s.status === 'running')),
-          );
+          setAssistantStatusLine(null);
           setAssistantBubbleTextSynced((prev) => {
             if (pendingNewResponseRef.current) {
               pendingNewResponseRef.current = false;
@@ -400,69 +377,22 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             return prev + ev.text;
           });
           break;
-        case 'tool_call':
+        case 'tool_call': {
           streamHadOutputRef.current = true;
           setState((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('streaming');
           pendingNewResponseRef.current = false;
-          setCommandActivitySteps((prev) => {
-            const label = commandToolLabel(ev.tool);
-            const withPrepDone = prev.map((s) =>
-              s.tool === ACTIVITY_REQUEST && s.status === 'running'
-                ? { ...s, status: 'done' as const }
-                : s,
-            );
-            if (withPrepDone.some((s) => s.tool === ev.tool && s.status === 'running')) {
-              return withPrepDone;
-            }
-            return [
-              ...withPrepDone,
-              {
-                id: `step-${++activityStepSeqRef.current}`,
-                tool: ev.tool,
-                label,
-                status: 'running' as const,
-              },
-            ];
-          });
+          const label = commandToolLabel(ev.tool);
+          setAssistantStatusLine(label ? `${label}…` : ASSISTANT_STATUS_THINKING);
           break;
+        }
         case 'tool_result':
           if (ev.summary) {
             streamHadOutputRef.current = true;
             const snippet = formatToolSummarySnippet(ev.summary, ev.ok);
-            const detail =
-              snippet.length > 100 ? `${snippet.slice(0, 97)}…` : snippet;
             lastToolBubbleSnippetRef.current = snippet;
-            setCommandActivitySteps((prev) => {
-              let next = prev.map((s) =>
-                s.tool === ev.tool && s.status === 'running'
-                  ? {
-                      ...s,
-                      status: ev.ok ? ('done' as const) : ('error' as const),
-                      detail: ev.ok ? undefined : detail,
-                    }
-                  : s,
-              );
-              if (
-                ev.ok &&
-                !assistantBubbleTextRef.current.trim() &&
-                !next.some((s) => s.tool === ACTIVITY_ANSWER)
-              ) {
-                next = [
-                  ...next.filter(
-                    (s) => !(s.tool === ACTIVITY_ANSWER && s.status === 'running'),
-                  ),
-                  {
-                    id: `step-${++activityStepSeqRef.current}`,
-                    tool: ACTIVITY_ANSWER,
-                    label: 'Putting answer together',
-                    status: 'running',
-                  },
-                ];
-              }
-              return next;
-            });
-            if (!ev.ok || !assistantBubbleTextRef.current.trim()) {
+            if (!ev.ok) {
+              setAssistantStatusLine(null);
               setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
             }
             setAssistantBubbleStatus(ev.ok ? 'streaming' : 'done');
@@ -471,6 +401,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
         case 'error':
           streamHadOutputRef.current = true;
+          setAssistantStatusLine(null);
           setAssistantBubbleTextSynced(ev.message);
           setAssistantBubbleStatus('done');
           setState('follow_up');
@@ -484,13 +415,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           if (stateRef.current === 'idle' || sessionEndingRef.current) break;
           followUpCaptureRef.current = false;
           pendingNewResponseRef.current = false;
-          setCommandActivitySteps((prev) =>
-            prev
-              .filter((s) => s.tool !== ACTIVITY_ANSWER || s.status !== 'running')
-              .map((s) =>
-                s.status === 'running' ? { ...s, status: 'done' as const } : s,
-              ),
-          );
+          setAssistantStatusLine(null);
           if (!assistantBubbleTextRef.current.trim()) {
             const fallback =
               lastToolBubbleSnippetRef.current.trim() || 'No response from Dadei. Try again.';
@@ -823,7 +748,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     userBubbleText,
     assistantBubbleText,
     assistantBubbleStatus,
-    commandActivitySteps,
+    assistantStatusLine,
     bubbleHistory,
     cancel,
     startListening,

@@ -5,6 +5,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import CommandBubble from '@dadei/ui/components/CommandBubble';
+import CommandFollowUpMicLevel from '@dadei/ui/components/CommandFollowUpMicLevel';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
@@ -61,6 +62,8 @@ export default function AssistantLayout() {
   const { isConnected, isServiceEnabled } = useService();
   const { state } = useCommand();
   const showWakeHint = state === 'idle' && isServiceEnabled;
+  const showCommandChrome = state !== 'idle' && state !== 'locked';
+  const showFollowUpMic = state === 'follow_up';
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
@@ -155,26 +158,32 @@ export default function AssistantLayout() {
             </div>
             <ToastStackHost className="fixed right-5 bottom-5 z-180" />
             <div className="relative flex min-h-0 flex-1 items-center justify-center">
-              <div className="relative z-10 flex flex-col items-center">
-                <div className="pointer-events-none absolute bottom-[calc(100%+1.25rem)] left-1/2 z-20 w-[min(640px,calc(100vw-8rem))] -translate-x-1/2">
-                  <div className="flex w-full flex-col items-center gap-3">
-                    <AnimatePresence>
-                      {state !== 'idle' && state !== 'locked' ? (
-                        <motion.div
-                          key="command-live-bubble"
-                          layout
-                          initial={{ opacity: 0, y: 30, scale: 0.97 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, y: -18, scale: 0.96 }}
-                          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                          className="pointer-events-none flex w-full justify-center"
-                        >
-                          <CommandBubble />
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
-                  </div>
-                </div>
+              <div className="relative z-10 flex flex-col items-center gap-4">
+                <AnimatePresence>
+                  {showCommandChrome ? (
+                    <motion.div
+                      key="command-live-bubble"
+                      layout
+                      initial={{ opacity: 0, y: 24, scale: 0.97 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -14, scale: 0.96 }}
+                      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+                      className="pointer-events-none flex w-[min(640px,calc(100vw-8rem))] flex-col items-center"
+                    >
+                      <CommandBubble />
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+                <AnimatePresence>
+                  {showFollowUpMic ? (
+                    <motion.div
+                      key="command-follow-up-mic"
+                      className="pointer-events-none flex justify-center"
+                    >
+                      <CommandFollowUpMicLevel />
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
                 <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
               </div>
             </div>

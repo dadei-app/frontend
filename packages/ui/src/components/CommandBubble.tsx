@@ -1,13 +1,8 @@
 import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import type {
-  CommandState,
-  AssistantBubbleStatus,
-  CommandActivityStep,
-} from '@dadei/ui/contexts/CommandContext';
+import type { CommandState, AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useAudio } from '@dadei/ui/contexts/AudioContext';
-import CommandActivityFeed from '@dadei/ui/components/CommandActivityFeed';
 import { VOICE_EASE } from '@dadei/ui/lib/voice/voiceConstants';
 
 const STATE_TINT: Record<CommandState, string> = {
@@ -56,9 +51,9 @@ interface GlassBubbleProps {
   text: string;
   state: CommandState;
   assistantStatus?: AssistantBubbleStatus;
-  activitySteps?: CommandActivityStep[];
+  statusLine?: string | null;
+  showListeningMic?: boolean;
   micLevel?: number;
-  showMicLevel?: boolean;
   animateEntry?: boolean;
 }
 
@@ -68,18 +63,17 @@ function GlassBubble({
   text,
   state,
   assistantStatus,
-  activitySteps = [],
+  statusLine = null,
+  showListeningMic = false,
   micLevel = 0,
-  showMicLevel = false,
   animateEntry = true,
 }: GlassBubbleProps) {
   const isAssistant = role === 'assistant';
   const hasText = text.trim().length > 0;
   const showCursor =
     isAssistant && assistantStatus === 'streaming' && hasText;
-  const showMicBar = showMicLevel && !hasText;
-  const hasActivity = isAssistant && activitySteps.length > 0;
-  const showActivityOnly = hasActivity && !hasText;
+  const showStatus = isAssistant && !!statusLine && !hasText;
+  const showListeningBar = showListeningMic && !hasText;
 
   return (
     <motion.div
@@ -98,13 +92,24 @@ function GlassBubble({
           <p className="font-secondary text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
             {label}
           </p>
-          {showActivityOnly ? <CommandActivityFeed steps={activitySteps} /> : null}
+          {showStatus ? (
+            <p className="font-primary mt-1 text-[15px] leading-relaxed text-zinc-400">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={statusLine}
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.2, ease: VOICE_EASE }}
+                  className="inline-block"
+                >
+                  {statusLine}
+                </motion.span>
+              </AnimatePresence>
+            </p>
+          ) : null}
           {hasText ? (
-            <p
-              className={`font-primary text-[15px] leading-relaxed text-zinc-100 ${
-                hasActivity ? 'mt-3' : 'mt-1'
-              }`}
-            >
+            <p className={`font-primary text-[15px] leading-relaxed text-zinc-100 ${showStatus ? 'mt-3' : 'mt-1'}`}>
               {text}
               {showCursor ? (
                 <span className="ml-0.5 inline-block w-[2px] animate-pulse bg-sky-300/90 align-middle">
@@ -113,11 +118,8 @@ function GlassBubble({
               ) : null}
             </p>
           ) : null}
-          {hasText && hasActivity ? (
-            <CommandActivityFeed steps={activitySteps} compact />
-          ) : null}
-          {showMicBar ? (
-            <div className={hasText || hasActivity ? 'mt-3' : 'mt-2'}>
+          {showListeningBar ? (
+            <div className={hasText || showStatus ? 'mt-3' : 'mt-2'}>
               <div className="h-0.5 overflow-hidden rounded-full bg-white/10">
                 <div
                   className="h-full rounded-full bg-cyan-400/80 transition-[width] duration-75"
@@ -138,40 +140,33 @@ export default function CommandBubble() {
     userBubbleText,
     assistantBubbleText,
     assistantBubbleStatus,
-    commandActivitySteps,
+    assistantStatusLine,
   } = useCommand();
   const { micLevel } = useAudio();
 
   if (state === 'idle' || state === 'locked') return null;
 
-  const capturingUser = state === 'listening' || state === 'follow_up';
-  const showUserMic =
-    state === 'listening' || (state === 'follow_up' && userBubbleText.trim().length > 0);
-  const showUser =
-    capturingUser || state === 'thinking' || state === 'responding';
+  const showUser = state === 'listening' || state === 'thinking' || state === 'responding' || state === 'follow_up';
   const assistantHasText = assistantBubbleText.trim().length > 0;
   const assistantIsBusy = state === 'thinking' || state === 'responding';
   const showAssistant =
     assistantIsBusy ||
     assistantHasText ||
-    commandActivitySteps.length > 0 ||
+    !!assistantStatusLine ||
     (state === 'follow_up' && assistantBubbleStatus === 'done');
 
   return (
     <>
       <CommandBubbleGlassFilter />
-      <motion.div
-        layout
-        className="mb-6 flex w-full max-w-[640px] flex-col gap-3"
-      >
-        {showUser ? (
+      <motion.div layout className="flex w-full max-w-[640px] flex-col gap-3">
+        {showUser && userBubbleText.trim() ? (
           <GlassBubble
             role="user"
             label="You"
             text={userBubbleText}
             state={state}
+            showListeningMic={state === 'listening'}
             micLevel={micLevel}
-            showMicLevel={showUserMic}
           />
         ) : null}
         <AnimatePresence>
@@ -191,7 +186,7 @@ export default function CommandBubble() {
                 text={assistantBubbleText}
                 state={state}
                 assistantStatus={assistantBubbleStatus}
-                activitySteps={commandActivitySteps}
+                statusLine={assistantStatusLine}
                 animateEntry={false}
               />
             </motion.div>
