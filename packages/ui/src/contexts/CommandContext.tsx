@@ -97,7 +97,10 @@ function formatToolSummarySnippet(summary: string, ok: boolean): string {
         : null;
     if (current && typeof current.temperature_2m === 'number') {
       const cond = typeof data.condition === 'string' ? data.condition.trim() : '';
-      const temp = `About ${Math.round(current.temperature_2m)}°`;
+      const units = typeof data.units === 'string' ? data.units.toLowerCase() : '';
+      const c = units === 'imperial' ? Math.round(((current.temperature_2m as number) - 32) * (5 / 9)) : Math.round(current.temperature_2m);
+      const f = units === 'imperial' ? Math.round(current.temperature_2m) : Math.round((current.temperature_2m as number) * (9 / 5) + 32);
+      const temp = `About ${c}°C (${f}°F)`;
       return cond ? `${temp}, ${cond}.` : `${temp} right now.`;
     }
     const message = parsed.message;
@@ -220,6 +223,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const commandStreamInFlightRef = useRef(false);
   const streamHadOutputRef = useRef(false);
   const lastToolBubbleSnippetRef = useRef('');
+  const lastCommittedTurnRef = useRef('');
   const interimCaptionRef = useRef('');
   const interimSeqRef = useRef<number>(0);
   const interimUtteranceIdRef = useRef<number | null>(null);
@@ -290,6 +294,17 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setAssistantStatusLine(ASSISTANT_STATUS_THINKING);
   }, []);
 
+  const commitLiveTurnToHistory = useCallback(() => {
+    const user = userBubbleTextRef.current.trim();
+    const assistant = assistantBubbleTextRef.current.trim();
+    if (!assistant) return;
+    const dedupeKey = `${user}::${assistant}`;
+    if (lastCommittedTurnRef.current === dedupeKey) return;
+    lastCommittedTurnRef.current = dedupeKey;
+    const id = `turn-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    setBubbleHistory((prev) => [...prev.slice(-7), { id, userText: user, assistantText: assistant }]);
+  }, []);
+
   const resetLiveBubbles = useCallback(() => {
     followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
@@ -344,6 +359,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     abortActiveStream();
     sessionEndingRef.current = false;
     lastSubmittedTextRef.current = null;
+    lastCommittedTurnRef.current = '';
     resetInterimCaptionState();
     setBubbleHistory([]);
     setState('idle');
@@ -538,7 +554,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             scheduleFollowUpExpiry(fallback.length);
             break;
           }
-          setAssistantBubbleStatus('done');
+          commitLiveTurnToHistory();
+          setUserBubbleText('');
+          setAssistantBubbleTextSynced('');
+          setAssistantBubbleStatus('pending');
           setState('follow_up');
           void claimAssistantMode();
           scheduleFollowUpExpiry(assistantBubbleTextRef.current.length);
@@ -547,7 +566,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [claimAssistantMode, endSession, scheduleFollowUpExpiry, setAssistantBubbleTextSynced],
+    [claimAssistantMode, commitLiveTurnToHistory, endSession, scheduleFollowUpExpiry, setAssistantBubbleTextSynced],
   );
 
   const submitVisibleCommandText = useCallback(

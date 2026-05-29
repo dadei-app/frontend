@@ -1,14 +1,13 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
+import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/cn';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;
 }
-
-const RIPPLE_DELAYS = [{ delay: 0 }, { delay: 0.4 }, { delay: 0.8 }] as const;
 
 const RIPPLE_COLORS = {
   red: 'rgba(255, 68, 68, 0.6)',
@@ -38,6 +37,14 @@ const MIC_GLASS = {
 
 const COLOR_CROSSFADE = { duration: 0.65, ease: [0.22, 1, 0.36, 1] as const };
 const RIPPLE_FADE = { duration: 0.45, ease: 'easeOut' as const };
+const RING_RHYTHM_MS = [330, 390, 360, 2000] as const;
+const RING_LIFETIME_MS = 2000;
+const MAX_RINGS = 8;
+
+interface RingParticle {
+  id: number;
+  tone: keyof typeof RIPPLE_COLORS;
+}
 
 function MicGlassLayer({
   tone,
@@ -58,29 +65,28 @@ function MicGlassLayer({
   );
 }
 
-/** Pulse rings; remount when ripples go hidden so they always start fresh on show. */
-function MicRippleRings({ tone }: { tone: keyof typeof RIPPLE_COLORS }) {
+function MicLevelAura({ visible, level }: { visible: boolean; level: number }) {
+  const aura = useMemo(() => {
+    const clamped = Math.max(0, Math.min(1, level));
+    return {
+      opacity: visible ? 0.28 + clamped * 0.5 : 0,
+      scale: visible ? 0.98 + clamped * 0.55 : 0.88,
+    };
+  }, [level, visible]);
+
   return (
-    <>
-      {RIPPLE_DELAYS.map(({ delay }) => (
-        <div key={delay} className="absolute inset-0 flex items-center justify-center">
-          <motion.div
-            className="h-full w-full rounded-full border-2 bg-transparent"
-            initial={{ scale: 1.05, opacity: 0, borderColor: RIPPLE_COLORS[tone] }}
-            animate={{
-              scale: [1.05, 2],
-              opacity: [0, 0.6, 0],
-              borderColor: RIPPLE_COLORS[tone],
-            }}
-            transition={{
-              scale: { duration: 2, repeat: Infinity, ease: 'easeOut', delay },
-              opacity: { duration: 2, repeat: Infinity, ease: 'easeOut', delay },
-              borderColor: COLOR_CROSSFADE,
-            }}
-          />
-        </div>
-      ))}
-    </>
+    <motion.div
+      aria-hidden
+      className="pointer-events-none absolute inset-[-22%] z-0 rounded-full"
+      style={{
+        background:
+          'radial-gradient(circle, rgba(56,189,248,0.45) 0%, rgba(14,165,233,0.28) 42%, rgba(2,132,199,0.08) 66%, transparent 100%)',
+        filter: 'blur(12px)',
+      }}
+      initial={false}
+      animate={aura}
+      transition={{ duration: 0.16, ease: 'easeOut' }}
+    />
   );
 }
 
@@ -102,6 +108,8 @@ function MicSpinner({ className }: { className: string }) {
 }
 
 export default function MicrophoneButton({ disableSpaceToggle = false }: MicrophoneButtonProps) {
+  const audioContext = useContext(AudioContext);
+  const micLevel = audioContext?.micLevel ?? 0;
   const {
     isServiceEnabled,
     toggleService,
@@ -125,11 +133,14 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const usePassiveGreen = !micBlocked && isIdle && !isServiceEnabled && !isAssistantMode;
 
   const showBlueRipples =
-    useAssistantBlue && (isFollowUp || isListening || (isIdle && isAssistantMode));
+    false;
   const showRedRipples = usePassiveRed;
-  const showRipples = showBlueRipples || showRedRipples;
-  const rippleTone: keyof typeof RIPPLE_COLORS = showBlueRipples ? 'blue' : 'red';
+  const emitRipples = showBlueRipples || showRedRipples;
+  const nextRingTone: keyof typeof RIPPLE_COLORS = showBlueRipples ? 'blue' : 'red';
   const showBlueSpinner = !micBlocked && isAwaitingResponse;
+  const [rings, setRings] = useState<RingParticle[]>([]);
+  const [showLiveAura, setShowLiveAura] = useState(false);
+  const ringIdRef = useRef(0);
 
   const stopSessionAndDisableService = useCallback(() => {
     cancel();
@@ -171,6 +182,49 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     await toggleService();
   };
 
+  const emitRing = useCallback((tone: keyof typeof RIPPLE_COLORS) => {
+    const id = ringIdRef.current++;
+    setRings((prev) => {
+      const next = [...prev, { id, tone }];
+      if (next.length <= MAX_RINGS) return next;
+      return next.slice(next.length - MAX_RINGS);
+    });
+    window.setTimeout(() => {
+      setRings((prev) => prev.filter((ring) => ring.id !== id));
+    }, RING_LIFETIME_MS + 80);
+  }, []);
+
+  useEffect(() => {
+    if (!emitRipples) return;
+    emitRing(nextRingTone);
+    let rhythmIdx = 0;
+    let timeoutId: number | null = null;
+    const scheduleNext = () => {
+      const waitMs = RING_RHYTHM_MS[rhythmIdx];
+      rhythmIdx = (rhythmIdx + 1) % RING_RHYTHM_MS.length;
+      timeoutId = window.setTimeout(() => {
+        emitRing(nextRingTone);
+        scheduleNext();
+      }, waitMs);
+    };
+    scheduleNext();
+    return () => {
+      if (timeoutId != null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [emitRipples, emitRing, nextRingTone]);
+
+  useEffect(() => {
+    const shouldShowLiveAura = !micBlocked && (isListening || isFollowUp) && !isAwaitingResponse;
+    if (!shouldShowLiveAura) {
+      setShowLiveAura(false);
+      return;
+    }
+    // Let existing ripples finish before the level aura takes over.
+    setShowLiveAura(rings.length === 0);
+  }, [isFollowUp, isListening, isAwaitingResponse, micBlocked, rings.length]);
+
   return (
     <div className="flex flex-col items-center gap-10">
       <motion.button
@@ -206,7 +260,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
         )}
 
         <AnimatePresence>
-          {showRipples ? (
+          {rings.length > 0 ? (
             <motion.div
               key="mic-ripples"
               aria-hidden
@@ -216,10 +270,25 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
               exit={{ opacity: 0 }}
               transition={RIPPLE_FADE}
             >
-              <MicRippleRings tone={rippleTone} />
+              {rings.map((ring) => (
+                <div key={ring.id} className="absolute inset-0 flex items-center justify-center">
+                  <motion.div
+                    className="h-full w-full rounded-full border-2 bg-transparent"
+                    initial={{ scale: 1.05, opacity: 0, borderColor: RIPPLE_COLORS[ring.tone] }}
+                    animate={{
+                      scale: [1.05, 2],
+                      opacity: [0, 0.62, 0],
+                      borderColor: RIPPLE_COLORS[ring.tone],
+                    }}
+                    transition={{ duration: RING_LIFETIME_MS / 1000, ease: 'easeOut' }}
+                  />
+                </div>
+              ))}
             </motion.div>
           ) : null}
         </AnimatePresence>
+
+        <MicLevelAura visible={showLiveAura} level={micLevel} />
 
         <div className="relative z-10 flex items-center justify-center text-white">
           <svg

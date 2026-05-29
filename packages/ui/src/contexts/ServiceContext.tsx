@@ -2,7 +2,12 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { serviceApi } from '@dadei/ui/lib/api/service';
-import { startRealtimeClient, stopRealtimeClient, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
+import {
+  sendRealtimeMessage,
+  startRealtimeClient,
+  stopRealtimeClient,
+  subscribeRealtimeMessages,
+} from '@dadei/ui/lib/realtimeClient';
 import { getRealtimeSessionId } from '@dadei/ui/lib/realtimeClient';
 import {
   ASSISTANT_ACTIONS_LIST_LIMIT,
@@ -32,6 +37,7 @@ interface ServiceContextType {
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
 const ENABLE_TIMEOUT_MS = 5000;
+const CLIENT_CONTEXT_LOCATION_TIMEOUT_MS = 3500;
 
 function isEpisodicMemory(data: unknown): data is EpisodicMemory {
   if (!data || typeof data !== 'object') return false;
@@ -43,6 +49,59 @@ function isNetworkAction(data: unknown): data is NetworkAction {
   if (!data || typeof data !== 'object') return false;
   const o = data as Record<string, unknown>;
   return typeof o.id === 'string' && typeof o.action_type === 'string' && typeof o.status === 'string';
+}
+
+type ClientContextKey = 'timezone' | 'location';
+
+function normalizeClientContextKeys(input: unknown): ClientContextKey[] {
+  if (!Array.isArray(input)) return [];
+  const out = new Set<ClientContextKey>();
+  for (const key of input) {
+    const k = String(key).trim().toLowerCase();
+    if (k === 'timezone' || k === 'location') out.add(k);
+  }
+  return [...out];
+}
+
+function getClientTimezone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
+function getClientLocation(): Promise<Record<string, unknown> | null> {
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_m: pos.coords.accuracy,
+          timestamp_ms: pos.timestamp,
+        });
+      },
+      () => resolve(null),
+      {
+        enableHighAccuracy: false,
+        maximumAge: 60_000,
+        timeout: CLIENT_CONTEXT_LOCATION_TIMEOUT_MS,
+      },
+    );
+  });
+}
+
+async function buildClientContextResponse(keys: ClientContextKey[]): Promise<Record<string, unknown>> {
+  const data: Record<string, unknown> = {};
+  if (keys.includes('timezone')) {
+    data.timezone = getClientTimezone();
+  }
+  if (keys.includes('location')) {
+    data.location = await getClientLocation();
+  }
+  return data;
 }
 
 export function ServiceProvider({ children }: { children: React.ReactNode }) {
@@ -129,6 +188,20 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     };
 
     const offWs = subscribeRealtimeMessages(msg => {
+      if (msg.event === 'client_context_request') {
+        const requestId = typeof msg.request_id === 'string' ? msg.request_id.trim() : '';
+        const keys = normalizeClientContextKeys(msg.keys);
+        if (!requestId || keys.length === 0) return;
+        void (async () => {
+          const data = await buildClientContextResponse(keys);
+          sendRealtimeMessage({
+            type: 'client_context_response',
+            request_id: requestId,
+            data,
+          });
+        })();
+        return;
+      }
       if (msg.event === 'realtime_status') {
         if (typeof msg.connected === 'boolean') {
           setIsConnected(msg.connected);

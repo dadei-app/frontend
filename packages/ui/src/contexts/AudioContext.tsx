@@ -13,11 +13,14 @@ const MIC_ANALYSER_SMOOTHING = 0.7;
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
 const SAMPLE_RATE = 16000;
 const FOLLOW_UP_SPEECH_RMS = 0.14;
-const WAKE_POST_MAX_MS = 5000;
-const WAKE_SILENCE_MS = 1500;
-const WAKE_SILENCE_RMS = 0.02;
+const WAKE_POST_MAX_MS = 6500;
+const WAKE_SILENCE_MS = 900;
+const WAKE_MIN_CAPTURE_MS = 650;
+const WAKE_SILENCE_RMS_BASE = 0.012;
+const WAKE_SILENCE_RMS_MAX = 0.045;
 const COMMAND_MIN_SAMPLES = 1600;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
+const VOICE_DEBUG_STORAGE_KEY = 'dadei.voice.debug';
 
 const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up', 'thinking', 'responding'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
@@ -69,6 +72,18 @@ function rms(samples: Int16Array): number {
     sumSq += v * v;
   }
   return Math.sqrt(sumSq / samples.length);
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.max(minimum, Math.min(maximum, value));
+}
+
+function isVoiceDebugEnabled(): boolean {
+  try {
+    return window.localStorage.getItem(VOICE_DEBUG_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 function concatPcm16(chunks: Int16Array[]): Int16Array {
@@ -154,6 +169,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const wakeCaptureActiveRef = useRef(false);
   const wakeCaptureStartedAtMsRef = useRef(0);
   const wakeCaptureSilenceSinceMsRef = useRef<number | null>(null);
+  const wakeCaptureSilenceRmsRef = useRef(WAKE_SILENCE_RMS_BASE);
+  const wakeCaptureSpeechSeenRef = useRef(false);
+  const wakeCaptureAmbientRmsRef = useRef(0);
+  const wakeCaptureLastChunkRmsRef = useRef(0);
+  const wakeCaptureLastElapsedMsRef = useRef(0);
+  const wakeCaptureLastSilenceElapsedMsRef = useRef(0);
   const wakePreBufferRef = useRef<Int16Array>(new Int16Array(0));
   const wakePostChunksRef = useRef<Int16Array[]>([]);
 
@@ -213,9 +234,26 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     return () => cancelAnimationFrame(raf);
   }, [state, streamAnalyserReady]);
 
-  const submitWakeCapture = useCallback(() => {
+  const submitWakeCapture = useCallback((reason: 'silence' | 'max_post') => {
+    if (isVoiceDebugEnabled()) {
+      console.debug('[Voice][WakeCapture] finalize', {
+        reason,
+        elapsed_ms: wakeCaptureLastElapsedMsRef.current,
+        silence_elapsed_ms: wakeCaptureLastSilenceElapsedMsRef.current,
+        silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
+        ambient_rms: Number(wakeCaptureAmbientRmsRef.current.toFixed(5)),
+        last_chunk_rms: Number(wakeCaptureLastChunkRmsRef.current.toFixed(5)),
+        speech_seen: wakeCaptureSpeechSeenRef.current,
+      });
+    }
     wakeCaptureActiveRef.current = false;
     wakeCaptureSilenceSinceMsRef.current = null;
+    wakeCaptureSilenceRmsRef.current = WAKE_SILENCE_RMS_BASE;
+    wakeCaptureSpeechSeenRef.current = false;
+    wakeCaptureAmbientRmsRef.current = 0;
+    wakeCaptureLastChunkRmsRef.current = 0;
+    wakeCaptureLastElapsedMsRef.current = 0;
+    wakeCaptureLastSilenceElapsedMsRef.current = 0;
     const chunks = [wakePreBufferRef.current, ...wakePostChunksRef.current];
     wakePreBufferRef.current = new Int16Array(0);
     wakePostChunksRef.current = [];
@@ -235,6 +273,21 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       wakeCaptureSilenceSinceMsRef.current = null;
       wakePreBufferRef.current = ringBufferRef.current.drain();
       wakePostChunksRef.current = [];
+      const ambientRms = rms(wakePreBufferRef.current);
+      wakeCaptureAmbientRmsRef.current = ambientRms;
+      // Adapt silence detection to current room noise so command-end feels consistent.
+      wakeCaptureSilenceRmsRef.current = clamp(
+        ambientRms * 1.8 + 0.004,
+        WAKE_SILENCE_RMS_BASE,
+        WAKE_SILENCE_RMS_MAX,
+      );
+      wakeCaptureSpeechSeenRef.current = false;
+      if (isVoiceDebugEnabled()) {
+        console.debug('[Voice][WakeCapture] started', {
+          ambient_rms: Number(ambientRms.toFixed(5)),
+          silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
+        });
+      }
       startListening();
     },
     [startListening],
@@ -275,6 +328,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     commandStreamReadyRef.current = false;
     wakeCaptureActiveRef.current = false;
     wakeCaptureSilenceSinceMsRef.current = null;
+    wakeCaptureSilenceRmsRef.current = WAKE_SILENCE_RMS_BASE;
+    wakeCaptureSpeechSeenRef.current = false;
+    wakeCaptureAmbientRmsRef.current = 0;
+    wakeCaptureLastChunkRmsRef.current = 0;
+    wakeCaptureLastElapsedMsRef.current = 0;
+    wakeCaptureLastSilenceElapsedMsRef.current = 0;
     wakePreBufferRef.current = new Int16Array(0);
     wakePostChunksRef.current = [];
     lastCommandStartAttemptMsRef.current = 0;
@@ -345,7 +404,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         wakePostChunksRef.current.push(pcm16);
         const nowMs = Date.now();
         const chunkRms = rms(pcm16);
-        if (chunkRms < WAKE_SILENCE_RMS) {
+        wakeCaptureLastChunkRmsRef.current = chunkRms;
+        const silenceRms = wakeCaptureSilenceRmsRef.current;
+        const speakingRms = silenceRms * 1.35;
+        if (chunkRms >= speakingRms) {
+          wakeCaptureSpeechSeenRef.current = true;
+        }
+        if (chunkRms < silenceRms) {
           if (wakeCaptureSilenceSinceMsRef.current == null) wakeCaptureSilenceSinceMsRef.current = nowMs;
         } else {
           wakeCaptureSilenceSinceMsRef.current = null;
@@ -354,8 +419,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const silenceElapsed = wakeCaptureSilenceSinceMsRef.current
           ? nowMs - wakeCaptureSilenceSinceMsRef.current
           : 0;
-        if (captureElapsed >= WAKE_POST_MAX_MS || silenceElapsed >= WAKE_SILENCE_MS) {
-          submitWakeCapture();
+        wakeCaptureLastElapsedMsRef.current = captureElapsed;
+        wakeCaptureLastSilenceElapsedMsRef.current = silenceElapsed;
+        const canEndForSilence =
+          captureElapsed >= WAKE_MIN_CAPTURE_MS &&
+          wakeCaptureSpeechSeenRef.current &&
+          silenceElapsed >= WAKE_SILENCE_MS;
+        const maxPostExceeded = captureElapsed >= WAKE_POST_MAX_MS;
+        if (maxPostExceeded || canEndForSilence) {
+          submitWakeCapture(maxPostExceeded ? 'max_post' : 'silence');
         }
       }
 

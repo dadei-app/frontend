@@ -2,7 +2,6 @@ import type { CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CommandState, AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
-import { useAudio } from '@dadei/ui/contexts/AudioContext';
 import { VOICE_EASE } from '@dadei/ui/lib/voice/voiceConstants';
 
 const STATE_TINT: Record<CommandState, string> = {
@@ -52,8 +51,6 @@ interface GlassBubbleProps {
   state: CommandState;
   assistantStatus?: AssistantBubbleStatus;
   statusLine?: string | null;
-  showListeningMic?: boolean;
-  micLevel?: number;
   animateEntry?: boolean;
 }
 
@@ -64,8 +61,6 @@ function GlassBubble({
   state,
   assistantStatus,
   statusLine = null,
-  showListeningMic = false,
-  micLevel = 0,
   animateEntry = true,
 }: GlassBubbleProps) {
   const isAssistant = role === 'assistant';
@@ -73,7 +68,6 @@ function GlassBubble({
   const showCursor =
     isAssistant && assistantStatus === 'streaming' && hasText;
   const showStatus = isAssistant && !!statusLine && !hasText;
-  const showListeningBar = showListeningMic && !hasText;
 
   return (
     <motion.div
@@ -118,16 +112,6 @@ function GlassBubble({
               ) : null}
             </p>
           ) : null}
-          {showListeningBar ? (
-            <div className={hasText || showStatus ? 'mt-3' : 'mt-2'}>
-              <div className="h-0.5 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-cyan-400/80 transition-[width] duration-75"
-                  style={{ width: `${Math.round(micLevel * 100)}%` }}
-                />
-              </div>
-            </div>
-          ) : null}
         </div>
       </div>
     </motion.div>
@@ -137,35 +121,26 @@ function GlassBubble({
 export default function TextBubble() {
   const {
     state,
+    bubbleHistory,
     userBubbleText,
     assistantBubbleText,
     assistantBubbleStatus,
     assistantStatusLine,
   } = useCommand();
-  const { micLevel } = useAudio();
 
   if (state === 'idle' || state === 'locked') return null;
 
   const showUser = state === 'listening' || state === 'thinking' || state === 'responding' || state === 'follow_up';
-  const showUserMicPlaceholder =
-    (state === 'listening' || state === 'follow_up') && !userBubbleText.trim();
   const assistantHasText = assistantBubbleText.trim().length > 0;
   const assistantIsBusy = state === 'thinking' || state === 'responding';
-  const showAssistant =
-    assistantIsBusy ||
-    assistantHasText ||
-    !!assistantStatusLine ||
-    (state === 'follow_up' && assistantBubbleStatus === 'done');
-  const placeUserBubbleBelowAssistant = state === 'follow_up' && showAssistant;
+  const showAssistant = assistantIsBusy || assistantHasText || !!assistantStatusLine;
 
-  const userBubble = showUser && (userBubbleText.trim() || showUserMicPlaceholder) ? (
+  const userBubble = showUser && userBubbleText.trim() ? (
     <GlassBubble
       role="user"
       label="You"
       text={userBubbleText}
       state={state}
-      showListeningMic={state === 'listening' || state === 'follow_up'}
-      micLevel={micLevel}
     />
   ) : null;
 
@@ -199,17 +174,24 @@ export default function TextBubble() {
     <>
       <TextBubbleGlassFilter />
       <motion.div layout className="flex w-full max-w-[640px] flex-col gap-3">
-        {placeUserBubbleBelowAssistant ? (
-          <>
-            {assistantBubble}
-            {userBubble}
-          </>
-        ) : (
-          <>
-            {userBubble}
-            {assistantBubble}
-          </>
-        )}
+        {bubbleHistory.map((turn) => (
+          <motion.div key={turn.id} layout className="flex w-full flex-col gap-3">
+            {turn.userText.trim() ? (
+              <GlassBubble role="user" label="You" text={turn.userText} state="follow_up" />
+            ) : null}
+            {turn.assistantText.trim() ? (
+              <GlassBubble
+                role="assistant"
+                label="Dadei"
+                text={turn.assistantText}
+                state="follow_up"
+                assistantStatus="done"
+              />
+            ) : null}
+          </motion.div>
+        ))}
+        {userBubble}
+        {assistantBubble}
       </motion.div>
     </>
   );
