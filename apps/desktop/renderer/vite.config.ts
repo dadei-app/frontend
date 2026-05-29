@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
     root: __dirname,
     envDir: frontendRoot,
     base: './',
+    assetsInclude: ['**/*.onnx'],
     plugins: [react()],
     define: {
       'process.env.API_URL': JSON.stringify(apiUrl),

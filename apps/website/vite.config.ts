@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
     plugins: [react()],
     envDir: frontendRoot,
     base: '/',
+    assetsInclude: ['**/*.onnx'],
     define: {
       'process.env.API_URL': JSON.stringify(apiUrl),
       'process.env.BETA': JSON.stringify(beta),

@@ -12,6 +12,7 @@ import { useService } from '@dadei/ui/contexts/ServiceContext';
 import axios from 'axios';
 import {
   isAbortError,
+  streamCommand,
   streamCommandFromText,
   type CommandSSEEvent,
 } from '@dadei/ui/lib/api/command';
@@ -65,6 +66,8 @@ interface CommandContextValue {
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
+  /** Submit captured wake-buffer audio clip (WAV PCM16 @16kHz). */
+  submitCapturedCommandAudio: (wavBuffer: ArrayBuffer) => void;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
@@ -684,6 +687,114 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     ],
   );
 
+  const submitCapturedCommandAudio = useCallback(
+    (wavBuffer: ArrayBuffer) => {
+      if (commandStreamInFlightRef.current) return;
+      if (!wavBuffer || wavBuffer.byteLength < 64) return;
+
+      clearWakeTimeout();
+      clearFollowUpTimer();
+      followUpCaptureRef.current = false;
+      resetInterimCaptionState();
+      streamHadOutputRef.current = false;
+      lastToolBubbleSnippetRef.current = '';
+      setAssistantBubbleTextSynced('');
+      setAssistantBubbleStatus('pending');
+      pendingNewResponseRef.current = true;
+      startRequestActivity();
+      setState('thinking');
+
+      void (async () => {
+        const claimed = await claimAssistantMode();
+        if (!claimed) {
+          setAssistantBubbleTextSynced('Could not claim assistant mode');
+          setAssistantBubbleStatus('done');
+          setState('idle');
+          return;
+        }
+
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          setAssistantBubbleTextSynced('Not authenticated');
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(0);
+          return;
+        }
+
+        if (!isConnected || !getRealtimeSessionToken()) {
+          setAssistantBubbleTextSynced('Not connected to the assistant service yet');
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(0);
+          return;
+        }
+
+        commandStreamInFlightRef.current = true;
+        abortActiveStream();
+        const abortController = new AbortController();
+        streamAbortRef.current = abortController;
+
+        try {
+          let sawDone = false;
+          for await (const ev of streamCommand(wavBuffer, accessToken, { signal: abortController.signal })) {
+            if (ev.type === 'error' && abortController.signal.aborted) continue;
+            if (ev.type === 'transcript') {
+              const caption = cleanTranscript(ev.text).trim();
+              if (caption) setUserBubbleText(caption);
+              continue;
+            }
+            if (ev.type === 'done') sawDone = true;
+            handleStreamEvent(ev);
+          }
+          if (
+            !sawDone &&
+            !abortController.signal.aborted &&
+            (stateRef.current === 'responding' || stateRef.current === 'thinking')
+          ) {
+            handleStreamEvent({ type: 'done' });
+          }
+        } catch (e) {
+          if (isAbortError(e) || abortController.signal.aborted) {
+            if (
+              stateRef.current === 'thinking' &&
+              !streamHadOutputRef.current &&
+              !assistantBubbleTextRef.current.trim()
+            ) {
+              setAssistantBubbleTextSynced('Request cancelled');
+              setAssistantBubbleStatus('done');
+              setState('follow_up');
+              scheduleFollowUpExpiry(0);
+            }
+            return;
+          }
+          const message = e instanceof Error ? e.message : 'Command failed';
+          streamHadOutputRef.current = true;
+          setAssistantBubbleTextSynced(message);
+          setAssistantBubbleStatus('done');
+          setState('follow_up');
+          scheduleFollowUpExpiry(message.length);
+        } finally {
+          streamAbortRef.current = null;
+          commandStreamInFlightRef.current = false;
+        }
+      })();
+    },
+    [
+      abortActiveStream,
+      claimAssistantMode,
+      clearFollowUpTimer,
+      clearWakeTimeout,
+      getAccessToken,
+      handleStreamEvent,
+      isConnected,
+      resetInterimCaptionState,
+      scheduleFollowUpExpiry,
+      setAssistantBubbleTextSynced,
+      startRequestActivity,
+    ],
+  );
+
   useEffect(() => {
     const off = subscribeRealtimeMessages((msg) => {
       const current = stateRef.current;
@@ -692,35 +803,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (current === 'thinking' || current === 'responding') return;
         const text = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         if (!text) return;
-
-        if (current === 'idle' && transcriptStartsWithWakeCommand(text)) {
-          lastWakeInterimRef.current = text;
-          void (async () => {
-            const armed = await armWakeListening();
-            if (!armed) return;
-            const caption = bubbleCaptionText(text, false);
-            if (caption) setUserBubbleText(caption);
-          })();
-          return;
-        }
-
-        if (current === 'listening') {
-          clearWakeFalsePositiveIfCommandInProgress(text);
-          const caption = bubbleCaptionText(text, followUpCaptureRef.current);
-          const utteranceId =
-            typeof msg.utterance_id === 'number' && Number.isFinite(msg.utterance_id)
-              ? msg.utterance_id
-              : null;
-          const interimSeq =
-            typeof msg.interim_seq === 'number' && Number.isFinite(msg.interim_seq)
-              ? msg.interim_seq
-              : null;
-          const stableCaption = caption
-            ? stableInterimCaption(caption, utteranceId, interimSeq)
-            : '';
-          if (stableCaption) setUserBubbleText(stableCaption);
-          return;
-        }
 
         if (current === 'follow_up') {
           if (commandStreamInFlightRef.current) return;
@@ -734,18 +816,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       }
 
       if (msg.event === 'command_transcript_done') {
-        if (current !== 'listening') return;
-        clearWakeTimeout();
-        const caption = userBubbleTextRef.current.trim();
-        const submitted =
-          lastSubmittedTextRef.current != null &&
-          Date.now() - lastSubmittedTextRef.current.atMs < 3_000;
-        if (!caption && !submitted) {
-          void (async () => {
-            if (localClaimRef.current) await releaseAssistantMode();
-            goIdle();
-          })();
-        }
         return;
       }
 
@@ -755,26 +825,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         const text = finalRaw || cleanTranscript(lastWakeInterimRef.current);
         resetInterimCaptionState();
         lastWakeInterimRef.current = '';
-
-        if (current === 'idle') {
-          if (!text.trim() || !transcriptStartsWithWakeCommand(text)) return;
-          void (async () => {
-            const armed = await armWakeListening();
-            if (!armed) return;
-            submitVisibleCommandText(text, false);
-          })();
-          return;
-        }
-
-        if (current === 'listening') {
-          if (!text.trim()) return;
-          const fromFollowUp = followUpCaptureRef.current;
-          followUpCaptureRef.current = false;
-          const caption = bubbleCaptionText(text, fromFollowUp);
-          if (caption) setUserBubbleText(caption);
-          submitVisibleCommandText(text, fromFollowUp);
-          return;
-        }
 
         if (current === 'follow_up') {
           if (commandStreamInFlightRef.current) return;
@@ -883,6 +933,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     bubbleHistory,
     cancel,
     startListening,
+    submitCapturedCommandAudio,
   };
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;

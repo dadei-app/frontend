@@ -53,6 +53,6 @@ export const ENDPOINTS = {
   MEMORY_BY_ID: '/memories/:memoryId',
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
-  COMMAND: '/actions/voice',
+  COMMAND: '/command',
   COMMAND_TEXT: '/actions/voice/text',
 } as const;

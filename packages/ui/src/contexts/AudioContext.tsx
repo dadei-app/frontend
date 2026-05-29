@@ -3,31 +3,36 @@ import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
 import { notifyVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
+import { RingBuffer } from '@dadei/ui/renderer/audio/ringBuffer';
+import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 
 const COMMAND_START_RETRY_MS = 500;
 const MIC_ANALYSER_FFT_SIZE = 256;
 const MIC_ANALYSER_SMOOTHING = 0.7;
-/** Normalized RMS above which we treat follow-up speech as started (before ASR interim). */
+// ScriptProcessorNode requires 0 or a power-of-two between 256 and 16384.
+const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
+const SAMPLE_RATE = 16000;
 const FOLLOW_UP_SPEECH_RMS = 0.14;
+const WAKE_POST_MAX_MS = 5000;
+const WAKE_SILENCE_MS = 1500;
+const WAKE_SILENCE_RMS = 0.02;
+const COMMAND_MIN_SAMPLES = 1600;
+const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
-/** States where mic PCM is forwarded to the realtime command pipeline. */
-const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
-
-/** Assistant is generating — do not capture or forward user audio. */
+const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up', 'thinking', 'responding'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
 
 interface AudioContextType {
   isProcessing: boolean;
   isAudioPipelineReady: boolean;
-  /** Normalized mic RMS in [0, 1] while listening; 0 otherwise. */
   micLevel: number;
 }
 
 export const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
 function downsampleTo16k(input: Float32Array, inputSampleRate: number): Float32Array {
-  if (inputSampleRate <= 16000) return input;
-  const ratio = inputSampleRate / 16000;
+  if (inputSampleRate <= SAMPLE_RATE) return input;
+  const ratio = inputSampleRate / SAMPLE_RATE;
   const outLength = Math.max(1, Math.floor(input.length / ratio));
   const output = new Float32Array(outLength);
   let offsetResult = 0;
@@ -47,10 +52,85 @@ function downsampleTo16k(input: Float32Array, inputSampleRate: number): Float32A
   return output;
 }
 
+function toPcm16(input: Float32Array): Int16Array {
+  const pcm16 = new Int16Array(input.length);
+  for (let i = 0; i < input.length; i++) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return pcm16;
+}
+
+function rms(samples: Int16Array): number {
+  if (!samples.length) return 0;
+  let sumSq = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const v = samples[i] / 32768;
+    sumSq += v * v;
+  }
+  return Math.sqrt(sumSq / samples.length);
+}
+
+function concatPcm16(chunks: Int16Array[]): Int16Array {
+  const total = chunks.reduce((n, c) => n + c.length, 0);
+  const out = new Int16Array(total);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.length;
+  }
+  return out;
+}
+
+function pcm16ToWavBuffer(samples: Int16Array, sampleRate = SAMPLE_RATE): ArrayBuffer {
+  const bytesPerSample = 2;
+  const dataSize = samples.length * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  let offset = 0;
+
+  const writeString = (s: string) => {
+    for (let i = 0; i < s.length; i++) {
+      view.setUint8(offset++, s.charCodeAt(i));
+    }
+  };
+
+  writeString('RIFF');
+  view.setUint32(offset, 36 + dataSize, true);
+  offset += 4;
+  writeString('WAVE');
+  writeString('fmt ');
+  view.setUint32(offset, 16, true);
+  offset += 4;
+  view.setUint16(offset, 1, true);
+  offset += 2;
+  view.setUint16(offset, 1, true);
+  offset += 2;
+  view.setUint32(offset, sampleRate, true);
+  offset += 4;
+  view.setUint32(offset, sampleRate * bytesPerSample, true);
+  offset += 4;
+  view.setUint16(offset, bytesPerSample, true);
+  offset += 2;
+  view.setUint16(offset, 16, true);
+  offset += 2;
+  writeString('data');
+  view.setUint32(offset, dataSize, true);
+  offset += 4;
+
+  for (let i = 0; i < samples.length; i++) {
+    view.setInt16(offset, samples[i], true);
+    offset += 2;
+  }
+
+  return buffer;
+}
+
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
-  const { state } = useCommand();
+  const { state, startListening, submitCapturedCommandAudio } = useCommand();
+
   const [isProcessing] = useState(false);
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
@@ -68,6 +148,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
+  const ringBufferRef = useRef(new RingBuffer(3, SAMPLE_RATE));
+  const wakeDetectorRef = useRef<WakeWordDetector | null>(null);
+  const wakeDetectorFailureLoggedRef = useRef(false);
+  const wakeCaptureActiveRef = useRef(false);
+  const wakeCaptureStartedAtMsRef = useRef(0);
+  const wakeCaptureSilenceSinceMsRef = useRef<number | null>(null);
+  const wakePreBufferRef = useRef<Int16Array>(new Int16Array(0));
+  const wakePostChunksRef = useRef<Int16Array[]>([]);
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -84,8 +173,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
       (state === 'follow_up' && ASSISTANT_BUSY_STATES.includes(prev))
     ) {
-      // Drop in-progress noise buffers — do not finalize into a transcript.
       sendRealtimeMessage({ type: 'command_audio_discard' });
+    } else if (
+      (prev === 'listening' || prev === 'follow_up') &&
+      (state === 'idle' || state === 'locked')
+    ) {
+      sendRealtimeMessage({ type: 'command_audio_cancel' });
     }
     prevStateRef.current = state;
   }, [state]);
@@ -96,9 +189,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       setMicLevel(0);
       return;
     }
-    if (!streamAnalyserReady || !analyserRef.current) {
-      return;
-    }
+    if (!streamAnalyserReady || !analyserRef.current) return;
 
     const analyser = analyserRef.current;
     const buf = new Uint8Array(analyser.fftSize);
@@ -111,21 +202,43 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const v = (buf[i] - 128) / 128;
         sumSq += v * v;
       }
-      const rms = Math.sqrt(sumSq / buf.length);
-      const level = Math.min(rms * 2.2, 1);
+      const level = Math.min(Math.sqrt(sumSq / buf.length) * 2.2, 1);
       setMicLevel(level);
-
       const speaking = level >= FOLLOW_UP_SPEECH_RMS;
-      if (speaking && !speechActive && stateRef.current === 'follow_up') {
-        notifyVoiceSpeechActivity();
-      }
+      if (speaking && !speechActive && stateRef.current === 'follow_up') notifyVoiceSpeechActivity();
       speechActive = speaking;
-
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [state, streamAnalyserReady]);
+
+  const submitWakeCapture = useCallback(() => {
+    wakeCaptureActiveRef.current = false;
+    wakeCaptureSilenceSinceMsRef.current = null;
+    const chunks = [wakePreBufferRef.current, ...wakePostChunksRef.current];
+    wakePreBufferRef.current = new Int16Array(0);
+    wakePostChunksRef.current = [];
+    const pcm16 = concatPcm16(chunks);
+    if (pcm16.length < COMMAND_MIN_SAMPLES) return;
+    submitCapturedCommandAudio(pcm16ToWavBuffer(pcm16, SAMPLE_RATE));
+  }, [submitCapturedCommandAudio]);
+
+  const onWakeWordDetected = useCallback(
+    (_timestampMs: number) => {
+      if (wakeCaptureActiveRef.current) return;
+      if (stateRef.current === 'thinking' || stateRef.current === 'responding' || stateRef.current === 'locked') {
+        return;
+      }
+      wakeCaptureActiveRef.current = true;
+      wakeCaptureStartedAtMsRef.current = Date.now();
+      wakeCaptureSilenceSinceMsRef.current = null;
+      wakePreBufferRef.current = ringBufferRef.current.drain();
+      wakePostChunksRef.current = [];
+      startListening();
+    },
+    [startListening],
+  );
 
   const stopCommandAudioStream = useCallback((cancel = false) => {
     if (processorNodeRef.current) {
@@ -147,6 +260,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       void webAudioCtxRef.current.close();
       webAudioCtxRef.current = null;
     }
+    if (wakeDetectorRef.current) {
+      void wakeDetectorRef.current.stop();
+      wakeDetectorRef.current = null;
+    }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
@@ -156,6 +273,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
     commandStreamActiveRef.current = false;
     commandStreamReadyRef.current = false;
+    wakeCaptureActiveRef.current = false;
+    wakeCaptureSilenceSinceMsRef.current = null;
+    wakePreBufferRef.current = new Int16Array(0);
+    wakePostChunksRef.current = [];
     lastCommandStartAttemptMsRef.current = 0;
   }, []);
 
@@ -164,19 +285,39 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (commandStreamReadyRef.current) return;
     if (!force && nowMs - lastCommandStartAttemptMsRef.current < COMMAND_START_RETRY_MS) return;
     lastCommandStartAttemptMsRef.current = nowMs;
-    sendRealtimeMessage({ type: 'command_audio_start', sample_rate: 16000 });
+    sendRealtimeMessage({ type: 'command_audio_start', sample_rate: SAMPLE_RATE });
   }, []);
 
   const startCommandAudioStream = useCallback(async () => {
     if (commandStreamActiveRef.current) return;
     const media = await navigator.mediaDevices.getUserMedia({
-      audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: true, noiseSuppression: true },
     });
     mediaStreamRef.current = media;
-    const ctx = new window.AudioContext({ sampleRate: 16000 });
+
+    if (ENABLE_LOCAL_WAKE_DETECTOR) {
+      const wakeDetector = new WakeWordDetector({ threshold: 0.5 });
+      wakeDetector.onWakeWord(onWakeWordDetected);
+      try {
+        await wakeDetector.start(media);
+        wakeDetectorRef.current = wakeDetector;
+      } catch (error) {
+        // Keep passive capture alive even if wake detector boot fails.
+        if (!wakeDetectorFailureLoggedRef.current) {
+          wakeDetectorFailureLoggedRef.current = true;
+          console.error('[Audio] wake-word detector start failed; passive capture continues', error);
+        } else {
+          console.warn('[Audio] wake-word detector unavailable for this session.');
+        }
+        wakeDetectorRef.current = null;
+      }
+    }
+
+    const ctx = new window.AudioContext({ sampleRate: SAMPLE_RATE });
     webAudioCtxRef.current = ctx;
     const source = ctx.createMediaStreamSource(media);
     sourceNodeRef.current = source;
+
     const analyserNode = ctx.createAnalyser();
     analyserNode.fftSize = MIC_ANALYSER_FFT_SIZE;
     analyserNode.smoothingTimeConstant = MIC_ANALYSER_SMOOTHING;
@@ -184,7 +325,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     analyserRef.current = analyserNode;
     setStreamAnalyserReady(true);
 
-    const processor = ctx.createScriptProcessor(2048, 1, 1);
+    const processor = ctx.createScriptProcessor(COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE, 1, 1);
     processorNodeRef.current = processor;
     analyserNode.connect(processor);
     processor.connect(ctx.destination);
@@ -197,23 +338,38 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       if (!commandStreamActiveRef.current || !forwardChunksRef.current) return;
       const input = event.inputBuffer.getChannelData(0);
       const downsampled = downsampleTo16k(input, ctx.sampleRate);
+      const pcm16 = toPcm16(downsampled);
+      ringBufferRef.current.push(pcm16);
+
+      if (wakeCaptureActiveRef.current) {
+        wakePostChunksRef.current.push(pcm16);
+        const nowMs = Date.now();
+        const chunkRms = rms(pcm16);
+        if (chunkRms < WAKE_SILENCE_RMS) {
+          if (wakeCaptureSilenceSinceMsRef.current == null) wakeCaptureSilenceSinceMsRef.current = nowMs;
+        } else {
+          wakeCaptureSilenceSinceMsRef.current = null;
+        }
+        const captureElapsed = nowMs - wakeCaptureStartedAtMsRef.current;
+        const silenceElapsed = wakeCaptureSilenceSinceMsRef.current
+          ? nowMs - wakeCaptureSilenceSinceMsRef.current
+          : 0;
+        if (captureElapsed >= WAKE_POST_MAX_MS || silenceElapsed >= WAKE_SILENCE_MS) {
+          submitWakeCapture();
+        }
+      }
+
       const nowMs = Date.now();
       if (!commandStreamReadyRef.current) {
         ensureCommandSessionStarted(nowMs);
         return;
-      }
-
-      const pcm16 = new Int16Array(downsampled.length);
-      for (let i = 0; i < downsampled.length; i++) {
-        const s = Math.max(-1, Math.min(1, downsampled[i]));
-        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
       const bytes = new Uint8Array(pcm16.buffer);
       let binary = '';
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       sendRealtimeMessage({ type: 'command_audio_chunk', pcm16_b64: btoa(binary) });
     };
-  }, [ensureCommandSessionStarted]);
+  }, [ensureCommandSessionStarted, onWakeWordDetected, submitWakeCapture]);
 
   useEffect(() => {
     const shouldListen =
@@ -227,14 +383,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const off = subscribeRealtimeMessages((msg) => {
       if (msg.event === 'command_transcript_ready') {
         commandStreamReadyRef.current = true;
-      }
-      if (msg.event === 'command_transcript_done' || msg.event === 'command_transcript_error') {
-        // Keep forwarding mic while idle/listening/follow_up — done is per-utterance, not end of session.
-        if (CHUNK_FORWARD_STATES.includes(stateRef.current)) {
-          commandStreamReadyRef.current = true;
-        } else {
-          commandStreamReadyRef.current = false;
-        }
       }
     });
     return off;

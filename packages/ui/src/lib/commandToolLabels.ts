@@ -24,6 +24,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_weather: 'Checking the weather',
   get_weather_forecast: 'Checking the forecast',
   get_current_location: 'Getting your location',
+  get_client_context: 'Getting client context',
   maps_search_places: 'Searching for a location',
   maps_directions: 'Getting directions',
   maps_distance_matrix: 'Checking travel time',
