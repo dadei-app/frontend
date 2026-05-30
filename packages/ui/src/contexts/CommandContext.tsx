@@ -77,7 +77,6 @@ const WAKE_FALSE_POSITIVE_MS = 12_000;
 /** Minimum interim length before arming a follow-up (filters ASR noise). */
 const MIN_FOLLOW_UP_INTERIM_CHARS = 4;
 const INTERIM_SHRINK_GUARD_RATIO = 0.7;
-const VOICE_DEBUG_STORAGE_KEY = 'dadei.voice.debug';
 
 function formatToolSummarySnippet(summary: string, ok: boolean): string {
   if (!summary.trim()) return ok ? 'Done.' : 'Something went wrong.';
@@ -105,8 +104,19 @@ function formatToolSummarySnippet(summary: string, ok: boolean): string {
     }
     const message = parsed.message;
     if (typeof message === 'string' && message.trim()) return message.trim();
+    const timezone = typeof data.timezone === 'string' ? data.timezone.trim() : '';
+    const localIso = typeof data.local_iso === 'string' ? data.local_iso.trim() : '';
+    if (timezone && localIso) {
+      const parsedDate = new Date(localIso);
+      if (!Number.isNaN(parsedDate.getTime())) {
+        const timeLabel = parsedDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        return `It's currently ${timeLabel} in ${timezone}.`;
+      }
+      return `Current timezone is ${timezone}.`;
+    }
+    if (ok) return 'Done.';
   } catch {
-    /* use raw summary */
+    if (ok) return 'Done.';
   }
   const trimmed = summary.trim();
   return trimmed.length > 280 ? `${trimmed.slice(0, 277)}…` : trimmed;
@@ -136,15 +146,6 @@ function longestCommonPrefixLen(a: string, b: string): number {
   let idx = 0;
   while (idx < max && a[idx] === b[idx]) idx += 1;
   return idx;
-}
-
-function isVoiceDebugEnabled(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    return window.localStorage.getItem(VOICE_DEBUG_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
 }
 
 export interface InterimCaptionState {
@@ -194,6 +195,7 @@ export function stabilizeInterimCaptionState(
 export function CommandProvider({ children }: { children: ReactNode }) {
   const { getAccessToken } = useAuth();
   const {
+    isServiceEnabled,
     isConnected,
     isAssistantMode,
     isAssistantOwner,
@@ -337,17 +339,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       interimUtteranceIdRef.current = next.utteranceId;
       interimSeqRef.current = next.interimSeq;
       interimCaptionRef.current = next.caption;
-      if (isVoiceDebugEnabled()) {
-        const accepted = next.caption.trim() !== prevCaption.trim() || !prevCaption.trim();
-        // eslint-disable-next-line no-console
-        console.debug('[Voice][Interim]', {
-          utteranceId: next.utteranceId,
-          interimSeq: next.interimSeq,
-          rawChars: rawCaption.trim().length,
-          stableChars: next.caption.trim().length,
-          accepted,
-        });
-      }
+      const accepted = next.caption.trim() !== prevCaption.trim() || !prevCaption.trim();
+      // eslint-disable-next-line no-console
+      console.debug('[Voice][Interim]', {
+        utteranceId: next.utteranceId,
+        interimSeq: next.interimSeq,
+        rawChars: rawCaption.trim().length,
+        stableChars: next.caption.trim().length,
+        accepted,
+      });
       return next.caption;
     },
     [],
@@ -587,6 +587,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       }
 
       if (fromFollowUp && isSessionEndUtterance(visible)) {
+        console.debug('[Voice][SessionEnd] matched follow-up submit', { text: visible });
         setUserBubbleText(visible);
         endSession();
         return;
@@ -823,6 +824,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         const text = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         if (!text) return;
 
+        if (current === 'listening') {
+          const visible = bubbleCaptionText(text, false);
+          if (!visible) return;
+          clearWakeFalsePositiveIfCommandInProgress(visible);
+          setUserBubbleText(visible);
+          return;
+        }
+
         if (current === 'follow_up') {
           if (commandStreamInFlightRef.current) return;
           const visible = text.trim();
@@ -845,17 +854,34 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         resetInterimCaptionState();
         lastWakeInterimRef.current = '';
 
+        if (current === 'listening') {
+          const trimmed = text.trim();
+          if (!trimmed) return;
+          clearWakeFalsePositiveIfCommandInProgress(trimmed);
+          submitVisibleCommandText(text, false);
+          return;
+        }
+
         if (current === 'follow_up') {
           if (commandStreamInFlightRef.current) return;
           const trimmed = text.trim();
           if (!trimmed) return;
           if (isSessionEndUtterance(trimmed)) {
+            console.debug('[Voice][SessionEnd] matched follow-up final', { text: trimmed });
             followUpCaptureRef.current = false;
             setUserBubbleText(trimmed);
             endSession();
             return;
           }
-          if (!followUpCaptureRef.current) return;
+          if (!followUpCaptureRef.current) {
+            // Backend may emit only final transcripts when interim decode is disabled.
+            // Do not drop valid follow-up commands just because we never saw interim.
+            if (trimmed.length < 2) {
+              console.debug('[Voice][FollowUp] dropped short final without interim', { text: trimmed });
+              return;
+            }
+            console.debug('[Voice][FollowUp] accepting final without interim', { text: trimmed });
+          }
           followUpCaptureRef.current = false;
           submitVisibleCommandText(text, true);
           return;
@@ -878,6 +904,27 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   ]);
 
   useEffect(() => subscribeVoiceSpeechActivity(onFollowUpSpeechActivity), [onFollowUpSpeechActivity]);
+
+  useEffect(() => {
+    if (isServiceEnabled) return;
+    const current = stateRef.current;
+    if (current === 'idle' || current === 'locked') return;
+    clearFollowUpTimer();
+    clearWakeTimeout();
+    abortActiveStream();
+    localClaimRef.current = false;
+    lastSubmittedTextRef.current = null;
+    resetInterimCaptionState();
+    setState('idle');
+    resetLiveBubbles();
+  }, [
+    abortActiveStream,
+    clearFollowUpTimer,
+    clearWakeTimeout,
+    isServiceEnabled,
+    resetInterimCaptionState,
+    resetLiveBubbles,
+  ]);
 
   useEffect(() => {
     if (isAssistantMode && !isAssistantOwner) {

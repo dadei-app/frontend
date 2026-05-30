@@ -20,7 +20,7 @@ const WAKE_SILENCE_RMS_BASE = 0.012;
 const WAKE_SILENCE_RMS_MAX = 0.045;
 const COMMAND_MIN_SAMPLES = 1600;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
-const VOICE_DEBUG_STORAGE_KEY = 'dadei.voice.debug';
+const USE_NETWORK_TRANSCRIPTS_FOR_COMMAND_SUBMIT = true;
 
 const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up', 'thinking', 'responding'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
@@ -76,14 +76,6 @@ function rms(samples: Int16Array): number {
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.max(minimum, Math.min(maximum, value));
-}
-
-function isVoiceDebugEnabled(): boolean {
-  try {
-    return window.localStorage.getItem(VOICE_DEBUG_STORAGE_KEY) === '1';
-  } catch {
-    return false;
-  }
 }
 
 function concatPcm16(chunks: Int16Array[]): Int16Array {
@@ -144,7 +136,7 @@ function pcm16ToWavBuffer(samples: Int16Array, sampleRate = SAMPLE_RATE): ArrayB
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
-  const { state, startListening, submitCapturedCommandAudio } = useCommand();
+  const { state, startListening } = useCommand();
 
   const [isProcessing] = useState(false);
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
@@ -200,6 +192,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       (state === 'idle' || state === 'locked')
     ) {
       sendRealtimeMessage({ type: 'command_audio_cancel' });
+      // Cancel tears down backend stream registration. Mark local stream as unready so
+      // the next utterance re-sends command_audio_start and rebinds the stream.
+      commandStreamReadyRef.current = false;
+      lastCommandStartAttemptMsRef.current = 0;
     }
     prevStateRef.current = state;
   }, [state]);
@@ -235,17 +231,15 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [state, streamAnalyserReady]);
 
   const submitWakeCapture = useCallback((reason: 'silence' | 'max_post') => {
-    if (isVoiceDebugEnabled()) {
-      console.debug('[Voice][WakeCapture] finalize', {
-        reason,
-        elapsed_ms: wakeCaptureLastElapsedMsRef.current,
-        silence_elapsed_ms: wakeCaptureLastSilenceElapsedMsRef.current,
-        silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
-        ambient_rms: Number(wakeCaptureAmbientRmsRef.current.toFixed(5)),
-        last_chunk_rms: Number(wakeCaptureLastChunkRmsRef.current.toFixed(5)),
-        speech_seen: wakeCaptureSpeechSeenRef.current,
-      });
-    }
+    console.debug('[Voice][WakeCapture] finalize', {
+      reason,
+      elapsed_ms: wakeCaptureLastElapsedMsRef.current,
+      silence_elapsed_ms: wakeCaptureLastSilenceElapsedMsRef.current,
+      silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
+      ambient_rms: Number(wakeCaptureAmbientRmsRef.current.toFixed(5)),
+      last_chunk_rms: Number(wakeCaptureLastChunkRmsRef.current.toFixed(5)),
+      speech_seen: wakeCaptureSpeechSeenRef.current,
+    });
     wakeCaptureActiveRef.current = false;
     wakeCaptureSilenceSinceMsRef.current = null;
     wakeCaptureSilenceRmsRef.current = WAKE_SILENCE_RMS_BASE;
@@ -257,10 +251,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const chunks = [wakePreBufferRef.current, ...wakePostChunksRef.current];
     wakePreBufferRef.current = new Int16Array(0);
     wakePostChunksRef.current = [];
+    if (USE_NETWORK_TRANSCRIPTS_FOR_COMMAND_SUBMIT) {
+      return;
+    }
     const pcm16 = concatPcm16(chunks);
     if (pcm16.length < COMMAND_MIN_SAMPLES) return;
-    submitCapturedCommandAudio(pcm16ToWavBuffer(pcm16, SAMPLE_RATE));
-  }, [submitCapturedCommandAudio]);
+    // Fallback path (disabled by default): direct command submit from local wake buffer.
+    // submitCapturedCommandAudio(pcm16ToWavBuffer(pcm16, SAMPLE_RATE));
+  }, []);
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number) => {
@@ -282,12 +280,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         WAKE_SILENCE_RMS_MAX,
       );
       wakeCaptureSpeechSeenRef.current = false;
-      if (isVoiceDebugEnabled()) {
-        console.debug('[Voice][WakeCapture] started', {
-          ambient_rms: Number(ambientRms.toFixed(5)),
-          silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
-        });
-      }
+      console.debug('[Voice][WakeCapture] started', {
+        ambient_rms: Number(ambientRms.toFixed(5)),
+        silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
+      });
       startListening();
     },
     [startListening],

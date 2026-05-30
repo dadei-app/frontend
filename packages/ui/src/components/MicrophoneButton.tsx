@@ -142,12 +142,9 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const [showLiveAura, setShowLiveAura] = useState(false);
   const ringIdRef = useRef(0);
 
-  const stopSessionAndDisableService = useCallback(() => {
+  const stopSessionOnly = useCallback(() => {
     cancel();
-    if (isServiceEnabled) {
-      void toggleService();
-    }
-  }, [cancel, isServiceEnabled, toggleService]);
+  }, [cancel]);
 
   useEffect(() => {
     if (disableSpaceToggle) return;
@@ -156,7 +153,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
       if (e.code === 'Space' && !micBlocked) {
         e.preventDefault();
         if (inActiveSession) {
-          stopSessionAndDisableService();
+          stopSessionOnly();
         } else {
           void toggleService();
         }
@@ -170,13 +167,13 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     toggleService,
     disableSpaceToggle,
     inActiveSession,
-    stopSessionAndDisableService,
+    stopSessionOnly,
   ]);
 
   const handleClick = async () => {
     if (micBlocked) return;
     if (inActiveSession) {
-      stopSessionAndDisableService();
+      stopSessionOnly();
       return;
     }
     await toggleService();
