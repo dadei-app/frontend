@@ -33,7 +33,7 @@ export function normalizeTranscriptForWake(text: string): string {
 }
 
 /** Short bias only — long prompts bleed into transcripts and the command bubble. */
-export const WAKE_WORD_INITIAL_PROMPT = 'Dadei. Wake words: Dadei, Assistant.';
+export const WAKE_WORD_INITIAL_PROMPT = 'Dadei. Wake words: Dadei, Assistant, Jarvis.';
 
 const ASSISTANT_WAKE_BAD_FOLLOW = new Set([
   'means',
@@ -67,6 +67,7 @@ const ASSISTANT_WAKE_FIRST_WORDS = new Set([
   'assists',
   'assistance',
   'system',
+  'jarvis',
 ]);
 
 const DADEI_WAKE_FIRST_WORDS = new Set([
@@ -81,6 +82,7 @@ const DADEI_WAKE_FIRST_WORDS = new Set([
   'daddies',
   'dadai',
   'dadeh',
+  'jarvis',
 ]);
 
 /**
@@ -103,12 +105,13 @@ export function transcriptLikelyContainsWakeWord(text: string): boolean {
     /\bda[-\s]?dee\b/.test(lower) ||
     /\bda\s+d[eiy]\b/.test(lower) ||
     /\bda[-\s]?dei\b/.test(lower) ||
-    /\bdade\s*[-]?\s*i\b/.test(lower);
+    /\bdade\s*[-]?\s*i\b/.test(lower) ||
+    /\bjarvis\b/.test(lower);
 
   if (hasDadeiShape) return true;
 
   const collapsed = lower.replace(/[^a-z]/g, '');
-  if (/dadei|dadey|dadee|daday|dahdee|dadai|dadeh/.test(collapsed)) return true;
+  if (/dadei|dadey|dadee|daday|dahdee|dadai|dadeh|jarvis/.test(collapsed)) return true;
   if (/assistant/.test(collapsed)) return true;
 
   return false;
@@ -156,7 +159,7 @@ function startsWithDadeiWake(lead: string, collapsedLead: string, firstWord: str
 
   if (startsShape) return true;
 
-  return /^(dadei|dadey|dadee|daday|dahdee|dadai|dadeh|daddy)/.test(collapsedLead);
+  return /^(dadei|dadey|dadee|daday|dahdee|dadai|dadeh|daddy|jarvis)/.test(collapsedLead);
 }
 
 /**
@@ -197,6 +200,7 @@ export function normalizeVisibleCommandText(text: string): string {
   out = out.replace(/^\s*da[- ]?dei\b[,.]?\s*/i, '');
   out = out.replace(/^\s*dadei\b[,.]?\s*/i, '');
   out = out.replace(/^\s*daddy\b[,.]?\s*/i, '');
+  out = out.replace(/^\s*jarvis\b[,.:]?\s*/i, '');
   out = out.replace(/^\s*assistant\b[,.:]?\s*/i, '');
   out = out.replace(/^\s*assisted\b[,.:]?\s*/i, '');
   out = out.replace(/^\s*assisting\b[,.:]?\s*/i, '');

@@ -79,7 +79,7 @@ const MIN_FOLLOW_UP_INTERIM_CHARS = 4;
 const INTERIM_SHRINK_GUARD_RATIO = 0.7;
 
 function formatToolSummarySnippet(summary: string, ok: boolean): string {
-  if (!summary.trim()) return ok ? 'Done.' : 'Something went wrong.';
+  if (!summary.trim()) return ok ? '' : 'Something went wrong.';
   try {
     const parsed = JSON.parse(summary) as Record<string, unknown>;
     if (!ok) {
@@ -104,6 +104,21 @@ function formatToolSummarySnippet(summary: string, ok: boolean): string {
     }
     const message = parsed.message;
     if (typeof message === 'string' && message.trim()) return message.trim();
+    const items = Array.isArray(data.items) ? data.items : [];
+    if (items.length > 0) {
+      const first = items[0] as Record<string, unknown>;
+      const title =
+        typeof first.summary === 'string'
+          ? first.summary.trim()
+          : typeof first.title === 'string'
+            ? first.title.trim()
+            : '';
+      if (items.length === 1) {
+        return title ? `I found 1 item: ${title}.` : 'I found 1 item.';
+      }
+      if (title) return `I found ${items.length} items. First is ${title}.`;
+      return `I found ${items.length} items.`;
+    }
     const timezone = typeof data.timezone === 'string' ? data.timezone.trim() : '';
     const localIso = typeof data.local_iso === 'string' ? data.local_iso.trim() : '';
     if (timezone && localIso) {
@@ -114,9 +129,9 @@ function formatToolSummarySnippet(summary: string, ok: boolean): string {
       }
       return `Current timezone is ${timezone}.`;
     }
-    if (ok) return 'Done.';
+    if (ok) return '';
   } catch {
-    if (ok) return 'Done.';
+    if (ok) return '';
   }
   const trimmed = summary.trim();
   return trimmed.length > 280 ? `${trimmed.slice(0, 277)}…` : trimmed;
@@ -546,8 +561,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
           if (!assistantBubbleTextRef.current.trim()) {
-            const fallback =
-              lastToolBubbleSnippetRef.current.trim() || 'No response from Dadei. Try again.';
+            const fallback = lastToolBubbleSnippetRef.current.trim() || 'I ran the tools but could not compose a reply. Please try again.';
             setAssistantBubbleTextSynced(fallback);
             setAssistantBubbleStatus('done');
             setState('follow_up');

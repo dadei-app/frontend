@@ -20,7 +20,6 @@ const WAKE_SILENCE_RMS_BASE = 0.012;
 const WAKE_SILENCE_RMS_MAX = 0.045;
 const COMMAND_MIN_SAMPLES = 1600;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
-const USE_NETWORK_TRANSCRIPTS_FOR_COMMAND_SUBMIT = true;
 
 const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up', 'thinking', 'responding'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
@@ -136,7 +135,7 @@ function pcm16ToWavBuffer(samples: Int16Array, sampleRate = SAMPLE_RATE): ArrayB
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
-  const { state, startListening } = useCommand();
+  const { state, startListening, submitCapturedCommandAudio } = useCommand();
 
   const [isProcessing] = useState(false);
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
@@ -251,14 +250,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const chunks = [wakePreBufferRef.current, ...wakePostChunksRef.current];
     wakePreBufferRef.current = new Int16Array(0);
     wakePostChunksRef.current = [];
-    if (USE_NETWORK_TRANSCRIPTS_FOR_COMMAND_SUBMIT) {
-      return;
-    }
     const pcm16 = concatPcm16(chunks);
     if (pcm16.length < COMMAND_MIN_SAMPLES) return;
-    // Fallback path (disabled by default): direct command submit from local wake buffer.
-    // submitCapturedCommandAudio(pcm16ToWavBuffer(pcm16, SAMPLE_RATE));
-  }, []);
+    submitCapturedCommandAudio(pcm16ToWavBuffer(pcm16, SAMPLE_RATE));
+  }, [submitCapturedCommandAudio]);
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number) => {

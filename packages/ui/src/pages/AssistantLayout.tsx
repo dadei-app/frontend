@@ -5,6 +5,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import TextBubble from '@dadei/ui/components/command/TextBubble';
+import MicLevelIndicator2 from '@dadei/ui/components/command/MicLevelIndicator2';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
@@ -176,6 +177,7 @@ export default function AssistantLayout() {
                 <div className="relative z-10 isolate">
                   <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
                 </div>
+                <MicLevelIndicator2 />
               </div>
             </div>
             <motion.div

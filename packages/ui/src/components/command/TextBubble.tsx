@@ -16,32 +16,13 @@ const STATE_TINT: Record<CommandState, string> = {
   locked: 'transparent',
 };
 
-function TextBubbleGlassFilter() {
-  return (
-    <svg
-      aria-hidden
-      width="0"
-      height="0"
-      className="pointer-events-none absolute"
-    >
-      <defs>
-        <filter id="dadei-text-bubble-glass" x="-4%" y="-4%" width="108%" height="108%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.01" numOctaves="2" seed="3" />
-          <feDisplacementMap in="SourceGraphic" scale="3" />
-        </filter>
-      </defs>
-    </svg>
-  );
-}
-
 const glassShellStyle: CSSProperties = {
-  backdropFilter: 'blur(12px) saturate(108%)',
-  WebkitBackdropFilter: 'blur(12px) saturate(108%)',
-  background: 'rgba(24, 24, 27, 0.88)',
-  border: '1px solid rgba(255, 255, 255, 0.09)',
+  backdropFilter: 'blur(6px) saturate(104%)',
+  WebkitBackdropFilter: 'blur(6px) saturate(104%)',
+  background: 'rgba(24, 24, 27, 0.8)',
+  border: '1px solid rgba(255, 255, 255, 0.07)',
   boxShadow:
-    'inset 0 1px 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 10px 28px -14px rgba(0, 0, 0, 0.4)',
-  filter: 'url(#dadei-text-bubble-glass)',
+    'inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 8px 22px -14px rgba(0, 0, 0, 0.32)',
 };
 
 interface GlassBubbleProps {
@@ -171,28 +152,25 @@ export default function TextBubble() {
   );
 
   return (
-    <>
-      <TextBubbleGlassFilter />
-      <motion.div layout className="flex w-full max-w-[640px] flex-col gap-3">
-        {bubbleHistory.map((turn) => (
-          <motion.div key={turn.id} layout className="flex w-full flex-col gap-3">
-            {turn.userText.trim() ? (
-              <GlassBubble role="user" label="You" text={turn.userText} state="follow_up" />
-            ) : null}
-            {turn.assistantText.trim() ? (
-              <GlassBubble
-                role="assistant"
-                label="Dadei"
-                text={turn.assistantText}
-                state="follow_up"
-                assistantStatus="done"
-              />
-            ) : null}
-          </motion.div>
-        ))}
-        {userBubble}
-        {assistantBubble}
-      </motion.div>
-    </>
+    <motion.div layout className="flex w-full max-w-[640px] flex-col gap-3">
+      {bubbleHistory.map((turn) => (
+        <motion.div key={turn.id} layout className="flex w-full flex-col gap-3">
+          {turn.userText.trim() ? (
+            <GlassBubble role="user" label="You" text={turn.userText} state="follow_up" />
+          ) : null}
+          {turn.assistantText.trim() ? (
+            <GlassBubble
+              role="assistant"
+              label="Dadei"
+              text={turn.assistantText}
+              state="follow_up"
+              assistantStatus="done"
+            />
+          ) : null}
+        </motion.div>
+      ))}
+      {userBubble}
+      {assistantBubble}
+    </motion.div>
   );
 }
