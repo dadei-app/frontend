@@ -20,6 +20,7 @@ import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import { useActionsQuery } from '@dadei/ui/lib/queryHooks';
 import { parseApiDateTime } from '@dadei/ui/lib/parseApiDateTime';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
+import { formatForUser } from '@dadei/ui/utils/time';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
 
@@ -82,7 +83,9 @@ function newId(): string {
 
 function formatActionDateTime(iso: string): string {
   try {
-    return parseApiDateTime(iso).toLocaleString(undefined, {
+    const utcIso = parseApiDateTime(iso).toISOString();
+    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return formatForUser(utcIso, userTz, {
       weekday: 'short',
       hour: 'numeric',
       minute: '2-digit',

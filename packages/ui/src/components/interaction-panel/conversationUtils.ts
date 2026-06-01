@@ -1,5 +1,6 @@
 import type { Conversation, Interaction } from '@dadei/ui/types/models.types';
 import { parseApiDateTime } from '@dadei/ui/lib/parseApiDateTime';
+import { formatForUser } from '@dadei/ui/utils/time';
 import { ORPHAN_KEY } from './constants';
 import type { ConversationGroupState, ConversationGroupView } from './types';
 
@@ -10,7 +11,8 @@ export function parseInteractionDate(iso: string | undefined | null): Date {
 export function formatLocalTime(iso: string | undefined | null): string {
   const d = parseInteractionDate(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(undefined, {
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return formatForUser(d.toISOString(), userTz, {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
@@ -20,7 +22,8 @@ export function formatLocalTime(iso: string | undefined | null): string {
 export function formatLocalDate(iso: string | undefined | null): string {
   const d = parseInteractionDate(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleDateString(undefined, { dateStyle: 'medium' });
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return formatForUser(d.toISOString(), userTz, { dateStyle: 'medium' });
 }
 
 /** Stable bucket id: conversation row id, else first known interaction conversation_id, else orphan sentinel. */

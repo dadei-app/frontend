@@ -39,6 +39,7 @@ import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
 import { veilEase } from '@dadei/ui/lib/motion';
+import { formatForUser } from '@dadei/ui/utils/time';
 
 type AssistantSettingsModalProps = {
   open: boolean;
@@ -48,7 +49,8 @@ type AssistantSettingsModalProps = {
 function formatWhen(iso: string | null | undefined): string {
   if (!iso) return '—';
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    return formatForUser(iso, userTz, {
       dateStyle: 'medium',
       timeStyle: 'short',
     });

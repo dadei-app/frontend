@@ -21,7 +21,8 @@ const WAKE_SILENCE_RMS_MAX = 0.045;
 const COMMAND_MIN_SAMPLES = 1600;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
-const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up', 'thinking', 'responding'];
+// Only forward microphone chunks while waiting for wake word or actively capturing user speech.
+const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
 
 interface AudioContextType {

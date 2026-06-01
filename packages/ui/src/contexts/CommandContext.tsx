@@ -36,6 +36,7 @@ import {
 import { commandToolLabel } from '@dadei/ui/lib/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/sessionEndDetection';
 import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
+import { formatForUser } from '@dadei/ui/utils/time';
 
 const ASSISTANT_STATUS_THINKING = 'Thinking…';
 
@@ -107,24 +108,68 @@ function formatToolSummarySnippet(summary: string, ok: boolean): string {
     const items = Array.isArray(data.items) ? data.items : [];
     if (items.length > 0) {
       const first = items[0] as Record<string, unknown>;
+      const firstStart =
+        first.start && typeof first.start === 'object'
+          ? (first.start as Record<string, unknown>)
+          : null;
       const title =
         typeof first.summary === 'string'
           ? first.summary.trim()
           : typeof first.title === 'string'
             ? first.title.trim()
+            : typeof first.name === 'string'
+              ? first.name.trim()
+              : typeof first.id === 'string'
+                ? first.id.trim()
+                : '';
+      const startIso =
+        firstStart && typeof firstStart.dateTime === 'string'
+          ? firstStart.dateTime
+          : firstStart && typeof firstStart.date === 'string'
+            ? firstStart.date
             : '';
       if (items.length === 1) {
+        if (title && startIso) {
+          const when = new Date(startIso);
+          if (!Number.isNaN(when.getTime())) {
+            const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+            const timeLabel = formatForUser(when.toISOString(), userTz, {
+              hour: 'numeric',
+              minute: '2-digit',
+            });
+            return `Next event is ${title} at ${timeLabel}.`;
+          }
+        }
         return title ? `I found 1 item: ${title}.` : 'I found 1 item.';
+      }
+      if (title && startIso) {
+        const when = new Date(startIso);
+        if (!Number.isNaN(when.getTime())) {
+          const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+          const timeLabel = formatForUser(when.toISOString(), userTz, {
+            hour: 'numeric',
+            minute: '2-digit',
+          });
+          return `I found ${items.length} events. Next is ${title} at ${timeLabel}.`;
+        }
       }
       if (title) return `I found ${items.length} items. First is ${title}.`;
       return `I found ${items.length} items.`;
+    }
+    if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+      const lat = data.latitude.toFixed(4);
+      const lon = data.longitude.toFixed(4);
+      return `You're near ${lat}, ${lon}.`;
     }
     const timezone = typeof data.timezone === 'string' ? data.timezone.trim() : '';
     const localIso = typeof data.local_iso === 'string' ? data.local_iso.trim() : '';
     if (timezone && localIso) {
       const parsedDate = new Date(localIso);
       if (!Number.isNaN(parsedDate.getTime())) {
-        const timeLabel = parsedDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const timeLabel = formatForUser(parsedDate.toISOString(), timezone, {
+          hour: 'numeric',
+          minute: '2-digit',
+        });
         return `It's currently ${timeLabel} in ${timezone}.`;
       }
       return `Current timezone is ${timezone}.`;
