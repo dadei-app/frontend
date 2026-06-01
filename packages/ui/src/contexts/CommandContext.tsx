@@ -561,7 +561,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
           if (!assistantBubbleTextRef.current.trim()) {
-            const fallback = lastToolBubbleSnippetRef.current.trim() || 'I ran the tools but could not compose a reply. Please try again.';
+            const fallback =
+              lastToolBubbleSnippetRef.current.trim() ||
+              'I completed the lookup but could not phrase the result. Please try again.';
             setAssistantBubbleTextSynced(fallback);
             setAssistantBubbleStatus('done');
             setState('follow_up');

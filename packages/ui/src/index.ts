@@ -6,8 +6,6 @@ export { ServiceProvider, ServiceContext, useService } from './contexts/ServiceC
 export { AudioProvider, AudioContext, useAudio } from './contexts/AudioContext';
 export { CommandProvider, useCommand } from './contexts/CommandContext';
 export type { CommandState, CommandMode } from './contexts/CommandContext';
-export { default as MicLevelIndicator } from './components/command/MicLevelIndicator';
-export { default as MicLevelIndicator2 } from './components/command/MicLevelIndicator2';
 export { default as TextBubble } from './components/command/TextBubble';
 export {
   NotificationProvider,

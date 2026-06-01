@@ -1,9 +1,10 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/cn';
+import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;
@@ -61,31 +62,6 @@ function MicGlassLayer({
       initial={false}
       animate={{ opacity: visible ? 1 : 0 }}
       transition={COLOR_CROSSFADE}
-    />
-  );
-}
-
-function MicLevelAura({ visible, level }: { visible: boolean; level: number }) {
-  const aura = useMemo(() => {
-    const clamped = Math.max(0, Math.min(1, level));
-    return {
-      opacity: visible ? 0.28 + clamped * 0.5 : 0,
-      scale: visible ? 0.98 + clamped * 0.55 : 0.88,
-    };
-  }, [level, visible]);
-
-  return (
-    <motion.div
-      aria-hidden
-      className="pointer-events-none absolute inset-[-22%] z-0 rounded-full"
-      style={{
-        background:
-          'radial-gradient(circle, rgba(56,189,248,0.45) 0%, rgba(14,165,233,0.28) 42%, rgba(2,132,199,0.08) 66%, transparent 100%)',
-        filter: 'blur(12px)',
-      }}
-      initial={false}
-      animate={aura}
-      transition={{ duration: 0.16, ease: 'easeOut' }}
     />
   );
 }

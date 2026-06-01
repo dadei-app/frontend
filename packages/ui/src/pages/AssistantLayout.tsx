@@ -5,7 +5,6 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import TextBubble from '@dadei/ui/components/command/TextBubble';
-import MicLevelIndicator2 from '@dadei/ui/components/command/MicLevelIndicator2';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
@@ -158,7 +157,7 @@ export default function AssistantLayout() {
             <ToastStackHost className="fixed right-5 bottom-5 z-180" />
             <div className="relative flex min-h-0 flex-1 items-center justify-center">
               <div className="relative flex flex-col items-center">
-                <div className="pointer-events-none absolute bottom-[11.5rem] left-1/2 z-40 w-[min(640px,calc(100vw-8rem))] -translate-x-1/2">
+                <div className="absolute top-[11.5rem] left-1/2 z-20 w-[min(640px,calc(100vw-8rem))] -translate-x-1/2">
                   <AnimatePresence>
                     {showCommandChrome ? (
                       <motion.div
@@ -177,7 +176,6 @@ export default function AssistantLayout() {
                 <div className="relative z-10 isolate">
                   <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
                 </div>
-                <MicLevelIndicator2 />
               </div>
             </div>
             <motion.div

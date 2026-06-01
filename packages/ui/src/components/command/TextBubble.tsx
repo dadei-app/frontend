@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CommandState, AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
@@ -115,6 +115,12 @@ export default function TextBubble() {
   const assistantHasText = assistantBubbleText.trim().length > 0;
   const assistantIsBusy = state === 'thinking' || state === 'responding';
   const showAssistant = assistantIsBusy || assistantHasText || !!assistantStatusLine;
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [bubbleHistory, userBubbleText, assistantBubbleText, assistantStatusLine, state]);
 
   const userBubble = showUser && userBubbleText.trim() ? (
     <GlassBubble
@@ -152,25 +158,32 @@ export default function TextBubble() {
   );
 
   return (
-    <motion.div layout className="flex w-full max-w-[640px] flex-col gap-3">
-      {bubbleHistory.map((turn) => (
-        <motion.div key={turn.id} layout className="flex w-full flex-col gap-3">
-          {turn.userText.trim() ? (
-            <GlassBubble role="user" label="You" text={turn.userText} state="follow_up" />
-          ) : null}
-          {turn.assistantText.trim() ? (
-            <GlassBubble
-              role="assistant"
-              label="Dadei"
-              text={turn.assistantText}
-              state="follow_up"
-              assistantStatus="done"
-            />
-          ) : null}
-        </motion.div>
-      ))}
-      {userBubble}
-      {assistantBubble}
+    <motion.div layout className="flex w-full max-w-[640px] flex-col">
+      <div
+        ref={scrollRef}
+        className="max-h-[42vh] overflow-y-auto pr-1 [scrollbar-color:rgba(161,161,170,0.5)_transparent] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="flex w-full flex-col gap-3 pb-1">
+          {bubbleHistory.map((turn) => (
+            <motion.div key={turn.id} layout className="flex w-full flex-col gap-3">
+              {turn.userText.trim() ? (
+                <GlassBubble role="user" label="You" text={turn.userText} state="follow_up" />
+              ) : null}
+              {turn.assistantText.trim() ? (
+                <GlassBubble
+                  role="assistant"
+                  label="Dadei"
+                  text={turn.assistantText}
+                  state="follow_up"
+                  assistantStatus="done"
+                />
+              ) : null}
+            </motion.div>
+          ))}
+          {userBubble}
+          {assistantBubble}
+        </div>
+      </div>
     </motion.div>
   );
 }
