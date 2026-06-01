@@ -33,6 +33,25 @@ export interface ElectronAPI {
   loginWithGoogle: () => Promise<{ success: boolean; data?: { code: string; state: string }; error?: string }>;
   storeClientName: (clientName: string) => Promise<{ success: boolean; error?: string }>;
   getClientName: () => Promise<{ success: boolean; clientName?: string; error?: string }>;
+  setVolume: (level: number) => Promise<{ ok: boolean }>;
+  volumeUp: () => Promise<{ ok: boolean }>;
+  volumeDown: () => Promise<{ ok: boolean }>;
+  volumeMute: () => Promise<{ ok: boolean }>;
+  mediaPlayPause: () => Promise<{ ok: boolean }>;
+  mediaNext: () => Promise<{ ok: boolean }>;
+  mediaPrevious: () => Promise<{ ok: boolean }>;
+  mediaStop: () => Promise<{ ok: boolean }>;
+  setBrightness: (level: number) => Promise<{ ok: boolean }>;
+  brightnessUp: () => Promise<{ ok: boolean }>;
+  brightnessDown: () => Promise<{ ok: boolean }>;
+  toggleDarkMode: () => Promise<{ ok: boolean }>;
+  lockDevice: () => Promise<{ ok: boolean }>;
+  sleepDevice: () => Promise<{ ok: boolean }>;
+  openApp: (name: string) => Promise<{ ok: boolean }>;
+  closeFocusedApp: () => Promise<{ ok: boolean }>;
+  minimizeFocusedWindow: () => Promise<{ ok: boolean }>;
+  toggleFullscreen: () => Promise<{ ok: boolean }>;
+  dismissNotifications: () => Promise<{ ok: boolean }>;
 }
 
 declare global {

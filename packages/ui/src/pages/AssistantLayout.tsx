@@ -157,7 +157,7 @@ export default function AssistantLayout() {
             <ToastStackHost className="fixed right-5 bottom-5 z-180" />
             <div className="relative flex min-h-0 flex-1 items-center justify-center">
               <div className="relative flex flex-col items-center">
-                <div className="absolute top-[11.5rem] left-1/2 z-20 w-[min(640px,calc(100vw-8rem))] -translate-x-1/2">
+                <div className="absolute top-[10.75rem] left-1/2 z-20 w-[min(640px,calc(100vw-8rem))] -translate-x-1/2">
                   <AnimatePresence>
                     {showCommandChrome ? (
                       <motion.div

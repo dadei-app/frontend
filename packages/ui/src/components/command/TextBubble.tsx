@@ -161,7 +161,7 @@ export default function TextBubble() {
     <motion.div layout className="flex w-full max-w-[640px] flex-col">
       <div
         ref={scrollRef}
-        className="max-h-[42vh] overflow-y-auto pr-1 [scrollbar-color:rgba(161,161,170,0.5)_transparent] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="max-h-[min(42vh,calc(50dvh-7rem))] overflow-y-auto pr-1 [scrollbar-color:rgba(161,161,170,0.5)_transparent] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="flex w-full flex-col gap-3 pb-1">
           {bubbleHistory.map((turn) => (

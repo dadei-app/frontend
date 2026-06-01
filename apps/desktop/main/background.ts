@@ -5,6 +5,7 @@ import { closeUpdaterSplashWindow, createUpdaterSplashWindow } from './updater-w
 import { getBackendVersionGate, isUpdateInstallInProgress, runPackagedStartupFlow } from './updater';
 import { TokenStorage } from './auth/token-storage';
 import { handleGoogleOAuth } from './auth/oauth-handler';
+import { registerDeviceControlIpcHandlers } from './device-control';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -153,6 +154,8 @@ ipcMain.handle('window:close', (event) => {
 ipcMain.handle('window:is-maximized', (event) => {
   return windowFromContents(event.sender)?.isMaximized() ?? false;
 });
+
+registerDeviceControlIpcHandlers();
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);

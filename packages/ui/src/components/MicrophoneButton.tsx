@@ -194,9 +194,10 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
       setShowLiveAura(false);
       return;
     }
-    // Let existing ripples finish before the level aura takes over.
-    setShowLiveAura(rings.length === 0);
-  }, [isFollowUp, isListening, isAwaitingResponse, micBlocked, rings.length]);
+    // Promote live level feedback immediately on wake/follow-up start.
+    setShowLiveAura(true);
+    setRings([]);
+  }, [isFollowUp, isListening, isAwaitingResponse, micBlocked]);
 
   return (
     <div className="flex flex-col items-center gap-10">

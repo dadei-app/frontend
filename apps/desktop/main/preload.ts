@@ -65,4 +65,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Client name
   storeClientName: (clientName: string) => ipcRenderer.invoke('client:store-name', clientName),
   getClientName: () => ipcRenderer.invoke('client:get-name'),
+
+  // Device control
+  setVolume: (level: number) => ipcRenderer.invoke('device:set-volume', level),
+  volumeUp: () => ipcRenderer.invoke('device:volume-up'),
+  volumeDown: () => ipcRenderer.invoke('device:volume-down'),
+  volumeMute: () => ipcRenderer.invoke('device:volume-mute'),
+  mediaPlayPause: () => ipcRenderer.invoke('device:media-play-pause'),
+  mediaNext: () => ipcRenderer.invoke('device:media-next'),
+  mediaPrevious: () => ipcRenderer.invoke('device:media-previous'),
+  mediaStop: () => ipcRenderer.invoke('device:media-stop'),
+  setBrightness: (level: number) => ipcRenderer.invoke('device:set-brightness', level),
+  brightnessUp: () => ipcRenderer.invoke('device:brightness-up'),
+  brightnessDown: () => ipcRenderer.invoke('device:brightness-down'),
+  toggleDarkMode: () => ipcRenderer.invoke('device:toggle-dark-mode'),
+  lockDevice: () => ipcRenderer.invoke('device:lock'),
+  sleepDevice: () => ipcRenderer.invoke('device:sleep'),
+  openApp: (name: string) => ipcRenderer.invoke('device:open-app', name),
+  closeFocusedApp: () => ipcRenderer.invoke('device:close-focused-app'),
+  minimizeFocusedWindow: () => ipcRenderer.invoke('device:minimize-focused-window'),
+  toggleFullscreen: () => ipcRenderer.invoke('device:toggle-fullscreen'),
+  dismissNotifications: () => ipcRenderer.invoke('device:dismiss-notifications'),
 });

@@ -1,7 +1,9 @@
 import { buildRealtimeWebSocketUrl } from '@dadei/ui/shared/api/realtime';
+import { dispatchClientAction } from '@dadei/ui/lib/clientActionHandler';
 
 export type RealtimeMessage = Record<string, unknown> & {
   event?: string;
+  type?: string;
 };
 
 type RealtimeHandler = (msg: RealtimeMessage) => void;
@@ -126,6 +128,7 @@ async function openSocket() {
   if (connectOpts.clientId?.trim()) {
     qs.set('client_id', connectOpts.clientId.trim());
   }
+  qs.set('client_type', window.electronAPI ? 'electron' : 'web');
   const url = `${base}?${qs.toString()}`;
 
   try {
@@ -163,6 +166,14 @@ async function openSocket() {
       lastInboundAt = Date.now();
       armHeartbeatWatchdog();
       emit(msg);
+      if (msg.type === 'client_action') {
+        void dispatchClientAction({
+          action: msg.action,
+          params: msg.params,
+        }).catch((error) => {
+          console.error('[client_action] dispatch failed', error);
+        });
+      }
     } catch (e) {
       console.error('[Realtime] bad message', e);
     }

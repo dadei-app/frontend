@@ -28,6 +28,7 @@ const TOOL_LABELS: Record<string, string> = {
   maps_search_places: 'Searching for a location',
   maps_directions: 'Getting directions',
   maps_distance_matrix: 'Checking travel time',
+  load_tool_groups: 'Summoning specialist tools',
   end_assistant_session: 'Ending session',
 };
 
