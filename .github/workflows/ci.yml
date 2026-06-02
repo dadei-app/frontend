@@ -1,21 +1,28 @@
 name: Continuous Integration
 
+# PR pushes: validate on pull_request only (avoid duplicate runs from push + pull_request).
+# main pushes: only for direct commits (skip merge/squash commits that already ran in the PR).
 on:
+  pull_request:
   push:
     branches:
-      - '**'
-  pull_request:
-    branches:
-      - '**'
+      - main
 
 concurrency:
-  group: frontend-ci-${{ github.workflow }}-${{ github.ref }}
+  group: frontend-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' ||
+      (
+        github.event_name == 'push' &&
+        !contains(github.event.head_commit.message, 'Merge pull request #') &&
+        !contains(github.event.head_commit.message, '(#')
+      )
 
     steps:
       - name: Checkout code
