@@ -1,41 +1,71 @@
 const TOOL_LABELS: Record<string, string> = {
-  create_calendar_event: 'Creating calendar event',
-  create_task: 'Creating task',
-  store_memory: 'Saving memory',
-  search_memory: 'Searching memory',
-  get_current_time: 'Getting the time',
-  send_email: 'Sending email',
-  web_search: 'Searching the web',
-  update_memory: 'Updating memory',
-  update_action: 'Updating action',
-  list_calendar_events: 'Checking your calendar',
-  calendar_list_events: 'Checking your calendar',
-  update_calendar_event: 'Updating event',
-  delete_calendar_event: 'Deleting event',
-  list_tasks: 'Checking tasks',
-  update_task: 'Updating task',
-  delete_task: 'Deleting task',
-  search_contacts: 'Finding a contact',
-  read_email: 'Reading email',
-  search_email: 'Searching email',
-  search_interactions: 'Searching past conversations',
-  query_person_memory: 'Recalling what I know',
-  assign_person_name: 'Saving a name',
-  get_weather: 'Checking the weather',
-  get_weather_forecast: 'Checking the forecast',
-  get_current_location: 'Getting your location',
-  get_client_context: 'Getting client context',
-  maps_search_places: 'Searching for a location',
-  maps_directions: 'Getting directions',
-  maps_distance_matrix: 'Checking travel time',
-  load_tool_groups: 'Summoning specialist tools',
-  end_assistant_session: 'Ending session',
+  create_calendar_event: 'Creating Calendar Event',
+  create_task: 'Creating Task',
+  store_memory: 'Saving Memory',
+  search_memory: 'Searching Memory',
+  get_current_time: 'Getting The Time',
+  send_email: 'Sending Email',
+  web_search: 'Searching The Web',
+  update_memory: 'Updating Memory',
+  update_action: 'Updating Action',
+  list_calendar_events: 'Checking Your Calendar',
+  calendar_list_events: 'Checking Your Calendar',
+  update_calendar_event: 'Updating Calendar Event',
+  delete_calendar_event: 'Deleting Calendar Event',
+  list_tasks: 'Checking Tasks',
+  update_task: 'Updating Task',
+  delete_task: 'Deleting Task',
+  search_contacts: 'Finding A Contact',
+  read_email: 'Reading Email',
+  search_email: 'Searching Email',
+  search_interactions: 'Searching Past Conversations',
+  query_person_memory: 'Recalling What I Know',
+  assign_person_name: 'Saving A Name',
+  get_weather: 'Checking The Weather',
+  get_weather_forecast: 'Checking The Forecast',
+  get_current_location: 'Getting Your Location',
+  get_client_context: 'Getting Client Context',
+  maps_search_places: 'Searching For A Location',
+  maps_directions: 'Getting Directions',
+  maps_distance_matrix: 'Checking Travel Time',
+  load_tool_groups: 'Summoning Specialist Tools',
+  end_assistant_session: 'Ending Session',
 };
+
+/** Strip trailing ASCII or unicode ellipses from status copy. */
+export function normalizeAssistantStatusBase(line: string): string {
+  return line.replace(/\u2026+$/u, '').replace(/\.{1,3}$/, '').trimEnd();
+}
+
+function titleCaseWords(text: string): string {
+  return text
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function titleCaseFromSnake(tool: string): string {
+  return titleCaseWords(tool.replace(/_/g, ' '));
+}
 
 /** Human label for a backend tool name (voice command SSE). */
 export function commandToolLabel(tool: string): string {
   if (!tool || tool.startsWith('_')) return '';
   const mapped = TOOL_LABELS[tool];
   if (mapped) return mapped;
-  return tool.replace(/_/g, ' ');
+  return titleCaseFromSnake(tool);
+}
+
+/** Status line body for a tool (no ellipses — UI animates those). */
+export function commandToolStatusLabel(tool: string): string {
+  const label = commandToolLabel(tool);
+  return label ? normalizeAssistantStatusBase(label) : '';
+}
+
+/** Title-case status copy from the server or defaults (e.g. Thinking). */
+export function formatAssistantStatusLine(line: string): string {
+  return titleCaseWords(normalizeAssistantStatusBase(line));
 }

@@ -3,6 +3,12 @@ import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
 import { notifyVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
+import {
+  COMMAND_MIC_LEVEL_GAIN,
+  COMMAND_SPEECH_RMS,
+  COMMAND_UTTERANCE_END_SILENCE_MS,
+  FOLLOW_UP_SPEECH_RMS,
+} from '@dadei/ui/lib/voice/voiceConstants';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 
 const COMMAND_START_RETRY_MS = 500;
@@ -11,12 +17,11 @@ const MIC_ANALYSER_SMOOTHING = 0.7;
 // ScriptProcessorNode requires 0 or a power-of-two between 256 and 16384.
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
 const SAMPLE_RATE = 16000;
-const FOLLOW_UP_SPEECH_RMS = 0.14;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
 // Only forward microphone chunks while waiting for wake word or actively capturing user speech.
 const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
-const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
+const ASSISTANT_BUSY_STATES: CommandState[] = ['transcribing', 'thinking', 'responding'];
 
 interface AudioContextType {
   isProcessing: boolean;
@@ -60,7 +65,7 @@ function toPcm16(input: Float32Array): Int16Array {
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
-  const { state, startListening } = useCommand();
+  const { state, startListening, notifyCommandUtteranceEnded } = useCommand();
 
   const [isProcessing] = useState(false);
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
@@ -81,6 +86,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const wakeDetectorRef = useRef<WakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
+  const commandSpeechSeenRef = useRef(false);
+  const commandSilenceStartedMsRef = useRef<number | null>(null);
 
   useEffect(() => {
     stateRef.current = state;
@@ -92,7 +99,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const prev = prevStateRef.current;
-    if (prev === 'listening' && ASSISTANT_BUSY_STATES.includes(state)) {
+    if (prev === 'listening' && (state === 'transcribing' || ASSISTANT_BUSY_STATES.includes(state))) {
       sendRealtimeMessage({ type: 'command_audio_end' });
     } else if (
       (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
@@ -111,9 +118,18 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   useEffect(() => {
+    if (state === 'listening' || state === 'follow_up') {
+      commandSpeechSeenRef.current = false;
+      commandSilenceStartedMsRef.current = null;
+    }
+  }, [state]);
+
+  useEffect(() => {
     const active = state === 'listening' || state === 'follow_up';
     if (!active) {
       setMicLevel(0);
+      commandSpeechSeenRef.current = false;
+      commandSilenceStartedMsRef.current = null;
       return;
     }
     if (!streamAnalyserReady || !analyserRef.current) return;
@@ -129,21 +145,49 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const v = (buf[i] - 128) / 128;
         sumSq += v * v;
       }
-      const level = Math.min(Math.sqrt(sumSq / buf.length) * 2.2, 1);
+      const inCommandCapture =
+        stateRef.current === 'listening' || stateRef.current === 'follow_up';
+      const level = Math.min(
+        Math.sqrt(sumSq / buf.length) * (inCommandCapture ? COMMAND_MIC_LEVEL_GAIN : 2.2),
+        1,
+      );
       setMicLevel(level);
       const speaking = level >= FOLLOW_UP_SPEECH_RMS;
       if (speaking && !speechActive && stateRef.current === 'follow_up') notifyVoiceSpeechActivity();
       speechActive = speaking;
+
+      if (stateRef.current === 'listening' || stateRef.current === 'follow_up') {
+        const commandSpeaking = level >= COMMAND_SPEECH_RMS;
+        if (commandSpeaking) {
+          commandSpeechSeenRef.current = true;
+          commandSilenceStartedMsRef.current = null;
+        } else if (commandSpeechSeenRef.current) {
+          const now = performance.now();
+          if (commandSilenceStartedMsRef.current === null) {
+            commandSilenceStartedMsRef.current = now;
+          } else if (now - commandSilenceStartedMsRef.current >= COMMAND_UTTERANCE_END_SILENCE_MS) {
+            commandSpeechSeenRef.current = false;
+            commandSilenceStartedMsRef.current = null;
+            notifyCommandUtteranceEnded();
+          }
+        }
+      }
+
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [state, streamAnalyserReady]);
+  }, [state, streamAnalyserReady, notifyCommandUtteranceEnded]);
 
   /** Local wake model only arms assistant mode; transcription is websocket-only. */
   const onWakeWordDetected = useCallback(
     (_timestampMs: number) => {
-      if (stateRef.current === 'thinking' || stateRef.current === 'responding' || stateRef.current === 'locked') {
+      if (
+        stateRef.current === 'transcribing' ||
+        stateRef.current === 'thinking' ||
+        stateRef.current === 'responding' ||
+        stateRef.current === 'locked'
+      ) {
         return;
       }
       console.debug('[Voice][Wake] detected — entering listening (server will transcribe)');

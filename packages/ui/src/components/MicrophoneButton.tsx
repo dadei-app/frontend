@@ -93,18 +93,17 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     registrationConflict,
     isAssistantMode,
   } = useService();
-  const { state, cancel } = useCommand();
+  const { state, cancel, micShowsProcessingRing } = useCommand();
 
   const micBlocked = isTogglingService || registrationConflict || state === 'locked';
   const isIdle = state === 'idle';
   const isFollowUp = state === 'follow_up';
   const isListening = state === 'listening';
-  const isAwaitingResponse = state === 'thinking' || state === 'responding';
   const inActiveSession = !isIdle || isAssistantMode;
 
   const useAssistantBlue =
     !micBlocked &&
-    (isAssistantMode || isListening || isAwaitingResponse || isFollowUp);
+    (isAssistantMode || isListening || micShowsProcessingRing || isFollowUp);
   const usePassiveRed = !micBlocked && isIdle && isServiceEnabled && !isAssistantMode;
   const usePassiveGreen = !micBlocked && isIdle && !isServiceEnabled && !isAssistantMode;
 
@@ -113,7 +112,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const showRedRipples = usePassiveRed;
   const emitRipples = showBlueRipples || showRedRipples;
   const nextRingTone: keyof typeof RIPPLE_COLORS = showBlueRipples ? 'blue' : 'red';
-  const showBlueSpinner = !micBlocked && isAwaitingResponse;
+  const showBlueSpinner = !micBlocked && micShowsProcessingRing;
   const [rings, setRings] = useState<RingParticle[]>([]);
   const [showLiveAura, setShowLiveAura] = useState(false);
   const ringIdRef = useRef(0);
@@ -189,7 +188,8 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   }, [emitRipples, emitRing, nextRingTone]);
 
   useEffect(() => {
-    const shouldShowLiveAura = !micBlocked && (isListening || isFollowUp) && !isAwaitingResponse;
+    const shouldShowLiveAura =
+      !micBlocked && (isListening || isFollowUp) && !micShowsProcessingRing;
     if (!shouldShowLiveAura) {
       setShowLiveAura(false);
       return;
@@ -197,7 +197,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     // Promote live level feedback immediately on wake/follow-up start.
     setShowLiveAura(true);
     setRings([]);
-  }, [isFollowUp, isListening, isAwaitingResponse, micBlocked]);
+  }, [isFollowUp, isListening, micBlocked, micShowsProcessingRing]);
 
   return (
     <div className="flex flex-col items-center gap-10">

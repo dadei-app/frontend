@@ -31,24 +31,31 @@ import {
   CLAIM_HOLD_SECONDS,
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
   computeFollowUpMs,
+  FOLLOW_UP_MIN_MS,
 } from '@dadei/ui/lib/voice/voiceConstants';
-import { commandToolLabel } from '@dadei/ui/lib/commandToolLabels';
+import {
+  commandToolStatusLabel,
+  formatAssistantStatusLine,
+} from '@dadei/ui/lib/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/sessionEndDetection';
 import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/utils/time';
 
-const ASSISTANT_STATUS_THINKING = 'Thinking…';
+const ASSISTANT_STATUS_THINKING = 'Thinking';
 
 export type CommandState =
   | 'idle'
   | 'listening'
+  /** User finished speaking; mic spinner only until transcript arrives. */
+  | 'transcribing'
   | 'thinking'
   | 'responding'
   | 'follow_up'
   | 'locked';
 
-export type AssistantBubbleStatus = 'pending' | 'streaming' | 'done';
+/** pending/status = tool labels; streaming = buffering tokens; revealing = typewriter after done. */
+export type AssistantBubbleStatus = 'pending' | 'streaming' | 'revealing' | 'done';
 
 export interface CommandTurnHistory {
   id: string;
@@ -67,6 +74,14 @@ interface CommandContextValue {
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
+  /** User finished speaking; mic spinner only until transcript arrives. */
+  notifyCommandUtteranceEnded: () => void;
+  /** First typewriter character of the final response (mic → follow-up listen). */
+  notifyAssistantRevealStarted: () => void;
+  /** Typewriter finished; start the 7s follow-up window. */
+  notifyAssistantRevealComplete: () => void;
+  /** Mic processing ring (transcribing → first response character). */
+  micShowsProcessingRing: boolean;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
@@ -278,6 +293,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const interimCaptionRef = useRef('');
   const interimSeqRef = useRef<number>(0);
   const interimUtteranceIdRef = useRef<number | null>(null);
+  const utteranceEndNotifiedRef = useRef(false);
+  /** True after local end-of-speech until transcript final is handled. */
+  const awaitingTranscriptRef = useRef(false);
+  const transcribeFromFollowUpRef = useRef(false);
+  const responseRevealStartedRef = useRef(false);
 
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
@@ -292,6 +312,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    if (state === 'listening') {
+      utteranceEndNotifiedRef.current = false;
+      awaitingTranscriptRef.current = false;
+      responseRevealStartedRef.current = false;
+    }
   }, [state]);
 
   useEffect(() => {
@@ -342,7 +370,27 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const startRequestActivity = useCallback(() => {
-    setAssistantStatusLine(ASSISTANT_STATUS_THINKING);
+    setAssistantStatusLine(formatAssistantStatusLine(ASSISTANT_STATUS_THINKING));
+  }, []);
+
+  const notifyCommandUtteranceEnded = useCallback(() => {
+    if (utteranceEndNotifiedRef.current) return;
+    const current = stateRef.current;
+    if (current !== 'listening' && current !== 'follow_up') return;
+    if (commandStreamInFlightRef.current) return;
+
+    utteranceEndNotifiedRef.current = true;
+    awaitingTranscriptRef.current = true;
+    transcribeFromFollowUpRef.current = current === 'follow_up';
+    clearWakeTimeout();
+    clearFollowUpTimer();
+    setState('transcribing');
+  }, [clearFollowUpTimer, clearWakeTimeout]);
+
+  const notifyAssistantRevealStarted = useCallback(() => {
+    if (responseRevealStartedRef.current) return;
+    responseRevealStartedRef.current = true;
+    setState('follow_up');
   }, []);
 
   const commitLiveTurnToHistory = useCallback(() => {
@@ -500,6 +548,41 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }, ms);
   }, [clearFollowUpTimer, goIdle, releaseAssistantMode]);
 
+  const scheduleFollowUpAfterTypewriter = useCallback(() => {
+    clearFollowUpTimer();
+    followUpTimerRef.current = setTimeout(() => {
+      void (async () => {
+        await releaseAssistantMode();
+        goIdle();
+      })();
+    }, FOLLOW_UP_MIN_MS);
+  }, [clearFollowUpTimer, goIdle, releaseAssistantMode]);
+
+  const revealCompleteHandledRef = useRef(false);
+
+  const notifyAssistantRevealComplete = useCallback(() => {
+    if (revealCompleteHandledRef.current) return;
+    if (stateRef.current === 'idle' || sessionEndingRef.current) return;
+    const assistant = assistantBubbleTextRef.current.trim();
+    if (!assistant) return;
+
+    revealCompleteHandledRef.current = true;
+    commitLiveTurnToHistory();
+    setUserBubbleText('');
+    setAssistantBubbleTextSynced('');
+    setAssistantBubbleStatus('pending');
+    setAssistantStatusLine(null);
+    responseRevealStartedRef.current = false;
+    followUpCaptureRef.current = false;
+    void claimAssistantMode();
+    scheduleFollowUpAfterTypewriter();
+  }, [
+    claimAssistantMode,
+    commitLiveTurnToHistory,
+    scheduleFollowUpAfterTypewriter,
+    setAssistantBubbleTextSynced,
+  ]);
+
   const startNewTurn = useCallback(() => {
     clearFollowUpTimer();
     clearWakeTimeout();
@@ -546,7 +629,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamHadOutputRef.current = true;
           setState((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('streaming');
-          setAssistantStatusLine(null);
           setAssistantBubbleTextSynced((prev) => {
             if (pendingNewResponseRef.current) {
               pendingNewResponseRef.current = false;
@@ -558,10 +640,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         case 'tool_call': {
           streamHadOutputRef.current = true;
           setState((s) => (s === 'thinking' ? 'responding' : s));
-          setAssistantBubbleStatus('streaming');
+          setAssistantBubbleStatus('pending');
           pendingNewResponseRef.current = false;
-          const label = commandToolLabel(ev.tool);
-          setAssistantStatusLine(label ? `${label}…` : ASSISTANT_STATUS_THINKING);
+          const label = commandToolStatusLabel(ev.tool);
+          setAssistantStatusLine(formatAssistantStatusLine(label || ASSISTANT_STATUS_THINKING));
           break;
         }
         case 'tool_result':
@@ -572,8 +654,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             if (!ev.ok) {
               setAssistantStatusLine(null);
               setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
+              setAssistantBubbleStatus('revealing');
+            } else {
+              setAssistantBubbleStatus('streaming');
             }
-            setAssistantBubbleStatus(ev.ok ? 'streaming' : 'done');
             setState((s) => (s === 'thinking' ? 'responding' : s));
           }
           break;
@@ -581,9 +665,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamHadOutputRef.current = true;
           setAssistantStatusLine(null);
           setAssistantBubbleTextSynced(ev.message);
-          setAssistantBubbleStatus('done');
-          setState('follow_up');
-          scheduleFollowUpExpiry(ev.message.length);
+          setAssistantBubbleStatus('revealing');
+          setState('responding');
           break;
         case 'session_end':
           setAssistantBubbleStatus('done');
@@ -599,18 +682,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
               lastToolBubbleSnippetRef.current.trim() ||
               'I completed the lookup but could not phrase the result. Please try again.';
             setAssistantBubbleTextSynced(fallback);
-            setAssistantBubbleStatus('done');
-            setState('follow_up');
-            scheduleFollowUpExpiry(fallback.length);
-            break;
           }
-          commitLiveTurnToHistory();
-          setUserBubbleText('');
-          setAssistantBubbleTextSynced('');
-          setAssistantBubbleStatus('pending');
-          setState('follow_up');
-          void claimAssistantMode();
-          scheduleFollowUpExpiry(assistantBubbleTextRef.current.length);
+          setAssistantBubbleStatus('revealing');
+          setState((s) => (s === 'thinking' ? 'responding' : s));
           break;
         default:
           break;
@@ -626,6 +700,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const displayText = liveCommandCaptionText(cleaned, fromFollowUp);
       const submitText = submitCommandText(cleaned, fromFollowUp);
       if (!submitText) {
+        awaitingTranscriptRef.current = false;
         if (!fromFollowUp && transcriptStartsWithWakeCommand(cleaned)) {
           // Wake-only final (e.g. just "assistant") should keep listening for the
           // rest of the command instead of tearing down assistant mode.
@@ -649,6 +724,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       if (last && last.text === submitText && nowMs - last.atMs < 1500) return;
       if (commandStreamInFlightRef.current) return;
       lastSubmittedTextRef.current = { text: submitText, atMs: nowMs };
+      responseRevealStartedRef.current = false;
+      revealCompleteHandledRef.current = false;
 
       clearWakeTimeout();
       clearFollowUpTimer();
@@ -660,6 +737,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setAssistantBubbleStatus('pending');
       pendingNewResponseRef.current = true;
       startRequestActivity();
+      userBubbleTextRef.current = displayText;
+      awaitingTranscriptRef.current = false;
+      transcribeFromFollowUpRef.current = false;
       setUserBubbleText(displayText);
       setState('thinking');
 
@@ -670,26 +750,23 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             ? 'Could not keep assistant mode for follow-up'
             : 'Could not claim assistant mode';
           setAssistantBubbleTextSynced(msg);
-          setAssistantBubbleStatus('done');
-          setState(fromFollowUp ? 'follow_up' : 'idle');
-          if (fromFollowUp) scheduleFollowUpExpiry(0);
+          setAssistantBubbleStatus('revealing');
+          setState('responding');
           return;
         }
 
         const accessToken = await getAccessToken();
         if (!accessToken) {
           setAssistantBubbleTextSynced('Not authenticated');
-          setAssistantBubbleStatus('done');
-          setState('follow_up');
-          scheduleFollowUpExpiry(0);
+          setAssistantBubbleStatus('revealing');
+          setState('responding');
           return;
         }
 
         if (!isConnected || !getRealtimeSessionToken()) {
           setAssistantBubbleTextSynced('Not connected to the assistant service yet');
-          setAssistantBubbleStatus('done');
-          setState('follow_up');
-          scheduleFollowUpExpiry(0);
+          setAssistantBubbleStatus('revealing');
+          setState('responding');
           return;
         }
 
@@ -722,18 +799,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
               !assistantBubbleTextRef.current.trim()
             ) {
               setAssistantBubbleTextSynced('Request cancelled');
-              setAssistantBubbleStatus('done');
-              setState('follow_up');
-              scheduleFollowUpExpiry(0);
+              setAssistantBubbleStatus('revealing');
+              setState('responding');
             }
             return;
           }
           const message = e instanceof Error ? e.message : 'Command failed';
           streamHadOutputRef.current = true;
           setAssistantBubbleTextSynced(message);
-          setAssistantBubbleStatus('done');
-          setState('follow_up');
-          scheduleFollowUpExpiry(message.length);
+          setAssistantBubbleStatus('revealing');
+          setState('responding');
         } finally {
           streamAbortRef.current = null;
           commandStreamInFlightRef.current = false;
@@ -763,7 +838,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const current = stateRef.current;
 
       if (msg.event === 'command_transcript_interim') {
-        if (current === 'thinking' || current === 'responding') return;
+        if (current === 'transcribing' || current === 'thinking' || current === 'responding') return;
         const text = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         if (!text) return;
 
@@ -783,16 +858,47 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       }
 
       if (msg.event === 'command_transcript_done') {
+        if (
+          (current === 'transcribing' ||
+            (current === 'thinking' && !userBubbleTextRef.current.trim())) &&
+          !commandStreamInFlightRef.current &&
+          !userBubbleTextRef.current.trim() &&
+          !awaitingTranscriptRef.current
+        ) {
+          const returnState = transcribeFromFollowUpRef.current ? 'follow_up' : 'listening';
+          utteranceEndNotifiedRef.current = false;
+          awaitingTranscriptRef.current = false;
+          transcribeFromFollowUpRef.current = false;
+          setAssistantStatusLine(null);
+          setAssistantBubbleTextSynced('');
+          setAssistantBubbleStatus('pending');
+          setState(returnState);
+        }
         return;
       }
 
       if (msg.event === 'command_transcript_final') {
-        if (current === 'thinking' || current === 'responding') return;
+        if (current === 'responding') return;
 
         const finalRaw = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         const text = finalRaw || cleanTranscript(lastWakeInterimRef.current);
         resetInterimCaptionState();
         lastWakeInterimRef.current = '';
+
+        if (current === 'transcribing' || (current === 'thinking' && awaitingTranscriptRef.current)) {
+          const fromFollowUp = transcribeFromFollowUpRef.current;
+          awaitingTranscriptRef.current = false;
+          transcribeFromFollowUpRef.current = false;
+          const trimmed = text.trim();
+          if (!trimmed) {
+            utteranceEndNotifiedRef.current = false;
+            setState(fromFollowUp ? 'follow_up' : 'listening');
+            return;
+          }
+          clearWakeFalsePositiveIfCommandInProgress(trimmed);
+          submitVisibleCommandText(text, fromFollowUp);
+          return;
+        }
 
         if (current === 'listening') {
           const trimmed = text.trim();
@@ -893,6 +999,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!localClaimRef.current || !assistantModeExpiresAt) return;
     const statesWithClaim: CommandState[] = [
       'listening',
+      'transcribing',
       'thinking',
       'responding',
       'follow_up',
@@ -930,6 +1037,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     [abortActiveStream, clearFollowUpTimer, clearWakeTimeout],
   );
 
+  const micShowsProcessingRing =
+    state === 'transcribing' || state === 'thinking' || state === 'responding';
+
   const value: CommandContextValue = {
     state,
     userBubbleText,
@@ -939,6 +1049,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     bubbleHistory,
     cancel,
     startListening,
+    notifyCommandUtteranceEnded,
+    notifyAssistantRevealStarted,
+    notifyAssistantRevealComplete,
+    micShowsProcessingRing,
   };
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;
@@ -952,22 +1066,25 @@ export function useCommand(): CommandContextValue {
   return ctx;
 }
 
-/** Scrollable command bubble region between mic and bottom hints. */
+/** Placement region for the command bubble stack (mic → panel bottom). */
 export function CommandBubbleStackHost({ className = '' }: { className?: string }) {
   const ctx = useContext(CommandContext);
   if (!ctx) return null;
-  const { state } = ctx;
+  const { state, bubbleHistory } = ctx;
   if (state === 'idle' || state === 'locked') return null;
+  if (state === 'transcribing' && bubbleHistory.length === 0) return null;
 
   return (
     <div
-      className={`command-bubble-stack-host pointer-events-auto absolute left-1/2 z-20 flex min-h-0 w-full max-w-[min(640px,calc(100vw-8rem))] -translate-x-1/2 flex-col overflow-hidden ${className}`}
+      className={`command-bubble-stack-host pointer-events-none absolute left-1/2 z-30 flex min-h-0 w-full max-w-[min(640px,calc(100vw-8rem))] -translate-x-1/2 flex-col overflow-hidden ${className}`}
       style={{
         top: 'calc(50% + var(--assistant-mic-half, 5rem) + var(--assistant-dock-gap, 0.75rem))',
-        bottom: 'var(--assistant-hints-reserve, 4.75rem)',
+        bottom: 0,
       }}
     >
-      <CommandBubble />
+      <div className="pointer-events-auto h-full min-h-0 min-w-0">
+        <CommandBubble />
+      </div>
     </div>
   );
 }

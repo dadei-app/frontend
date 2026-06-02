@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import { computeApprovalCountdown } from '@dadei/ui/lib/approvalCountdown';
 import { parseApiDateTimeMs } from '@dadei/ui/lib/parseApiDateTime';
 
 export interface BannerProps {
@@ -201,16 +202,10 @@ function CountdownBar({
   durationMs: number;
   countdownEndsAt?: string;
 }) {
-  const { initialScaleX, remainingSec } = useMemo(() => {
-    const now = Date.now();
-    const endMs = countdownEndsAt ? parseApiDateTimeMs(countdownEndsAt) : now + durationMs;
-    const remainingMs = Math.max(endMs - now, 0);
-    const remainingRatio = Math.min(remainingMs / durationMs, 1);
-    return {
-      initialScaleX: remainingRatio,
-      remainingSec: remainingMs / 1000,
-    };
-  }, [countdownEndsAt, durationMs]);
+  const { initialScaleX, remainingSec } = useMemo(
+    () => computeApprovalCountdown(countdownEndsAt, durationMs),
+    [countdownEndsAt, durationMs],
+  );
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] overflow-hidden">

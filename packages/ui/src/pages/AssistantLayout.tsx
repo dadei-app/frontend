@@ -170,8 +170,6 @@ export default function AssistantLayout() {
                 </div>
               </div>
 
-              <CommandBubbleStackHost />
-
               {/* Hints: overlay only — never participate in flex layout. */}
               <motion.div
                 initial={{ opacity: 0 }}
@@ -201,6 +199,8 @@ export default function AssistantLayout() {
                   <span>to toggle</span>
                 </p>
               </motion.div>
+
+              <CommandBubbleStackHost />
             </div>
           </div>
 
