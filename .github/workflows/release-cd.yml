@@ -1,10 +1,7 @@
 name: Desktop CD
 
 on:
-  workflow_run:
-    workflows: ["Continuous Integration"]
-    types: [completed]
-    branches: [main]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
@@ -12,13 +9,10 @@ permissions:
 
 concurrency:
   group: desktop-cd-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: true
       matrix:
@@ -34,8 +28,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v6
         with:
@@ -104,19 +96,20 @@ jobs:
 
   publish:
     needs: build
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          fetch-depth: 0
 
       - name: Read version
         id: pkg
         run: |
           VERSION=$(jq -r .version package.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "Missing version in package.json"
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -139,11 +132,13 @@ jobs:
         run: find assets -name builder-debug.yml -delete
 
       - uses: ncipollo/release-action@v1
+        id: release
         with:
           tag: ${{ steps.pkg.outputs.tag }}
           name: Dadei App ${{ steps.pkg.outputs.tag }}
-          commit: ${{ github.event.workflow_run.head_sha || github.sha }}
+          commit: ${{ github.sha }}
           allowUpdates: true
+          makeLatest: true
           removeArtifacts: true
           replacesArtifacts: true
           artifactErrorsFailBuild: true
@@ -151,3 +146,15 @@ jobs:
           omitNameDuringUpdate: true
           artifacts: assets/windows/*.exe,assets/windows/*.yml,assets/macos/*.dmg,assets/macos/*.zip,assets/macos/*.yml,assets/linux/*.AppImage,assets/linux/*.yml
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify release tag points at this commit
+        run: |
+          git fetch --tags origin
+          TAG="${{ steps.pkg.outputs.tag }}"
+          TAG_SHA=$(git rev-parse "refs/tags/${TAG}^{commit}")
+          if [ "$TAG_SHA" != "${{ github.sha }}" ]; then
+            echo "Tag ${TAG} points at ${TAG_SHA}, expected ${{ github.sha }}."
+            echo "If you re-used the same version, bump package.json before releasing again."
+            exit 1
+          fi
+          echo "Verified ${TAG} -> ${TAG_SHA}"
