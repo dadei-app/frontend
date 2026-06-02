@@ -2,9 +2,8 @@ import { useLayoutEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useCommand } from '@dadei/ui/contexts/CommandContext';
+import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import TextBubble from '@dadei/ui/components/command/TextBubble';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
@@ -61,12 +60,11 @@ export default function AssistantLayout() {
   const { isConnected, isServiceEnabled } = useService();
   const { state } = useCommand();
   const showWakeHint = state === 'idle' && isServiceEnabled;
-  const showCommandChrome = state !== 'idle' && state !== 'locked';
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
 
-  const sessionDataEnabled = isAuthenticated && !isLoading && isConnected;
+  const sessionDataEnabled = isAuthenticated && !isLoading;
   const actionBannerEnabled = isAuthenticated && !isLoading;
   useMemoriesQuery(sessionDataEnabled);
   useActionsQuery(actionBannerEnabled);
@@ -79,19 +77,17 @@ export default function AssistantLayout() {
     );
     root.style.setProperty('--assistant-header-h', '4.75rem');
     root.style.setProperty('--assistant-mic-h', '10rem');
-    root.style.setProperty('--assistant-bubble-gap', '2rem');
-    root.style.setProperty('--assistant-bottom-chrome', '7.5rem');
-    root.style.setProperty(
-      '--assistant-bubble-max-h',
-      'calc(100dvh - var(--assistant-titlebar-offset, 0px) - var(--assistant-header-h, 4.75rem) - var(--assistant-mic-h, 10rem) - var(--assistant-bubble-gap, 2rem) - var(--assistant-bottom-chrome, 7.5rem))',
-    );
+    root.style.setProperty('--assistant-mic-half', '5rem');
+    root.style.setProperty('--assistant-dock-gap', '0.75rem');
+    /** Reserved strip at panel bottom for hint overlays (does not affect mic centering). */
+    root.style.setProperty('--assistant-hints-reserve', '4.75rem');
     return () => {
       root.style.removeProperty('--assistant-titlebar-offset');
       root.style.removeProperty('--assistant-header-h');
       root.style.removeProperty('--assistant-mic-h');
-      root.style.removeProperty('--assistant-bubble-gap');
-      root.style.removeProperty('--assistant-bottom-chrome');
-      root.style.removeProperty('--assistant-bubble-max-h');
+      root.style.removeProperty('--assistant-mic-half');
+      root.style.removeProperty('--assistant-dock-gap');
+      root.style.removeProperty('--assistant-hints-reserve');
     };
   }, []);
 
@@ -166,57 +162,46 @@ export default function AssistantLayout() {
               <BannerStackHost />
             </div>
             <ToastStackHost className="fixed right-5 bottom-5 z-180" />
-            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
-              <div className="relative flex w-full min-h-0 max-w-[min(640px,calc(100vw-8rem))] flex-col items-center justify-center">
-                <div className="relative z-10 shrink-0 isolate">
+            <div className="relative min-h-0 flex-1 overflow-hidden">
+              {/* Mic: geometric center of the left panel; hints are out of flow. */}
+              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+                <div className="pointer-events-auto isolate">
                   <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
                 </div>
-                <div className="mt-8 flex w-full min-h-0 max-h-[var(--assistant-bubble-max-h)] flex-col">
-                  <AnimatePresence>
-                    {showCommandChrome ? (
-                      <motion.div
-                        key="command-live-bubble"
-                        initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.96 }}
-                        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                        className="flex min-h-0 w-full flex-1 flex-col items-center"
-                      >
-                        <TextBubble />
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </div>
               </div>
+
+              <CommandBubbleStackHost />
+
+              {/* Hints: overlay only — never participate in flex layout. */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pb-8 pt-3 text-sm text-zinc-500 font-secondary"
+              >
+                <AnimatePresence initial={false}>
+                  {showWakeHint ? (
+                    <motion.p
+                      key="wake-hint"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.2 }}
+                      className={ASSISTANT_HINT_ROW}
+                    >
+                      <span>Say</span>
+                      <SpokenWakeWord variant="dadei">Dadei</SpokenWakeWord>
+                      <span>or</span>
+                      <SpokenWakeWord variant="assistant">Assistant</SpokenWakeWord>
+                      <span>to start a command</span>
+                    </motion.p>
+                  ) : null}
+                </AnimatePresence>
+                <p className={ASSISTANT_HINT_ROW}>
+                  <kbd className={KEY_HINT_CLASS}>Space</kbd>
+                  <span>to toggle</span>
+                </p>
+              </motion.div>
             </div>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="pointer-events-none absolute inset-x-0 bottom-20 z-10 flex select-none flex-col items-center gap-2.5 text-sm text-zinc-500 font-secondary"
-            >
-              <AnimatePresence initial={false}>
-                {showWakeHint ? (
-                  <motion.p
-                    key="wake-hint"
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 4 }}
-                    transition={{ duration: 0.2 }}
-                    className={ASSISTANT_HINT_ROW}
-                  >
-                    <span>Say</span>
-                    <SpokenWakeWord variant="dadei">Dadei</SpokenWakeWord>
-                    <span>or</span>
-                    <SpokenWakeWord variant="assistant">Assistant</SpokenWakeWord>
-                    <span>to start a command</span>
-                  </motion.p>
-                ) : null}
-              </AnimatePresence>
-              <p className={ASSISTANT_HINT_ROW}>
-                <kbd className={KEY_HINT_CLASS}>Space</kbd>
-                <span>to toggle</span>
-              </p>
-            </motion.div>
           </div>
 
           <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-white/7 bg-zinc-950/40 backdrop-blur-sm">

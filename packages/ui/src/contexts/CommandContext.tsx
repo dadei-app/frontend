@@ -12,7 +12,6 @@ import { useService } from '@dadei/ui/contexts/ServiceContext';
 import axios from 'axios';
 import {
   isAbortError,
-  streamCommand,
   streamCommandFromText,
   type CommandSSEEvent,
 } from '@dadei/ui/lib/api/command';
@@ -36,6 +35,7 @@ import {
 import { commandToolLabel } from '@dadei/ui/lib/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/sessionEndDetection';
 import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
+import CommandBubble from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/utils/time';
 
 const ASSISTANT_STATUS_THINKING = 'Thinking…';
@@ -67,8 +67,6 @@ interface CommandContextValue {
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
-  /** Submit captured wake-buffer audio clip (WAV PCM16 @16kHz). */
-  submitCapturedCommandAudio: (wavBuffer: ArrayBuffer) => void;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
@@ -760,114 +758,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  const submitCapturedCommandAudio = useCallback(
-    (wavBuffer: ArrayBuffer) => {
-      if (commandStreamInFlightRef.current) return;
-      if (!wavBuffer || wavBuffer.byteLength < 64) return;
-
-      clearWakeTimeout();
-      clearFollowUpTimer();
-      followUpCaptureRef.current = false;
-      resetInterimCaptionState();
-      streamHadOutputRef.current = false;
-      lastToolBubbleSnippetRef.current = '';
-      setAssistantBubbleTextSynced('');
-      setAssistantBubbleStatus('pending');
-      pendingNewResponseRef.current = true;
-      startRequestActivity();
-      setState('thinking');
-
-      void (async () => {
-        const claimed = await claimAssistantMode();
-        if (!claimed) {
-          setAssistantBubbleTextSynced('Could not claim assistant mode');
-          setAssistantBubbleStatus('done');
-          setState('idle');
-          return;
-        }
-
-        const accessToken = await getAccessToken();
-        if (!accessToken) {
-          setAssistantBubbleTextSynced('Not authenticated');
-          setAssistantBubbleStatus('done');
-          setState('follow_up');
-          scheduleFollowUpExpiry(0);
-          return;
-        }
-
-        if (!isConnected || !getRealtimeSessionToken()) {
-          setAssistantBubbleTextSynced('Not connected to the assistant service yet');
-          setAssistantBubbleStatus('done');
-          setState('follow_up');
-          scheduleFollowUpExpiry(0);
-          return;
-        }
-
-        commandStreamInFlightRef.current = true;
-        abortActiveStream();
-        const abortController = new AbortController();
-        streamAbortRef.current = abortController;
-
-        try {
-          let sawDone = false;
-          for await (const ev of streamCommand(wavBuffer, accessToken, { signal: abortController.signal })) {
-            if (ev.type === 'error' && abortController.signal.aborted) continue;
-            if (ev.type === 'transcript') {
-              const caption = liveCommandCaptionText(ev.text, false);
-              if (caption) setUserBubbleText(caption);
-              continue;
-            }
-            if (ev.type === 'done') sawDone = true;
-            handleStreamEvent(ev);
-          }
-          if (
-            !sawDone &&
-            !abortController.signal.aborted &&
-            (stateRef.current === 'responding' || stateRef.current === 'thinking')
-          ) {
-            handleStreamEvent({ type: 'done' });
-          }
-        } catch (e) {
-          if (isAbortError(e) || abortController.signal.aborted) {
-            if (
-              stateRef.current === 'thinking' &&
-              !streamHadOutputRef.current &&
-              !assistantBubbleTextRef.current.trim()
-            ) {
-              setAssistantBubbleTextSynced('Request cancelled');
-              setAssistantBubbleStatus('done');
-              setState('follow_up');
-              scheduleFollowUpExpiry(0);
-            }
-            return;
-          }
-          const message = e instanceof Error ? e.message : 'Command failed';
-          streamHadOutputRef.current = true;
-          setAssistantBubbleTextSynced(message);
-          setAssistantBubbleStatus('done');
-          setState('follow_up');
-          scheduleFollowUpExpiry(message.length);
-        } finally {
-          streamAbortRef.current = null;
-          commandStreamInFlightRef.current = false;
-        }
-      })();
-    },
-    [
-      abortActiveStream,
-      claimAssistantMode,
-      clearFollowUpTimer,
-      clearWakeTimeout,
-      getAccessToken,
-      handleStreamEvent,
-      isConnected,
-      resetInterimCaptionState,
-      scheduleFollowUpExpiry,
-      setAssistantBubbleTextSynced,
-      startRequestActivity,
-    ],
-  );
-
   useEffect(() => {
     const off = subscribeRealtimeMessages((msg) => {
       const current = stateRef.current;
@@ -877,21 +767,17 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         const text = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         if (!text) return;
 
+        // No live caption — UI updates only on command_transcript_final from the server.
         if (current === 'listening') {
-          const visible = liveCommandCaptionText(text, false);
-          if (!visible) return;
-          clearWakeFalsePositiveIfCommandInProgress(visible);
-          setUserBubbleText(visible);
+          clearWakeFalsePositiveIfCommandInProgress(text);
           return;
         }
 
         if (current === 'follow_up') {
           if (commandStreamInFlightRef.current) return;
-          const visible = liveCommandCaptionText(text, true);
-          if (visible.length < MIN_FOLLOW_UP_INTERIM_CHARS) return;
+          if (text.trim().length < MIN_FOLLOW_UP_INTERIM_CHARS) return;
           onFollowUpSpeechActivity();
           followUpCaptureRef.current = true;
-          setUserBubbleText(visible);
         }
         return;
       }
@@ -902,6 +788,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
       if (msg.event === 'command_transcript_final') {
         if (current === 'thinking' || current === 'responding') return;
+
         const finalRaw = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         const text = finalRaw || cleanTranscript(lastWakeInterimRef.current);
         resetInterimCaptionState();
@@ -1052,7 +939,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     bubbleHistory,
     cancel,
     startListening,
-    submitCapturedCommandAudio,
   };
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;
@@ -1064,6 +950,26 @@ export function useCommand(): CommandContextValue {
     throw new Error('useCommand must be used within CommandProvider');
   }
   return ctx;
+}
+
+/** Scrollable command bubble region between mic and bottom hints. */
+export function CommandBubbleStackHost({ className = '' }: { className?: string }) {
+  const ctx = useContext(CommandContext);
+  if (!ctx) return null;
+  const { state } = ctx;
+  if (state === 'idle' || state === 'locked') return null;
+
+  return (
+    <div
+      className={`command-bubble-stack-host pointer-events-auto absolute left-1/2 z-20 flex min-h-0 w-full max-w-[min(640px,calc(100vw-8rem))] -translate-x-1/2 flex-col overflow-hidden ${className}`}
+      style={{
+        top: 'calc(50% + var(--assistant-mic-half, 5rem) + var(--assistant-dock-gap, 0.75rem))',
+        bottom: 'var(--assistant-hints-reserve, 4.75rem)',
+      }}
+    >
+      <CommandBubble />
+    </div>
+  );
 }
 
 /** @deprecated Use CommandState */

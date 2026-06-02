@@ -14,6 +14,7 @@ describe('submitCommandText', () => {
   it('strips wake words only when submitting a wake command', () => {
     expect(submitCommandText('Assistant, tell me the weather', false)).toBe('tell me the weather');
     expect(submitCommandText('Dadei what time is it', false)).toBe('what time is it');
+    expect(submitCommandText('hey jarvis whats my birthday', false)).toBe('whats my birthday');
   });
 
   it('does not strip command words that resemble wake prefixes', () => {

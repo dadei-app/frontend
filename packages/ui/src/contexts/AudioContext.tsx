@@ -3,7 +3,6 @@ import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
 import { notifyVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
-import { RingBuffer } from '@dadei/ui/renderer/audio/ringBuffer';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 
 const COMMAND_START_RETRY_MS = 500;
@@ -13,12 +12,6 @@ const MIC_ANALYSER_SMOOTHING = 0.7;
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
 const SAMPLE_RATE = 16000;
 const FOLLOW_UP_SPEECH_RMS = 0.14;
-const WAKE_POST_MAX_MS = 6500;
-const WAKE_SILENCE_MS = 900;
-const WAKE_MIN_CAPTURE_MS = 650;
-const WAKE_SILENCE_RMS_BASE = 0.012;
-const WAKE_SILENCE_RMS_MAX = 0.045;
-const COMMAND_MIN_SAMPLES = 1600;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
 // Only forward microphone chunks while waiting for wake word or actively capturing user speech.
@@ -64,79 +57,10 @@ function toPcm16(input: Float32Array): Int16Array {
   return pcm16;
 }
 
-function rms(samples: Int16Array): number {
-  if (!samples.length) return 0;
-  let sumSq = 0;
-  for (let i = 0; i < samples.length; i++) {
-    const v = samples[i] / 32768;
-    sumSq += v * v;
-  }
-  return Math.sqrt(sumSq / samples.length);
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.max(minimum, Math.min(maximum, value));
-}
-
-function concatPcm16(chunks: Int16Array[]): Int16Array {
-  const total = chunks.reduce((n, c) => n + c.length, 0);
-  const out = new Int16Array(total);
-  let offset = 0;
-  for (const c of chunks) {
-    out.set(c, offset);
-    offset += c.length;
-  }
-  return out;
-}
-
-function pcm16ToWavBuffer(samples: Int16Array, sampleRate = SAMPLE_RATE): ArrayBuffer {
-  const bytesPerSample = 2;
-  const dataSize = samples.length * bytesPerSample;
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-  let offset = 0;
-
-  const writeString = (s: string) => {
-    for (let i = 0; i < s.length; i++) {
-      view.setUint8(offset++, s.charCodeAt(i));
-    }
-  };
-
-  writeString('RIFF');
-  view.setUint32(offset, 36 + dataSize, true);
-  offset += 4;
-  writeString('WAVE');
-  writeString('fmt ');
-  view.setUint32(offset, 16, true);
-  offset += 4;
-  view.setUint16(offset, 1, true);
-  offset += 2;
-  view.setUint16(offset, 1, true);
-  offset += 2;
-  view.setUint32(offset, sampleRate, true);
-  offset += 4;
-  view.setUint32(offset, sampleRate * bytesPerSample, true);
-  offset += 4;
-  view.setUint16(offset, bytesPerSample, true);
-  offset += 2;
-  view.setUint16(offset, 16, true);
-  offset += 2;
-  writeString('data');
-  view.setUint32(offset, dataSize, true);
-  offset += 4;
-
-  for (let i = 0; i < samples.length; i++) {
-    view.setInt16(offset, samples[i], true);
-    offset += 2;
-  }
-
-  return buffer;
-}
-
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
-  const { state, startListening, submitCapturedCommandAudio } = useCommand();
+  const { state, startListening } = useCommand();
 
   const [isProcessing] = useState(false);
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
@@ -155,20 +79,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
-  const ringBufferRef = useRef(new RingBuffer(3, SAMPLE_RATE));
   const wakeDetectorRef = useRef<WakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
-  const wakeCaptureActiveRef = useRef(false);
-  const wakeCaptureStartedAtMsRef = useRef(0);
-  const wakeCaptureSilenceSinceMsRef = useRef<number | null>(null);
-  const wakeCaptureSilenceRmsRef = useRef(WAKE_SILENCE_RMS_BASE);
-  const wakeCaptureSpeechSeenRef = useRef(false);
-  const wakeCaptureAmbientRmsRef = useRef(0);
-  const wakeCaptureLastChunkRmsRef = useRef(0);
-  const wakeCaptureLastElapsedMsRef = useRef(0);
-  const wakeCaptureLastSilenceElapsedMsRef = useRef(0);
-  const wakePreBufferRef = useRef<Int16Array>(new Int16Array(0));
-  const wakePostChunksRef = useRef<Int16Array[]>([]);
 
   useEffect(() => {
     stateRef.current = state;
@@ -192,8 +104,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       (state === 'idle' || state === 'locked')
     ) {
       sendRealtimeMessage({ type: 'command_audio_cancel' });
-      // Cancel tears down backend stream registration. Mark local stream as unready so
-      // the next utterance re-sends command_audio_start and rebinds the stream.
       commandStreamReadyRef.current = false;
       lastCommandStartAttemptMsRef.current = 0;
     }
@@ -230,68 +140,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     return () => cancelAnimationFrame(raf);
   }, [state, streamAnalyserReady]);
 
-  const submitWakeCapture = useCallback((reason: 'silence' | 'max_post') => {
-    console.debug('[Voice][WakeCapture] finalize', {
-      reason,
-      elapsed_ms: wakeCaptureLastElapsedMsRef.current,
-      silence_elapsed_ms: wakeCaptureLastSilenceElapsedMsRef.current,
-      silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
-      ambient_rms: Number(wakeCaptureAmbientRmsRef.current.toFixed(5)),
-      last_chunk_rms: Number(wakeCaptureLastChunkRmsRef.current.toFixed(5)),
-      speech_seen: wakeCaptureSpeechSeenRef.current,
-    });
-    wakeCaptureActiveRef.current = false;
-    wakeCaptureSilenceSinceMsRef.current = null;
-    wakeCaptureSilenceRmsRef.current = WAKE_SILENCE_RMS_BASE;
-    wakeCaptureSpeechSeenRef.current = false;
-    wakeCaptureAmbientRmsRef.current = 0;
-    wakeCaptureLastChunkRmsRef.current = 0;
-    wakeCaptureLastElapsedMsRef.current = 0;
-    wakeCaptureLastSilenceElapsedMsRef.current = 0;
-    const chunks = [wakePreBufferRef.current, ...wakePostChunksRef.current];
-    wakePreBufferRef.current = new Int16Array(0);
-    wakePostChunksRef.current = [];
-    const pcm16 = concatPcm16(chunks);
-
-    // Prefer the live websocket utterance path when the stream is ready — avoids a
-    // second POST /command decode that can disagree with the caption the user saw.
-    if (
-      commandStreamReadyRef.current &&
-      commandStreamActiveRef.current &&
-      stateRef.current === 'listening'
-    ) {
-      sendRealtimeMessage({ type: 'command_audio_end' });
-      return;
-    }
-
-    if (pcm16.length < COMMAND_MIN_SAMPLES) return;
-    submitCapturedCommandAudio(pcm16ToWavBuffer(pcm16, SAMPLE_RATE));
-  }, [submitCapturedCommandAudio]);
-
+  /** Local wake model only arms assistant mode; transcription is websocket-only. */
   const onWakeWordDetected = useCallback(
     (_timestampMs: number) => {
-      if (wakeCaptureActiveRef.current) return;
       if (stateRef.current === 'thinking' || stateRef.current === 'responding' || stateRef.current === 'locked') {
         return;
       }
-      wakeCaptureActiveRef.current = true;
-      wakeCaptureStartedAtMsRef.current = Date.now();
-      wakeCaptureSilenceSinceMsRef.current = null;
-      wakePreBufferRef.current = ringBufferRef.current.drain();
-      wakePostChunksRef.current = [];
-      const ambientRms = rms(wakePreBufferRef.current);
-      wakeCaptureAmbientRmsRef.current = ambientRms;
-      // Adapt silence detection to current room noise so command-end feels consistent.
-      wakeCaptureSilenceRmsRef.current = clamp(
-        ambientRms * 1.8 + 0.004,
-        WAKE_SILENCE_RMS_BASE,
-        WAKE_SILENCE_RMS_MAX,
-      );
-      wakeCaptureSpeechSeenRef.current = false;
-      console.debug('[Voice][WakeCapture] started', {
-        ambient_rms: Number(ambientRms.toFixed(5)),
-        silence_rms_threshold: Number(wakeCaptureSilenceRmsRef.current.toFixed(5)),
-      });
+      console.debug('[Voice][Wake] detected — entering listening (server will transcribe)');
       startListening();
     },
     [startListening],
@@ -330,16 +185,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
     commandStreamActiveRef.current = false;
     commandStreamReadyRef.current = false;
-    wakeCaptureActiveRef.current = false;
-    wakeCaptureSilenceSinceMsRef.current = null;
-    wakeCaptureSilenceRmsRef.current = WAKE_SILENCE_RMS_BASE;
-    wakeCaptureSpeechSeenRef.current = false;
-    wakeCaptureAmbientRmsRef.current = 0;
-    wakeCaptureLastChunkRmsRef.current = 0;
-    wakeCaptureLastElapsedMsRef.current = 0;
-    wakeCaptureLastSilenceElapsedMsRef.current = 0;
-    wakePreBufferRef.current = new Int16Array(0);
-    wakePostChunksRef.current = [];
     lastCommandStartAttemptMsRef.current = 0;
   }, []);
 
@@ -365,7 +210,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         await wakeDetector.start(media);
         wakeDetectorRef.current = wakeDetector;
       } catch (error) {
-        // Keep passive capture alive even if wake detector boot fails.
         if (!wakeDetectorFailureLoggedRef.current) {
           wakeDetectorFailureLoggedRef.current = true;
           console.error('[Audio] wake-word detector start failed; passive capture continues', error);
@@ -402,38 +246,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       const input = event.inputBuffer.getChannelData(0);
       const downsampled = downsampleTo16k(input, ctx.sampleRate);
       const pcm16 = toPcm16(downsampled);
-      ringBufferRef.current.push(pcm16);
-
-      if (wakeCaptureActiveRef.current) {
-        wakePostChunksRef.current.push(pcm16);
-        const nowMs = Date.now();
-        const chunkRms = rms(pcm16);
-        wakeCaptureLastChunkRmsRef.current = chunkRms;
-        const silenceRms = wakeCaptureSilenceRmsRef.current;
-        const speakingRms = silenceRms * 1.35;
-        if (chunkRms >= speakingRms) {
-          wakeCaptureSpeechSeenRef.current = true;
-        }
-        if (chunkRms < silenceRms) {
-          if (wakeCaptureSilenceSinceMsRef.current == null) wakeCaptureSilenceSinceMsRef.current = nowMs;
-        } else {
-          wakeCaptureSilenceSinceMsRef.current = null;
-        }
-        const captureElapsed = nowMs - wakeCaptureStartedAtMsRef.current;
-        const silenceElapsed = wakeCaptureSilenceSinceMsRef.current
-          ? nowMs - wakeCaptureSilenceSinceMsRef.current
-          : 0;
-        wakeCaptureLastElapsedMsRef.current = captureElapsed;
-        wakeCaptureLastSilenceElapsedMsRef.current = silenceElapsed;
-        const canEndForSilence =
-          captureElapsed >= WAKE_MIN_CAPTURE_MS &&
-          wakeCaptureSpeechSeenRef.current &&
-          silenceElapsed >= WAKE_SILENCE_MS;
-        const maxPostExceeded = captureElapsed >= WAKE_POST_MAX_MS;
-        if (maxPostExceeded || canEndForSilence) {
-          submitWakeCapture(maxPostExceeded ? 'max_post' : 'silence');
-        }
-      }
 
       const nowMs = Date.now();
       if (!commandStreamReadyRef.current) {
@@ -445,7 +257,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       sendRealtimeMessage({ type: 'command_audio_chunk', pcm16_b64: btoa(binary) });
     };
-  }, [ensureCommandSessionStarted, onWakeWordDetected, submitWakeCapture]);
+  }, [ensureCommandSessionStarted, onWakeWordDetected]);
 
   useEffect(() => {
     const shouldListen =

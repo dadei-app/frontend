@@ -17,10 +17,14 @@ export function liveCommandCaptionText(text: string, fromFollowUp: boolean): str
   return cleaned.trim();
 }
 
-/** Text sent to inference after wake-word stripping. */
+/**
+ * Text sent to inference. Follow-ups are verbatim; wake commands drop only the
+ * wake phrase (not fillers like "what" in "what's my birthday").
+ */
 export function submitCommandText(text: string, fromFollowUp: boolean): string {
   const cleaned = cleanCommandTranscript(text);
   if (!cleaned) return '';
   if (fromFollowUp) return cleaned.trim();
-  return normalizeVisibleCommandText(cleaned);
+  const stripped = normalizeVisibleCommandText(cleaned);
+  return stripped || cleaned.trim();
 }

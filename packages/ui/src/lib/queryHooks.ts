@@ -132,7 +132,6 @@ export function memoriesListQueryOptions(limit = ASSISTANT_MEMORIES_LIST_LIMIT) 
     queryKey: queryKeys.memoriesList(limit),
     queryFn: () => memoriesApi.list({ limit }),
     staleTime: 30_000,
-    /** Lists are warmed on the assistant shell and updated via realtime; avoid refetch when Settings opens. */
     refetchOnMount: false,
   };
 }

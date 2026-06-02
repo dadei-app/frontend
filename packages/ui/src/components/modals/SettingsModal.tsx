@@ -22,7 +22,6 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
@@ -154,13 +153,12 @@ function actionDisplayText(action: NetworkAction): string {
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
   const queryClient = useQueryClient();
-  const { user, refreshUser, logout, saveTokens } = useAuth();
-  const { isConnected } = useService();
+  const { user, refreshUser, logout, saveTokens, isAuthenticated } = useAuth();
   const { showToast } = useNotifications();
   const authMeQuery = useAuthMeQuery(open);
   const integrationsStatusQuery = useIntegrationsStatusQuery(open);
-  const memoriesQuery = useMemoriesQuery(isConnected);
-  const actionsQuery = useActionsQuery(open && isConnected);
+  const memoriesQuery = useMemoriesQuery(open && isAuthenticated);
+  const actionsQuery = useActionsQuery(open && isAuthenticated);
   const deleteMemoryMutation = useDeleteMemoryMutation();
   const deleteActionMutation = useDeleteActionMutation();
   const [deletePhrase, setDeletePhrase] = useState('');
@@ -172,6 +170,11 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<SidebarView>('integrations');
   const prefersReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!open || !isAuthenticated || activeView !== 'memories') return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.memories });
+  }, [open, isAuthenticated, activeView, queryClient]);
 
   const profile = authMeQuery.data ?? user;
   const email = profile?.email ?? '—';
@@ -588,11 +591,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 </div>
               ) : activeView === 'memories' ? (
                 <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
-                  {!isConnected ? (
-                    <p className="text-sm text-zinc-500 font-secondary">
-                      Memories load after this device registers as a client (same as the interaction feed).
-                    </p>
-                  ) : memoriesQuery.isLoading ? (
+                  {memoriesQuery.isLoading ? (
                     <p className="text-sm text-zinc-500 font-secondary">Loading memories…</p>
                   ) : memoriesQuery.isError ? (
                     <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(memoriesQuery.error)}</p>
@@ -637,11 +636,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               ) : (
                 <div className="relative flex min-h-0 flex-1 flex-col">
                   <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
-                    {!isConnected ? (
-                      <p className="text-sm text-zinc-500 font-secondary">
-                        Actions load after this device registers as a client.
-                      </p>
-                    ) : actionsQuery.isLoading ? (
+                    {actionsQuery.isLoading ? (
                       <p className="text-sm text-zinc-500 font-secondary">Loading actions…</p>
                     ) : actionsQuery.isError ? (
                       <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(actionsQuery.error)}</p>

@@ -48,7 +48,7 @@ export interface NetworkAction {
   network_id: string;
 }
 
-/** Episodic memory from GET /memories or realtime `episodic_memory` events. */
+/** Episodic memory from GET /memories. */
 export interface EpisodicMemory {
   id: string;
   network_id: string;

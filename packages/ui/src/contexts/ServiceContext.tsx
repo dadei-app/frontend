@@ -11,12 +11,11 @@ import {
 import { getRealtimeSessionId } from '@dadei/ui/lib/realtimeClient';
 import {
   ASSISTANT_ACTIONS_LIST_LIMIT,
-  ASSISTANT_MEMORIES_LIST_LIMIT,
   clearAssistantSessionCaches,
 } from '@dadei/ui/lib/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import { useQueryClient } from '@tanstack/react-query';
-import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
+import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 interface ServiceContextType {
   isServiceEnabled: boolean;
@@ -38,12 +37,6 @@ export const ServiceContext = createContext<ServiceContextType | undefined>(unde
 
 const ENABLE_TIMEOUT_MS = 5000;
 const CLIENT_CONTEXT_LOCATION_TIMEOUT_MS = 3500;
-
-function isEpisodicMemory(data: unknown): data is EpisodicMemory {
-  if (!data || typeof data !== 'object') return false;
-  const o = data as Record<string, unknown>;
-  return typeof o.id === 'string' && typeof o.canonical_text === 'string' && typeof o.status === 'string';
-}
 
 function isNetworkAction(data: unknown): data is NetworkAction {
   if (!data || typeof data !== 'object') return false;
@@ -245,24 +238,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isConnected) return;
 
-    const memoryKey = queryKeys.memoriesList(ASSISTANT_MEMORIES_LIST_LIMIT);
     const actionKey = queryKeys.actionsList(ASSISTANT_ACTIONS_LIST_LIMIT, 0);
-
-    const mergeMemory = (memory: EpisodicMemory) => {
-      queryClient.setQueryData<EpisodicMemory[]>(memoryKey, prev => {
-        const list = prev ?? [];
-        if (memory.status === 'cancelled' || memory.status === 'expired') {
-          return list.filter(m => m.id !== memory.id);
-        }
-        const idx = list.findIndex(m => m.id === memory.id);
-        if (idx === -1) {
-          return [memory, ...list];
-        }
-        const next = [...list];
-        next[idx] = memory;
-        return next;
-      });
-    };
 
     const mergeAction = (action: NetworkAction) => {
       queryClient.setQueryData<NetworkAction[]>(actionKey, prev => {
@@ -278,11 +254,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     };
 
     const offWs = subscribeRealtimeMessages(msg => {
-      if (msg.event === 'episodic_memory') {
-        if (!isEpisodicMemory(msg.data)) return;
-        mergeMemory(msg.data);
-        return;
-      }
       if (msg.event === 'action') {
         if (!isNetworkAction(msg.data)) return;
         mergeAction(msg.data);
