@@ -233,12 +233,10 @@ function CountdownBar({
       aria-hidden
     >
       <div
-        className="absolute inset-y-0 right-0 bg-zinc-100"
+        className="absolute inset-y-0 left-0 bg-zinc-100"
         style={{
-          width: '100%',
-          transform: `scaleX(${progress})`,
-          transformOrigin: 'right center',
-          willChange: 'transform',
+          width: `${progress * 100}%`,
+          willChange: 'width',
         }}
       />
     </div>
