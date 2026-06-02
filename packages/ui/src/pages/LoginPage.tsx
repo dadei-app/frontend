@@ -2,9 +2,9 @@ import { useEffect, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import LoginOverlay from '@dadei/ui/components/modals/LoginModal';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
-import { isElectronDesktop } from '@dadei/ui/lib/electronWindowChrome';
+import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 
 function isSafeInternalPath(path: string): boolean {
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) return false;

@@ -7,13 +7,13 @@ import {
   startRealtimeClient,
   stopRealtimeClient,
   subscribeRealtimeMessages,
-} from '@dadei/ui/lib/realtimeClient';
-import { getRealtimeSessionId } from '@dadei/ui/lib/realtimeClient';
+} from '@dadei/ui/lib/realtime/realtimeClient';
+import { getRealtimeSessionId } from '@dadei/ui/lib/realtime/realtimeClient';
 import {
   ASSISTANT_ACTIONS_LIST_LIMIT,
   clearAssistantSessionCaches,
-} from '@dadei/ui/lib/queryHooks';
-import { queryKeys } from '@dadei/ui/lib/queryKeys';
+} from '@dadei/ui/lib/query/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { useQueryClient } from '@tanstack/react-query';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 

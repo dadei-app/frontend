@@ -1,6 +1,6 @@
-import { API_BASE_URL } from '@dadei/ui/shared/api/client';
-import { ENDPOINTS } from '@dadei/ui/shared/api/constants';
-import { getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
+import { API_BASE_URL } from '@dadei/ui/lib/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import { getRealtimeSessionToken } from '@dadei/ui/lib/realtime/realtimeClient';
 
 export type CommandSSEEvent =
   | { type: 'transcript'; text: string }

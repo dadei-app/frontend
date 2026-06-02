@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { ToastType } from '@dadei/ui/types/models.types';
-import { cn } from '@dadei/ui/lib/cn';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 interface ToastProps {
   message: string;

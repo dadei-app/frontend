@@ -3,13 +3,13 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Person } from '@dadei/ui/types/models.types';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { cn } from '@dadei/ui/lib/cn';
+import { cn } from '@dadei/ui/lib/shared/cn';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import {
   useDeletePersonMutation,
   usePersonsQuery,
   useRenamePersonMutation,
-} from '@dadei/ui/lib/queryHooks';
+} from '@dadei/ui/lib/query/queryHooks';
 
 /** Below client tooltip (195); above main chrome. */
 const PEOPLE_DRAWER_Z = 170;

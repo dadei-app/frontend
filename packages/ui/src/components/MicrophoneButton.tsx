@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
-import { cn } from '@dadei/ui/lib/cn';
+import { cn } from '@dadei/ui/lib/shared/cn';
 import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
 
 interface MicrophoneButtonProps {

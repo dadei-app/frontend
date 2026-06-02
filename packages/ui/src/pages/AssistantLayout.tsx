@@ -10,10 +10,10 @@ import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import AssistantSettingsModal from '@dadei/ui/components/modals/SettingsModal';
 import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
-import { useMemoriesQuery, useActionsQuery } from '@dadei/ui/lib/queryHooks';
-import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS, isElectronDesktop } from '@dadei/ui/lib/electronWindowChrome';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
-import { cn } from '@dadei/ui/lib/cn';
+import { useMemoriesQuery, useActionsQuery } from '@dadei/ui/lib/query/queryHooks';
+import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS, isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
+import { cn } from '@dadei/ui/lib/shared/cn';
 import { Mic } from 'lucide-react';
 
 const ASSISTANT_HINT_ROW =

@@ -1,14 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
-import { notifyVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
+import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
+import { notifyVoiceSpeechActivity } from '@dadei/ui/lib/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
   COMMAND_SPEECH_RMS,
   COMMAND_UTTERANCE_END_SILENCE_MS,
   FOLLOW_UP_SPEECH_RMS,
-} from '@dadei/ui/lib/voice/voiceConstants';
+} from '@dadei/ui/lib/voice/session/voiceConstants';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 
 const COMMAND_START_RETRY_MS = 500;

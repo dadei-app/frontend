@@ -11,7 +11,7 @@ import { integrationsApi } from '@dadei/ui/lib/api/integrations';
 import type { Conversation, Person } from '@dadei/ui/types/models.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
-import { queryKeys } from '@dadei/ui/lib/queryKeys';
+import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 
 const CONVERSATION_STALE_MS = 5 * 60_000;
 const INTERACTIONS_BOOTSTRAP_STALE_MS = 30_000;

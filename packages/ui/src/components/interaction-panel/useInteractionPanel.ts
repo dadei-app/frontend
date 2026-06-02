@@ -7,7 +7,7 @@ import { interactionsApi } from '@dadei/ui/lib/api/interactions';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
+import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
 import {
   conversationQueryOptions,
   INTERACTION_PANEL_RECENT_LIMIT,
@@ -15,8 +15,8 @@ import {
   useInteractionsBootstrapQuery,
   usePersonsQuery,
   useRecentConversationsQuery,
-} from '@dadei/ui/lib/queryHooks';
-import { queryKeys } from '@dadei/ui/lib/queryKeys';
+} from '@dadei/ui/lib/query/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { ORPHAN_KEY } from './constants';
 import { activeConversationKey, groupKey, parseInteractionDate } from './conversationUtils';
 import type { ConversationGroupState, ConversationGroupView } from './types';

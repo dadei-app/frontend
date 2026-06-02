@@ -1,5 +1,5 @@
-import { buildRealtimeWebSocketUrl } from '@dadei/ui/shared/api/realtime';
-import { dispatchClientAction } from '@dadei/ui/lib/clientActionHandler';
+import { buildRealtimeWebSocketUrl } from '@dadei/ui/lib/api/http/realtime';
+import { dispatchClientAction } from '@dadei/ui/lib/realtime/clientActionHandler';
 
 export type RealtimeMessage = Record<string, unknown> & {
   event?: string;

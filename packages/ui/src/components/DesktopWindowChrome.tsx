@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { Copy, Minus, Square, X } from 'lucide-react';
-import { cn } from '@dadei/ui/lib/cn';
+import { cn } from '@dadei/ui/lib/shared/cn';
 import {
   DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
   isElectronDesktop,
   isElectronMac,
   needsCustomWindowControls,
-} from '@dadei/ui/lib/electronWindowChrome';
+} from '@dadei/ui/lib/platform/electronWindowChrome';
 
 function useMaximizedState() {
   const api = typeof window !== 'undefined' ? window.electronAPI : undefined;

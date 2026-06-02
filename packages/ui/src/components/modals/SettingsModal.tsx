@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
-import { triggerGoogleOAuth } from '@dadei/ui/lib/googleAuth';
+import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import {
   useAuthMeQuery,
@@ -32,14 +32,14 @@ import {
   useDeleteMemoryMutation,
   useActionsQuery,
   useDeleteActionMutation,
-} from '@dadei/ui/lib/queryHooks';
-import { queryKeys } from '@dadei/ui/lib/queryKeys';
+} from '@dadei/ui/lib/query/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
 import { MemorySettingsRow } from '@dadei/ui/components/settings/MemorySettingsRow';
 import { WorkspaceActionRow } from '@dadei/ui/components/settings/WorkspaceActionRow';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 
-import { veilEase } from '@dadei/ui/lib/motion';
+import { veilEase } from '@dadei/ui/lib/shared/motion';
 
 type AssistantSettingsModalProps = {
   open: boolean;

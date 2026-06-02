@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { AnimatePresence, motion } from 'framer-motion';
 import type { CommandState, AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
-import { formatAssistantStatusLine } from '@dadei/ui/lib/commandToolLabels';
+import { formatAssistantStatusLine } from '@dadei/ui/lib/voice/labels/commandToolLabels';
 import {
   typewriterDelayBeforeChar,
   typewriterRevealStep,
-} from '@dadei/ui/lib/typewriterTiming';
-import { VOICE_EASE } from '@dadei/ui/lib/voice/voiceConstants';
+} from '@dadei/ui/lib/voice/ui/typewriterTiming';
+import { VOICE_EASE } from '@dadei/ui/lib/voice/session/voiceConstants';
 
 const STATUS_ELLIPSIS_CYCLE_MS = 480;
 /** Alpha mask fade length at clipped scroll edges (not a visible overlay). */

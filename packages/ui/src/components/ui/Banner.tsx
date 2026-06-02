@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { parseApiDateTimeMs } from '@dadei/ui/lib/parseApiDateTime';
+import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
 
 export interface BannerProps {
   id: string;

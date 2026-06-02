@@ -1,6 +1,6 @@
-import { api } from '@dadei/ui/shared/api/client';
+import { api } from '@dadei/ui/lib/api/http/client';
 import { LoginCredentials, RegisterData, AuthResponse, UserMe } from '../../types/auth.types';
-import { ENDPOINTS } from '@dadei/ui/shared/api/constants';
+import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
 
 export const authApi = {
   /**

@@ -16,29 +16,29 @@ import {
   type CommandSSEEvent,
 } from '@dadei/ui/lib/api/command';
 import { serviceApi } from '@dadei/ui/lib/api/service';
-import { getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
-import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
+import { getRealtimeSessionToken } from '@dadei/ui/lib/realtime/realtimeClient';
+import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
 import {
   isInstructionalTranscriptBleed,
   sanitizeCommandTranscript,
-} from '@dadei/ui/lib/commandTranscriptSanitize';
+} from '@dadei/ui/lib/voice/wake/commandTranscriptSanitize';
 import {
   liveCommandCaptionText,
   submitCommandText,
-} from '@dadei/ui/lib/commandCaption';
-import { normalizeVisibleCommandText, transcriptStartsWithWakeCommand } from '@dadei/ui/lib/wakeWordDetection';
+} from '@dadei/ui/lib/voice/wake/commandCaption';
+import { normalizeVisibleCommandText, transcriptStartsWithWakeCommand } from '@dadei/ui/lib/voice/wake/wakeWordDetection';
 import {
   CLAIM_HOLD_SECONDS,
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
   computeFollowUpMs,
   FOLLOW_UP_MIN_MS,
-} from '@dadei/ui/lib/voice/voiceConstants';
+} from '@dadei/ui/lib/voice/session/voiceConstants';
 import {
   commandToolStatusLabel,
   formatAssistantStatusLine,
-} from '@dadei/ui/lib/commandToolLabels';
-import { isSessionEndUtterance } from '@dadei/ui/lib/voice/sessionEndDetection';
-import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/voiceSessionActivity';
+} from '@dadei/ui/lib/voice/labels/commandToolLabels';
+import { isSessionEndUtterance } from '@dadei/ui/lib/voice/session/sessionEndDetection';
+import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/session/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/utils/time';
 

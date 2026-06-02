@@ -1,5 +1,5 @@
-import { ENDPOINTS } from '@dadei/ui/shared/api/constants';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 
 function apiOriginPrefix(): string {
   const apiUrl = process.env.API_URL || 'http://localhost:8000';

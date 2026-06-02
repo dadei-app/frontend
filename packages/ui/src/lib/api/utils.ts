@@ -1,4 +1,4 @@
-import { API_CONFIG } from "@dadei/ui/shared/api/constants";
+import { API_CONFIG } from "@dadei/ui/lib/api/http/constants";
 
 export interface ClientIpAddresses {
     local: string;

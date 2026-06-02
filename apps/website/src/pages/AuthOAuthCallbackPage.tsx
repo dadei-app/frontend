@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { resolvePostOAuthPath } from '@dadei/ui/lib/assistantPaths';
+import { resolvePostOAuthPath } from '@dadei/ui/lib/platform/assistantPaths';
 
 /**
  * Handles redirect return from server-side web OAuth.

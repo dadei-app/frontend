@@ -1,8 +1,8 @@
-import { api } from '@dadei/ui/shared/api/client';
-import { ENDPOINTS, API_CONFIG } from '@dadei/ui/shared/api/constants';
+import { api } from '@dadei/ui/lib/api/http/client';
+import { ENDPOINTS, API_CONFIG } from '@dadei/ui/lib/api/http/constants';
 import { buildEndpoint } from './utils';
 import { Interaction } from '@dadei/ui/types/models.types';
-import { getRealtimeClientId, getRealtimeSessionToken } from '@dadei/ui/lib/realtimeClient';
+import { getRealtimeClientId, getRealtimeSessionToken } from '@dadei/ui/lib/realtime/realtimeClient';
 
 interface GetInteractionsParams {
   limit?: number;

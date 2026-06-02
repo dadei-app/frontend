@@ -1,6 +1,6 @@
-import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { authApi } from '@dadei/ui/lib/api/auth';
-import { buildWebGoogleOAuthLoginUrl } from '@dadei/ui/lib/webOAuthUrls';
+import { buildWebGoogleOAuthLoginUrl } from '@dadei/ui/lib/auth/webOAuthUrls';
 
 export async function triggerGoogleOAuth(options: {
   saveTokens: (tokens: { accessToken: string; refreshToken: string }) => Promise<void>;

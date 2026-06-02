@@ -1,12 +1,12 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { api } from '@dadei/ui/shared/api/client';
+import { api } from '@dadei/ui/lib/api/http/client';
 import { authApi } from '@dadei/ui/lib/api/auth';
-import { webTokenStore } from '@dadei/ui/lib/webTokenStore';
+import { webTokenStore } from '@dadei/ui/lib/auth/webTokenStore';
 import { AuthTokens, LoginCredentials, RegisterData, UserMe } from '@dadei/ui/types/auth.types';
 import { useQueryClient } from '@tanstack/react-query';
-import { clearAssistantSessionCaches } from '@dadei/ui/lib/queryHooks';
-import { queryKeys } from '@dadei/ui/lib/queryKeys';
+import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 
 interface AuthContextType {
   isAuthenticated: boolean;

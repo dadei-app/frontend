@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Check, Trash2, X } from 'lucide-react';
-import { cn } from '@dadei/ui/lib/cn';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 const DEFAULT_EASE = [0.22, 1, 0.36, 1] as const;
 const DEFAULT_IDLE_WIDTH = 36;

@@ -1,5 +1,5 @@
-import { api } from '@dadei/ui/shared/api/client';
-import { ENDPOINTS } from '@dadei/ui/shared/api/constants';
+import { api } from '@dadei/ui/lib/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
 import { buildEndpoint, getClientIpAddresses, retryWithBackoff } from './utils';
 
 interface ClientRegistration {

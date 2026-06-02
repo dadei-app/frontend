@@ -3,10 +3,10 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
-import { isElectronDesktop } from '@dadei/ui/lib/electronWindowChrome';
-import { triggerGoogleOAuth } from '@dadei/ui/lib/googleAuth';
+import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
+import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
 
 const veilEase = [0.22, 1, 0.36, 1] as const;
 

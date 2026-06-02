@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Settings2, LogOut, Users, Mic } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import PeoplePanel from '@dadei/ui/components/PeoplePanel';
-import { cn } from '@dadei/ui/lib/cn';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 interface HeaderProps {
   isPeoplePanelOpen: boolean;
