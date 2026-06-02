@@ -105,7 +105,7 @@ jobs:
       - name: Notify Vercel
         uses: vercel/repository-dispatch/actions/status@v1
         with:
-          name: Vercel - dadei: deploy
+          name: 'Vercel - dadei: deploy'
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/checkout@v6
