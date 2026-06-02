@@ -17,6 +17,8 @@ const SESSION_END_PATTERNS: RegExp[] = [
   /^thank you$/,
   /^thanks? (so )?much$/,
   /^many thanks$/,
+  /^ok thanks?$/,
+  /^cool$/,
   /^bye$/,
   /^goodbye$/,
   /^see you(?: later)?$/,

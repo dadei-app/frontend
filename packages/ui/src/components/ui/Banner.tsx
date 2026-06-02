@@ -1,7 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { computeApprovalCountdown } from '@dadei/ui/lib/approvalCountdown';
 import { parseApiDateTimeMs } from '@dadei/ui/lib/parseApiDateTime';
 
 export interface BannerProps {
@@ -202,22 +201,45 @@ function CountdownBar({
   durationMs: number;
   countdownEndsAt?: string;
 }) {
-  const { initialScaleX, remainingSec } = useMemo(
-    () => computeApprovalCountdown(countdownEndsAt, durationMs),
-    [countdownEndsAt, durationMs],
-  );
+  const [progress, setProgress] = useState(1);
+
+  useEffect(() => {
+    const windowMs = Math.max(durationMs, 1);
+    const endMs = countdownEndsAt
+      ? parseApiDateTimeMs(countdownEndsAt)
+      : Date.now() + windowMs;
+
+    if (!Number.isFinite(endMs)) {
+      setProgress(0);
+      return;
+    }
+
+    let raf = 0;
+    const tick = () => {
+      const remainingMs = Math.max(endMs - Date.now(), 0);
+      setProgress(Math.min(remainingMs / windowMs, 1));
+      if (remainingMs > 0) {
+        raf = requestAnimationFrame(tick);
+      }
+    };
+
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [countdownEndsAt, durationMs]);
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 h-[3px] overflow-hidden">
-      <motion.div
-        initial={{ scaleX: initialScaleX }}
-        animate={{ scaleX: 0 }}
-        transition={{ duration: remainingSec, ease: 'linear' }}
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 h-[3px] overflow-hidden bg-white/[0.06]"
+      aria-hidden
+    >
+      <div
+        className="absolute inset-y-0 right-0 bg-zinc-100"
         style={{
-          transformOrigin: 'left center',
-          boxShadow: '0 0 12px rgba(255,255,255,0.28)',
+          width: '100%',
+          transform: `scaleX(${progress})`,
+          transformOrigin: 'right center',
+          willChange: 'transform',
         }}
-        className="h-full bg-gradient-to-r from-zinc-100 via-zinc-200 to-zinc-300/80"
       />
     </div>
   );

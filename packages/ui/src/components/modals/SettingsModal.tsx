@@ -35,35 +35,16 @@ import {
 } from '@dadei/ui/lib/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
-import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
+import { MemorySettingsRow } from '@dadei/ui/components/settings/MemorySettingsRow';
+import { WorkspaceActionRow } from '@dadei/ui/components/settings/WorkspaceActionRow';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+
 import { veilEase } from '@dadei/ui/lib/motion';
-import { formatForUser } from '@dadei/ui/utils/time';
 
 type AssistantSettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
-
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    return formatForUser(iso, userTz, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  } catch {
-    return '—';
-  }
-}
-
-function formatMetaLine(parts: Array<string | null | undefined>): string {
-  return parts
-    .map((part) => (part ?? '').trim())
-    .filter((part) => part.length > 0)
-    .join(' · ');
-}
 
 type SidebarView = 'integrations' | 'memories' | 'events' | 'tasks' | 'mail';
 
@@ -87,15 +68,6 @@ const EMPTY_ACTION_COPY_BY_VIEW: Record<Extract<SidebarView, 'events' | 'tasks' 
     'No tasks yet. This list fills in once conversations include concrete next steps to track.',
   mail:
     'No mail actions yet. Drafts and send actions appear here when a message is prepared from conversation context.',
-};
-
-const ACTION_TYPE_LABELS: Record<string, string> = {
-  calendar: 'Calendar event',
-  calendar_event: 'Calendar event',
-  todo: 'Task',
-  task: 'Task',
-  email: 'Email',
-  message: 'Message',
 };
 
 const INTEGRATION_ICONS: Record<string, typeof CalendarDays> = {
@@ -123,32 +95,6 @@ function accessBadgeClass(granted: boolean, googleConnected: boolean): string {
     return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
   }
   return 'border-zinc-700 bg-zinc-800/80 text-zinc-500';
-}
-
-function actionDisplayText(action: NetworkAction): string {
-  const title = action.title?.trim();
-  if (title) return title;
-
-  const details = action.details?.trim();
-  if (details) {
-    try {
-      const parsed = JSON.parse(details) as {
-        canonical_text?: unknown;
-        tool_args?: { title?: string; subject?: string; description?: string };
-      };
-      if (typeof parsed.canonical_text === 'string' && parsed.canonical_text.trim()) {
-        return parsed.canonical_text.trim();
-      }
-      const toolTitle = parsed.tool_args?.title?.trim() || parsed.tool_args?.subject?.trim();
-      if (toolTitle) return toolTitle;
-      const toolDescription = parsed.tool_args?.description?.trim();
-      if (toolDescription) return toolDescription;
-    } catch {
-      /* not JSON */
-    }
-    return details;
-  }
-  return ACTION_TYPE_LABELS[action.action_type] ?? action.action_type;
 }
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
@@ -602,33 +548,19 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   ) : (
                     <ul className="space-y-2">
                       {memoryRows.map((m: EpisodicMemory) => (
-                        <li
+                        <MemorySettingsRow
                           key={m.id}
-                          className="group/memory rounded-lg border border-white/7 bg-zinc-950/40 px-3 py-2.5"
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm leading-snug text-zinc-100">{m.canonical_text}</p>
-                              <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                                {formatMetaLine([m.memory_type, m.status, formatWhen(m.created_at)])}
-                              </p>
-                            </div>
-                            <SplitDeleteToolbar
-                              armed={armedMemoryDeleteId === m.id}
-                              disabled={deleteMemoryMutation.isPending}
-                              onArm={() => {
-                                setArmedMemoryDeleteId(m.id);
-                              }}
-                              onDisarm={() => setArmedMemoryDeleteId(null)}
-                              onConfirm={() => {
-                                void handleDeleteMemory(m.id);
-                              }}
-                              idleTitle="Delete memory"
-                              idleAriaLabel="Delete memory"
-                              idleVisibleClassName="group-hover/memory:opacity-100"
-                            />
-                          </div>
-                        </li>
+                          memory={m}
+                          armed={armedMemoryDeleteId === m.id}
+                          disabled={deleteMemoryMutation.isPending}
+                          onArm={() => {
+                            setArmedMemoryDeleteId(m.id);
+                          }}
+                          onDisarm={() => setArmedMemoryDeleteId(null)}
+                          onConfirm={() => {
+                            void handleDeleteMemory(m.id);
+                          }}
+                        />
                       ))}
                     </ul>
                   )}
@@ -647,39 +579,19 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                     ) : (
                       <ul className="space-y-2">
                         {workspaceActionRows.map((action: NetworkAction) => (
-                          <li
+                          <WorkspaceActionRow
                             key={action.id}
-                            className="group/action rounded-lg border border-white/7 bg-zinc-950/40 px-3 py-2.5"
-                          >
-                            <div className="flex items-start gap-2">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm leading-snug text-zinc-100">
-                                  {actionDisplayText(action)}
-                                </p>
-                                <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                                  {action.status}
-                                  {action.scheduled_time
-                                    ? ` · ${formatWhen(action.scheduled_time)}`
-                                    : ''}
-                                  {` · ${formatWhen(action.created_at)}`}
-                                </p>
-                              </div>
-                              <SplitDeleteToolbar
-                                armed={armedActionDeleteId === action.id}
-                                disabled={deleteActionMutation.isPending}
-                                onArm={() => {
-                                  setArmedActionDeleteId(action.id);
-                                }}
-                                onDisarm={() => setArmedActionDeleteId(null)}
-                                onConfirm={() => {
-                                  void handleDeleteAction(action.id);
-                                }}
-                                idleTitle="Delete action"
-                                idleAriaLabel="Delete action"
-                                idleVisibleClassName="group-hover/action:opacity-100"
-                              />
-                            </div>
-                          </li>
+                            action={action}
+                            armed={armedActionDeleteId === action.id}
+                            disabled={deleteActionMutation.isPending}
+                            onArm={() => {
+                              setArmedActionDeleteId(action.id);
+                            }}
+                            onDisarm={() => setArmedActionDeleteId(null)}
+                            onConfirm={() => {
+                              void handleDeleteAction(action.id);
+                            }}
+                          />
                         ))}
                       </ul>
                     )}

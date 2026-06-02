@@ -18,9 +18,8 @@ import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notificationConstants';
 import { playNotificationPing } from '@dadei/ui/lib/notificationSound';
 import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import { useActionsQuery } from '@dadei/ui/lib/queryHooks';
-import { parseApiDateTime } from '@dadei/ui/lib/parseApiDateTime';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
-import { formatForUser } from '@dadei/ui/utils/time';
+import { actionBannerMeta, actionDisplayTitle } from '@dadei/ui/utils/actionDisplay';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
 
@@ -81,46 +80,6 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function formatActionDateTime(iso: string): string {
-  try {
-    const utcIso = parseApiDateTime(iso).toISOString();
-    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    return formatForUser(utcIso, userTz, {
-      weekday: 'short',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
-
-function truncateText(s: string, n: number): string {
-  return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
-}
-
-function buildActionBannerMeta(action: NetworkAction): string | undefined {
-  const parts: string[] = [];
-  if (action.start_time) parts.push(formatActionDateTime(action.start_time));
-
-  if (action.details) {
-    try {
-      const parsed = JSON.parse(action.details) as {
-        tool_args?: { description?: string; body?: string; notes?: string; to?: string };
-      };
-      const detail =
-        parsed.tool_args?.description ||
-        parsed.tool_args?.body ||
-        parsed.tool_args?.notes ||
-        parsed.tool_args?.to;
-      if (detail) parts.push(truncateText(detail, 80));
-    } catch {
-      // ignore non-json details
-    }
-  }
-  return parts.length ? parts.join(' · ') : undefined;
-}
-
 /** Keeps proposed action banners in sync with the actions query while authenticated. */
 function useActionBannerSync(
   enabled: boolean,
@@ -158,12 +117,11 @@ function useActionBannerSync(
       const bannerId = `action:${action.id}`;
       currentBannerIds.add(bannerId);
       const label = ACTION_LABELS[action.action_type] ?? action.action_type;
-      const title = action.title?.trim() || label;
       showBanner({
         id: bannerId,
         category: label,
-        title,
-        body: buildActionBannerMeta(action),
+        title: actionDisplayTitle(action),
+        body: actionBannerMeta(action),
         durationMs: AUTO_FIRE_DELAY_MS,
         showCountdown: true,
         countdownEndsAt: action.scheduled_at || undefined,
