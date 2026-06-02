@@ -24,10 +24,10 @@ import {
   sanitizeCommandTranscript,
 } from '@dadei/ui/lib/commandTranscriptSanitize';
 import {
-  normalizeTranscriptForWake,
-  normalizeVisibleCommandText,
-  transcriptStartsWithWakeCommand,
-} from '@dadei/ui/lib/wakeWordDetection';
+  liveCommandCaptionText,
+  submitCommandText,
+} from '@dadei/ui/lib/commandCaption';
+import { normalizeVisibleCommandText, transcriptStartsWithWakeCommand } from '@dadei/ui/lib/wakeWordDetection';
 import {
   CLAIM_HOLD_SECONDS,
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
@@ -186,15 +186,6 @@ function cleanTranscript(raw: string): string {
   const cleaned = sanitizeCommandTranscript(raw);
   if (!cleaned || isInstructionalTranscriptBleed(cleaned)) return '';
   return cleaned;
-}
-
-/** Live caption: show command text; keep wake word visible until stripped on submit. */
-function bubbleCaptionText(text: string, fromFollowUp: boolean): string {
-  const cleaned = cleanTranscript(text);
-  if (!cleaned) return '';
-  if (fromFollowUp) return cleaned.trim();
-  const visible = normalizeVisibleCommandText(cleaned);
-  return visible || normalizeTranscriptForWake(cleaned);
 }
 
 function normalizeInterimCaption(text: string): string {
@@ -634,8 +625,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     (raw: string, fromFollowUp: boolean) => {
       const cleaned = cleanTranscript(raw);
       if (!cleaned) return;
-      const visible = fromFollowUp ? cleaned.trim() : normalizeVisibleCommandText(cleaned);
-      if (!visible) {
+      const displayText = liveCommandCaptionText(cleaned, fromFollowUp);
+      const submitText = submitCommandText(cleaned, fromFollowUp);
+      if (!submitText) {
         if (!fromFollowUp && transcriptStartsWithWakeCommand(cleaned)) {
           // Wake-only final (e.g. just "assistant") should keep listening for the
           // rest of the command instead of tearing down assistant mode.
@@ -647,18 +639,18 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      if (fromFollowUp && isSessionEndUtterance(visible)) {
-        console.debug('[Voice][SessionEnd] matched follow-up submit', { text: visible });
-        setUserBubbleText(visible);
+      if (fromFollowUp && isSessionEndUtterance(submitText)) {
+        console.debug('[Voice][SessionEnd] matched follow-up submit', { text: submitText });
+        setUserBubbleText(displayText);
         endSession();
         return;
       }
 
       const nowMs = Date.now();
       const last = lastSubmittedTextRef.current;
-      if (last && last.text === visible && nowMs - last.atMs < 1500) return;
+      if (last && last.text === submitText && nowMs - last.atMs < 1500) return;
       if (commandStreamInFlightRef.current) return;
-      lastSubmittedTextRef.current = { text: visible, atMs: nowMs };
+      lastSubmittedTextRef.current = { text: submitText, atMs: nowMs };
 
       clearWakeTimeout();
       clearFollowUpTimer();
@@ -670,7 +662,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setAssistantBubbleStatus('pending');
       pendingNewResponseRef.current = true;
       startRequestActivity();
-      setUserBubbleText(visible);
+      setUserBubbleText(displayText);
       setState('thinking');
 
       void (async () => {
@@ -710,7 +702,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         try {
           let sawDone = false;
-          for await (const ev of streamCommandFromText(visible, accessToken, {
+          for await (const ev of streamCommandFromText(submitText, accessToken, {
             signal: abortController.signal,
           })) {
             if (ev.type === 'error' && abortController.signal.aborted) continue;
@@ -821,7 +813,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           for await (const ev of streamCommand(wavBuffer, accessToken, { signal: abortController.signal })) {
             if (ev.type === 'error' && abortController.signal.aborted) continue;
             if (ev.type === 'transcript') {
-              const caption = cleanTranscript(ev.text).trim();
+              const caption = liveCommandCaptionText(ev.text, false);
               if (caption) setUserBubbleText(caption);
               continue;
             }
@@ -886,7 +878,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (!text) return;
 
         if (current === 'listening') {
-          const visible = bubbleCaptionText(text, false);
+          const visible = liveCommandCaptionText(text, false);
           if (!visible) return;
           clearWakeFalsePositiveIfCommandInProgress(visible);
           setUserBubbleText(visible);
@@ -895,7 +887,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         if (current === 'follow_up') {
           if (commandStreamInFlightRef.current) return;
-          const visible = text.trim();
+          const visible = liveCommandCaptionText(text, true);
           if (visible.length < MIN_FOLLOW_UP_INTERIM_CHARS) return;
           onFollowUpSpeechActivity();
           followUpCaptureRef.current = true;

@@ -78,9 +78,20 @@ export default function AssistantLayout() {
       isElectronDesktop() ? DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS : '0px',
     );
     root.style.setProperty('--assistant-header-h', '4.75rem');
+    root.style.setProperty('--assistant-mic-h', '10rem');
+    root.style.setProperty('--assistant-bubble-gap', '2rem');
+    root.style.setProperty('--assistant-bottom-chrome', '7.5rem');
+    root.style.setProperty(
+      '--assistant-bubble-max-h',
+      'calc(100dvh - var(--assistant-titlebar-offset, 0px) - var(--assistant-header-h, 4.75rem) - var(--assistant-mic-h, 10rem) - var(--assistant-bubble-gap, 2rem) - var(--assistant-bottom-chrome, 7.5rem))',
+    );
     return () => {
       root.style.removeProperty('--assistant-titlebar-offset');
       root.style.removeProperty('--assistant-header-h');
+      root.style.removeProperty('--assistant-mic-h');
+      root.style.removeProperty('--assistant-bubble-gap');
+      root.style.removeProperty('--assistant-bottom-chrome');
+      root.style.removeProperty('--assistant-bubble-max-h');
     };
   }, []);
 
@@ -143,9 +154,9 @@ export default function AssistantLayout() {
           onOpenSettings={() => setSettingsOpen(true)}
         />
 
-        <main className="relative z-0 flex min-h-0 flex-1 overflow-hidden overscroll-none">
+        <main className="relative z-0 flex min-h-0 flex-1 min-w-0 overscroll-none">
           <div
-            className="relative flex min-h-0 flex-1 flex-col px-10 pt-6 pb-10"
+            className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible px-10 pt-6 pb-10"
             style={{
               background:
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
@@ -155,26 +166,26 @@ export default function AssistantLayout() {
               <BannerStackHost />
             </div>
             <ToastStackHost className="fixed right-5 bottom-5 z-180" />
-            <div className="relative flex min-h-0 flex-1 items-center justify-center">
-              <div className="relative flex flex-col items-center">
-                <div className="absolute top-[10.75rem] left-1/2 z-20 w-[min(640px,calc(100vw-8rem))] -translate-x-1/2">
+            <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+              <div className="relative flex w-full min-h-0 max-w-[min(640px,calc(100vw-8rem))] flex-col items-center justify-center">
+                <div className="relative z-10 shrink-0 isolate">
+                  <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
+                </div>
+                <div className="mt-8 flex w-full min-h-0 max-h-[var(--assistant-bubble-max-h)] flex-col">
                   <AnimatePresence>
                     {showCommandChrome ? (
                       <motion.div
                         key="command-live-bubble"
-                        initial={{ opacity: 0, y: 24, scale: 0.97 }}
+                        initial={{ opacity: 0, y: 16, scale: 0.97 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -14, scale: 0.96 }}
+                        exit={{ opacity: 0, y: 10, scale: 0.96 }}
                         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                        className="flex w-full flex-col items-center"
+                        className="flex min-h-0 w-full flex-1 flex-col items-center"
                       >
                         <TextBubble />
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
-                </div>
-                <div className="relative z-10 isolate">
-                  <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
                 </div>
               </div>
             </div>
@@ -208,7 +219,7 @@ export default function AssistantLayout() {
             </motion.div>
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col border-l border-white/7 bg-zinc-950/40 backdrop-blur-sm">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-white/7 bg-zinc-950/40 backdrop-blur-sm">
             <InteractionPanel />
           </div>
         </main>

@@ -55,20 +55,20 @@ function GlassBubble({
       initial={animateEntry ? { opacity: 0, y: 12, scale: 0.97 } : false}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.42, ease: VOICE_EASE }}
-      className="relative w-full max-w-[640px]"
+      className="relative w-full min-w-0 max-w-[640px]"
     >
-      <div className="relative overflow-hidden rounded-2xl" style={glassShellStyle}>
+      <div className="relative rounded-2xl" style={glassShellStyle}>
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl opacity-[0.06]"
           style={{ background: STATE_TINT[state] }}
           aria-hidden
         />
-        <div className="relative px-5 py-4">
+        <div className="relative min-w-0 px-5 py-4">
           <p className="font-secondary text-[10px] font-semibold uppercase tracking-[0.2em] text-white/45">
             {label}
           </p>
           {showStatus ? (
-            <p className="font-primary mt-1 text-[15px] leading-relaxed text-zinc-400">
+            <p className="font-primary mt-1 text-[15px] leading-relaxed wrap-anywhere text-zinc-400">
               <AnimatePresence mode="wait">
                 <motion.span
                   key={statusLine}
@@ -84,7 +84,9 @@ function GlassBubble({
             </p>
           ) : null}
           {hasText ? (
-            <p className={`font-primary text-[15px] leading-relaxed text-zinc-100 ${showStatus ? 'mt-3' : 'mt-1'}`}>
+            <p
+              className={`font-primary text-[15px] leading-relaxed wrap-anywhere text-zinc-100 ${showStatus ? 'mt-3' : 'mt-1'}`}
+            >
               {text}
               {showCursor ? (
                 <span className="ml-0.5 inline-block w-[2px] animate-pulse bg-sky-300/90 align-middle">
@@ -158,10 +160,10 @@ export default function TextBubble() {
   );
 
   return (
-    <motion.div layout className="flex w-full max-w-[640px] flex-col">
+    <motion.div layout className="flex min-h-0 w-full min-w-0 max-w-[640px] flex-1 flex-col">
       <div
         ref={scrollRef}
-        className="max-h-[min(42vh,calc(50dvh-7rem))] overflow-y-auto pr-1 [scrollbar-color:rgba(161,161,170,0.5)_transparent] [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="min-h-0 max-h-full flex-1 overflow-y-auto overscroll-contain pr-1 [scrollbar-color:rgba(161,161,170,0.5)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/50"
       >
         <div className="flex w-full flex-col gap-3 pb-1">
           {bubbleHistory.map((turn) => (

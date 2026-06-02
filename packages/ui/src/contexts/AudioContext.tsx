@@ -252,6 +252,18 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     wakePreBufferRef.current = new Int16Array(0);
     wakePostChunksRef.current = [];
     const pcm16 = concatPcm16(chunks);
+
+    // Prefer the live websocket utterance path when the stream is ready — avoids a
+    // second POST /command decode that can disagree with the caption the user saw.
+    if (
+      commandStreamReadyRef.current &&
+      commandStreamActiveRef.current &&
+      stateRef.current === 'listening'
+    ) {
+      sendRealtimeMessage({ type: 'command_audio_end' });
+      return;
+    }
+
     if (pcm16.length < COMMAND_MIN_SAMPLES) return;
     submitCapturedCommandAudio(pcm16ToWavBuffer(pcm16, SAMPLE_RATE));
   }, [submitCapturedCommandAudio]);
