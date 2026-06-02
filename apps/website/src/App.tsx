@@ -13,8 +13,8 @@ import AuthOAuthCallbackPage from '@/pages/AuthOAuthCallbackPage';
 export function App() {
   return (
     <AppQueryProvider>
-      <NotificationProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <NotificationProvider>
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -35,8 +35,8 @@ export function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </AuthProvider>
-      </NotificationProvider>
+        </NotificationProvider>
+      </AuthProvider>
     </AppQueryProvider>
   );
 }

@@ -9,9 +9,21 @@
     "build:website": "npm run build --workspace=apps/website",
     "build:desktop": "npm run build --workspace=apps/desktop",
     "build:ui": "npm run build --workspace=@dadei/ui",
-    "package:desktop": "npm run package --workspace=apps/desktop"
+    "package:desktop": "npm run package --workspace=apps/desktop",
+    "test": "npm run test --workspace=@dadei/ui",
+    "check:versions": "node scripts/check-versions.mjs",
+    "check:version-bump": "node scripts/check-version-bump.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
+  },
+  "overrides": {
+    "trim-newlines": "^3.0.1",
+    "meow": {
+      "trim-newlines": "^3.0.1"
+    },
+    "meow@3.7.0": {
+      "trim-newlines": "^3.0.1"
+    }
   }
 }

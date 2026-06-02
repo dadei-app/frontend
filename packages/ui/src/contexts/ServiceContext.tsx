@@ -1,12 +1,21 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { serviceApi } from '@dadei/ui/lib/api/service';
-import { startRealtimeClient, stopRealtimeClient, subscribeRealtimeMessages } from '@dadei/ui/lib/realtimeClient';
+import {
+  sendRealtimeMessage,
+  startRealtimeClient,
+  stopRealtimeClient,
+  subscribeRealtimeMessages,
+} from '@dadei/ui/lib/realtimeClient';
 import { getRealtimeSessionId } from '@dadei/ui/lib/realtimeClient';
-import { clearAssistantSessionCaches } from '@dadei/ui/lib/queryHooks';
+import {
+  ASSISTANT_ACTIONS_LIST_LIMIT,
+  clearAssistantSessionCaches,
+} from '@dadei/ui/lib/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import { useQueryClient } from '@tanstack/react-query';
+import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 interface ServiceContextType {
   isServiceEnabled: boolean;
@@ -27,10 +36,69 @@ interface ServiceContextType {
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
 const ENABLE_TIMEOUT_MS = 5000;
+const CLIENT_CONTEXT_LOCATION_TIMEOUT_MS = 3500;
+
+function isNetworkAction(data: unknown): data is NetworkAction {
+  if (!data || typeof data !== 'object') return false;
+  const o = data as Record<string, unknown>;
+  return typeof o.id === 'string' && typeof o.action_type === 'string' && typeof o.status === 'string';
+}
+
+type ClientContextKey = 'timezone' | 'location';
+
+function normalizeClientContextKeys(input: unknown): ClientContextKey[] {
+  if (!Array.isArray(input)) return [];
+  const out = new Set<ClientContextKey>();
+  for (const key of input) {
+    const k = String(key).trim().toLowerCase();
+    if (k === 'timezone' || k === 'location') out.add(k);
+  }
+  return [...out];
+}
+
+function getClientTimezone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
+function getClientLocation(): Promise<Record<string, unknown> | null> {
+  if (!navigator.geolocation) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        resolve({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_m: pos.coords.accuracy,
+          timestamp_ms: pos.timestamp,
+        });
+      },
+      () => resolve(null),
+      {
+        enableHighAccuracy: false,
+        maximumAge: 60_000,
+        timeout: CLIENT_CONTEXT_LOCATION_TIMEOUT_MS,
+      },
+    );
+  });
+}
+
+async function buildClientContextResponse(keys: ClientContextKey[]): Promise<Record<string, unknown>> {
+  const data: Record<string, unknown> = {};
+  if (keys.includes('timezone')) {
+    data.timezone = getClientTimezone();
+  }
+  if (keys.includes('location')) {
+    data.location = await getClientLocation();
+  }
+  return data;
+}
 
 export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading, getAccessToken } = useAuth();
-  const { showToast } = useNotifications();
   const queryClient = useQueryClient();
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
@@ -78,10 +146,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       } catch (error: unknown) {
         console.error('Failed to start realtime client:', error);
         setRegistrationConflict(true);
-        showToast(
-          'Could not start realtime connectivity. Try signing out and back in, or try again in a moment.',
-          'error'
-        );
         setIsConnected(false);
         stopRealtimeClient();
       }
@@ -92,7 +156,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, isAuthLoading, showToast]);
+  }, [isAuthenticated, isAuthLoading]);
 
   useEffect(() => {
     const handleServiceStatusChanged = (status: { enabled: boolean }) => {
@@ -117,6 +181,20 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     };
 
     const offWs = subscribeRealtimeMessages(msg => {
+      if (msg.event === 'client_context_request') {
+        const requestId = typeof msg.request_id === 'string' ? msg.request_id.trim() : '';
+        const keys = normalizeClientContextKeys(msg.keys);
+        if (!requestId || keys.length === 0) return;
+        void (async () => {
+          const data = await buildClientContextResponse(keys);
+          sendRealtimeMessage({
+            type: 'client_context_response',
+            request_id: requestId,
+            data,
+          });
+        })();
+        return;
+      }
       if (msg.event === 'realtime_status') {
         if (typeof msg.connected === 'boolean') {
           setIsConnected(msg.connected);
@@ -157,12 +235,48 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isConnected) return;
+
+    const actionKey = queryKeys.actionsList(ASSISTANT_ACTIONS_LIST_LIMIT, 0);
+
+    const mergeAction = (action: NetworkAction) => {
+      queryClient.setQueryData<NetworkAction[]>(actionKey, prev => {
+        const list = prev ?? [];
+        const idx = list.findIndex(a => a.id === action.id);
+        if (idx === -1) {
+          return [action, ...list];
+        }
+        const next = [...list];
+        next[idx] = action;
+        return next;
+      });
+    };
+
+    const offWs = subscribeRealtimeMessages(msg => {
+      if (msg.event === 'action') {
+        if (!isNetworkAction(msg.data)) return;
+        mergeAction(msg.data);
+      }
+    });
+
+    let offElectron: (() => void) | undefined;
+    if (window.electronAPI?.onWebhookAction) {
+      offElectron = window.electronAPI.onWebhookAction(payload => {
+        if (!isNetworkAction(payload?.data)) return;
+        mergeAction(payload.data);
+      });
+    }
+
+    return () => {
+      offWs();
+      if (offElectron) offElectron();
+    };
+  }, [isConnected, queryClient]);
+
   const toggleService = useCallback(async () => {
     if (registrationConflict) {
-      showToast(
-        'This session is not registered with the assistant service. Try signing out and back in.',
-        'error'
-      );
+      console.warn('[Service] Registration conflict: cannot toggle service');
       return;
     }
 
@@ -177,15 +291,13 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         enableTimeoutRef.current = setTimeout(() => {
           console.error('[Service] Enable timeout - no status event received');
           setIsTogglingService(false);
-          showToast('Service failed to enable - no response from backend', 'error');
         }, ENABLE_TIMEOUT_MS);
       }
     } catch (error) {
       console.error('Failed to toggle service:', error);
       setIsTogglingService(false);
-      showToast('Failed to communicate with backend', 'error');
     }
-  }, [isServiceEnabled, showToast, registrationConflict]);
+  }, [isServiceEnabled, registrationConflict]);
 
   const realtimeSessionId = getRealtimeSessionId();
   const isAssistantOwner =

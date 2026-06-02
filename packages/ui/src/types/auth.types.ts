@@ -35,4 +35,6 @@ export interface UserMe {
     email: string;
     has_password: boolean;
     google_connected: boolean;
+    google_granted_scopes?: string[];
+    google_scopes_stale?: boolean;
 }

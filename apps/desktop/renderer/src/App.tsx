@@ -12,8 +12,8 @@ export function App() {
   return (
     <AppQueryProvider>
       <MemoryRouter initialEntries={['/assistant']}>
-        <NotificationProvider>
-          <AuthProvider>
+        <AuthProvider>
+          <NotificationProvider>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route
@@ -32,8 +32,8 @@ export function App() {
               <Route path="/" element={<Navigate to="/assistant" replace />} />
               <Route path="*" element={<Navigate to="/assistant" replace />} />
             </Routes>
-          </AuthProvider>
-        </NotificationProvider>
+          </NotificationProvider>
+        </AuthProvider>
       </MemoryRouter>
     </AppQueryProvider>
   );

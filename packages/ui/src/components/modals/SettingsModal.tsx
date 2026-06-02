@@ -1,23 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
-import { Bell, Brain, CalendarDays, CheckSquare, LogOut, Mail, Trash2, X } from 'lucide-react';
-import { FcGoogle } from 'react-icons/fc';
+import {
+  Brain,
+  CalendarDays,
+  CheckSquare,
+  Clock3,
+  CloudSun,
+  FileText,
+  Globe,
+  HardDrive,
+  LogOut,
+  Mail,
+  Map,
+  Plug,
+  Table,
+  Trash2,
+  Users,
+  X,
+} from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import {
   useAuthMeQuery,
+  useIntegrationsStatusQuery,
   useMemoriesQuery,
   useDeleteMemoryMutation,
   useActionsQuery,
   useDeleteActionMutation,
 } from '@dadei/ui/lib/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/queryKeys';
 import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
-import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
+import { MemorySettingsRow } from '@dadei/ui/components/settings/MemorySettingsRow';
+import { WorkspaceActionRow } from '@dadei/ui/components/settings/WorkspaceActionRow';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/assistantPaths';
+
 import { veilEase } from '@dadei/ui/lib/motion';
 
 type AssistantSettingsModalProps = {
@@ -25,75 +46,65 @@ type AssistantSettingsModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-function formatWhen(iso: string | null | undefined): string {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  } catch {
-    return '—';
-  }
-}
-
-function formatMetaLine(parts: Array<string | null | undefined>): string {
-  return parts
-    .map((part) => (part ?? '').trim())
-    .filter((part) => part.length > 0)
-    .join(' · ');
-}
-
-type SidebarView = 'memories' | 'events' | 'tasks' | 'reminders' | 'mail';
+type SidebarView = 'integrations' | 'memories' | 'events' | 'tasks' | 'mail';
 
 const viewMeta: Record<SidebarView, { label: string; Icon: typeof CalendarDays }> = {
+  integrations: { label: 'Integrations', Icon: Plug },
   memories: { label: 'Memories', Icon: Brain },
   events: { label: 'Events', Icon: CalendarDays },
   tasks: { label: 'Tasks', Icon: CheckSquare },
-  reminders: { label: 'Reminders', Icon: Bell },
   mail: { label: 'Mail', Icon: Mail },
 };
 
-const ACTION_TYPES_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string[]> = {
-  events: ['calendar'],
-  tasks: ['todo'],
-  reminders: ['reminder'],
+const ACTION_TYPES_BY_VIEW: Record<Extract<SidebarView, 'events' | 'tasks' | 'mail'>, string[]> = {
+  events: ['calendar', 'calendar_event'],
+  tasks: ['todo', 'task'],
   mail: ['email', 'message'],
 };
 
-const EMPTY_ACTION_COPY_BY_VIEW: Record<Exclude<SidebarView, 'memories'>, string> = {
+const EMPTY_ACTION_COPY_BY_VIEW: Record<Extract<SidebarView, 'events' | 'tasks' | 'mail'>, string> = {
   events: 'No events yet. Calendar items will show up here when plans with dates get picked up from your chats.',
   tasks:
     'No tasks yet. This list fills in once conversations include concrete next steps to track.',
-  reminders:
-    'No reminders yet. Time-based nudges appear here after you ask for follow-ups or timed prompts.',
   mail:
     'No mail actions yet. Drafts and send actions appear here when a message is prepared from conversation context.',
 };
 
-function actionDisplayText(action: NetworkAction): string {
-  const details = action.details?.trim();
-  if (details) {
-    try {
-      const parsed = JSON.parse(details) as { canonical_text?: unknown };
-      if (typeof parsed.canonical_text === 'string' && parsed.canonical_text.trim()) {
-        return parsed.canonical_text.trim();
-      }
-    } catch {
-      /* not JSON */
-    }
-    return details;
+const INTEGRATION_ICONS: Record<string, typeof CalendarDays> = {
+  gmail: Mail,
+  calendar: CalendarDays,
+  contacts: Users,
+  tasks: CheckSquare,
+  docs: FileText,
+  drive: HardDrive,
+  sheets: Table,
+};
+
+const REALTIME_DATA_SOURCES: Array<{ name: string; detail: string; Icon: typeof CalendarDays }> = [
+  { name: 'Weather', detail: 'Live conditions and short-term forecast lookups.', Icon: CloudSun },
+  { name: 'Maps', detail: 'Place and routing lookups for local context.', Icon: Map },
+  { name: 'Web Search', detail: 'Fresh web answers and source retrieval.', Icon: Globe },
+  { name: 'Current Time', detail: 'Timezone-aware clock checks without extra auth.', Icon: Clock3 },
+];
+
+function accessBadgeClass(granted: boolean, googleConnected: boolean): string {
+  if (granted) {
+    return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200';
   }
-  return action.action_type;
+  if (googleConnected) {
+    return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
+  }
+  return 'border-zinc-700 bg-zinc-800/80 text-zinc-500';
 }
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
-  const { user, refreshUser, logout, saveTokens } = useAuth();
-  const { isConnected } = useService();
+  const queryClient = useQueryClient();
+  const { user, refreshUser, logout, saveTokens, isAuthenticated } = useAuth();
   const { showToast } = useNotifications();
   const authMeQuery = useAuthMeQuery(open);
-  const memoriesQuery = useMemoriesQuery(isConnected);
-  const actionsQuery = useActionsQuery(open && isConnected);
+  const integrationsStatusQuery = useIntegrationsStatusQuery(open);
+  const memoriesQuery = useMemoriesQuery(open && isAuthenticated);
+  const actionsQuery = useActionsQuery(open && isAuthenticated);
   const deleteMemoryMutation = useDeleteMemoryMutation();
   const deleteActionMutation = useDeleteActionMutation();
   const [deletePhrase, setDeletePhrase] = useState('');
@@ -103,15 +114,31 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
   const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<SidebarView>('memories');
+  const [activeView, setActiveView] = useState<SidebarView>('integrations');
   const prefersReducedMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (!open || !isAuthenticated || activeView !== 'memories') return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.memories });
+  }, [open, isAuthenticated, activeView, queryClient]);
 
   const profile = authMeQuery.data ?? user;
   const email = profile?.email ?? '—';
   const canDelete =
     !!profile && deletePhrase.trim().toLowerCase() === profile.email.trim().toLowerCase();
-  const googleConnected = Boolean(profile?.google_connected);
+  const integrationsStatus = integrationsStatusQuery.data;
+  const googleConnected =
+    integrationsStatus?.google_connected ?? Boolean(profile?.google_connected);
   const activeViewMeta = viewMeta[activeView];
+
+  const integrationCards = useMemo(
+    () =>
+      (integrationsStatus?.integrations ?? []).map((integration) => ({
+        ...integration,
+        Icon: INTEGRATION_ICONS[integration.id] ?? Plug,
+      })),
+    [integrationsStatus?.integrations]
+  );
 
   const handleSignOut = async () => {
     onOpenChange(false);
@@ -127,9 +154,12 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     try {
       await triggerGoogleOAuth({
         saveTokens,
-        onSuccess: () => void refreshUser(),
+        onSuccess: () => {
+          void refreshUser();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
+        },
         onError: (msg) => setGoogleConnectError(msg),
-        webNextPath: '/auth/callback',
+        webNextPath: ASSISTANT_PATH,
       });
     } finally {
       if (isElectron) {
@@ -166,11 +196,16 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const memoryRows = memoriesQuery.data ?? [];
   const workspaceActionRows =
-    activeView === 'memories'
+    activeView === 'memories' || activeView === 'integrations'
       ? []
       : (actionsQuery.data ?? []).filter((action) =>
           ACTION_TYPES_BY_VIEW[activeView].includes(action.action_type)
         );
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveView('integrations');
+  }, [open]);
 
   const handleDeleteMemory = async (memoryId: string) => {
     try {
@@ -283,7 +318,9 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               <Dialog.Title className="text-lg font-semibold tracking-tight text-zinc-50">
                 Settings
               </Dialog.Title>
-              <p className="text-sm text-zinc-500 font-secondary">Memories and Actions powered by the Google Workspace</p>
+              <p className="text-sm text-zinc-500 font-secondary">
+                Integrations, memories, and workspace data
+              </p>
             </div>
             <Dialog.Close asChild>
               <button
@@ -301,6 +338,18 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               <nav className="space-y-1">
                 <button
                   type="button"
+                  onClick={() => setActiveView('integrations')}
+                  className={`inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-secondary transition-colors ${
+                    activeView === 'integrations'
+                      ? 'bg-emerald-500/15 text-emerald-300'
+                      : 'text-zinc-300 hover:bg-white/5 hover:text-zinc-100'
+                  }`}
+                >
+                  <Plug className="h-4 w-4" />
+                  Integrations
+                </button>
+                <button
+                  type="button"
                   onClick={() => setActiveView('memories')}
                   className={`inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-secondary transition-colors ${
                     activeView === 'memories'
@@ -315,10 +364,10 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
               <div className="mt-5 border-t border-white/10 pt-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
-                  Google Workspace
+                  Workspace data
                 </p>
                 <nav className="space-y-1">
-                  {(['events', 'tasks', 'reminders', 'mail'] as SidebarView[]).map((view) => {
+                  {(['events', 'tasks', 'mail'] as SidebarView[]).map((view) => {
                     const { label, Icon } = viewMeta[view];
                     const isActive = activeView === view;
                     return (
@@ -360,7 +409,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               </div>
             </aside>
 
-            <section className="flex min-h-0 flex-col p-5 sm:p-6">
+            <section className="flex min-h-0 flex-col overflow-hidden p-5 sm:p-6">
               <div className="mb-3 flex items-center gap-2">
                 <activeViewMeta.Icon className="h-4 w-4 text-emerald-400/90" aria-hidden />
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
@@ -368,13 +417,127 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 </h3>
               </div>
 
-              {activeView === 'memories' ? (
-                <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
-                  {!isConnected ? (
-                    <p className="text-sm text-zinc-500 font-secondary">
-                      Memories load after this device registers as a client (same as the interaction feed).
+              {activeView === 'integrations' ? (
+                <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-none pr-1">
+                  <div className="rounded-xl border border-white/10 bg-zinc-950/45 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm text-zinc-100">Google Workspace</h4>
+                        <p className="mt-1 text-xs text-zinc-500 font-secondary">
+                          Connect once, then re-authorize services when scopes change.
+                        </p>
+                      </div>
+                      {!googleConnected ? (
+                        <button
+                          type="button"
+                          onClick={() => void handleGoogleConnect()}
+                          disabled={connectingGoogle}
+                          className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-zinc-800/85 px-3 py-1.5 text-xs text-zinc-100 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {connectingGoogle ? 'Connecting…' : 'Connect Google'}
+                        </button>
+                      ) : null}
+                    </div>
+                    {googleConnectError ? (
+                      <p className="mt-3 text-xs text-rose-300/90 font-secondary">{googleConnectError}</p>
+                    ) : null}
+                    {integrationsStatusQuery.isLoading ? (
+                      <p className="mt-4 text-xs text-zinc-500 font-secondary">Loading integrations…</p>
+                    ) : integrationsStatusQuery.isError ? (
+                      <p className="mt-4 text-xs text-rose-300/90 font-secondary">
+                        Could not load integration scope status.
+                      </p>
+                    ) : null}
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {integrationCards.map((integration) => {
+                        const isConnectedStatus = integration.status === 'connected';
+                        const isReauthStatus = integration.status === 'needs_reauth';
+                        return (
+                          <article
+                            key={integration.id}
+                            className="rounded-xl border border-white/8 bg-zinc-900/75 p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <integration.Icon className="h-4 w-4 text-emerald-300/90" aria-hidden />
+                                <p className="text-sm text-zinc-100">{integration.name}</p>
+                              </div>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[11px] font-secondary ${
+                                  isConnectedStatus
+                                    ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                                    : isReauthStatus
+                                      ? 'border-amber-500/40 bg-amber-500/15 text-amber-300'
+                                      : 'border-zinc-600/80 bg-zinc-800/80 text-zinc-400'
+                                }`}
+                              >
+                                {isConnectedStatus
+                                  ? 'Connected'
+                                  : isReauthStatus
+                                    ? 'Needs re-auth'
+                                    : 'Disconnected'}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              {integration.access.map((badge) => (
+                                <span
+                                  key={`${integration.id}-${badge.kind}`}
+                                  className={`rounded-md border px-2 py-1 text-[11px] font-medium font-secondary ${accessBadgeClass(
+                                    badge.granted,
+                                    googleConnected
+                                  )}`}
+                                >
+                                  {badge.kind === 'read' ? 'Read' : 'Write'}
+                                </span>
+                              ))}
+                            </div>
+
+                            {isReauthStatus && googleConnected ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleGoogleConnect()}
+                                disabled={connectingGoogle}
+                                className="mt-3 inline-flex items-center justify-center rounded-lg border border-amber-500/35 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-200 transition-colors hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {connectingGoogle ? 'Re-authorizing…' : 'Re-authorize'}
+                              </button>
+                            ) : null}
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-zinc-950/45 p-4">
+                    <h4 className="text-sm text-zinc-100">Realtime Data</h4>
+                    <p className="mt-1 text-xs text-zinc-500 font-secondary">
+                      Always available. These sources do not require account authorization.
                     </p>
-                  ) : memoriesQuery.isLoading ? (
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                      {REALTIME_DATA_SOURCES.map((source) => (
+                        <article
+                          key={source.name}
+                          className="rounded-xl border border-white/8 bg-zinc-900/75 p-3"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <source.Icon className="h-4 w-4 text-emerald-300/90" aria-hidden />
+                              <p className="text-sm text-zinc-100">{source.name}</p>
+                            </div>
+                            <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[11px] text-emerald-300 font-secondary">
+                              Always on
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs text-zinc-500 font-secondary">{source.detail}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : activeView === 'memories' ? (
+                <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
+                  {memoriesQuery.isLoading ? (
                     <p className="text-sm text-zinc-500 font-secondary">Loading memories…</p>
                   ) : memoriesQuery.isError ? (
                     <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(memoriesQuery.error)}</p>
@@ -385,45 +548,27 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   ) : (
                     <ul className="space-y-2">
                       {memoryRows.map((m: EpisodicMemory) => (
-                        <li
+                        <MemorySettingsRow
                           key={m.id}
-                          className="group/memory rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
-                        >
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm leading-snug text-zinc-100">{m.canonical_text}</p>
-                              <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                                {formatMetaLine([m.memory_type, m.status, formatWhen(m.created_at)])}
-                              </p>
-                            </div>
-                            <SplitDeleteToolbar
-                              armed={armedMemoryDeleteId === m.id}
-                              disabled={deleteMemoryMutation.isPending}
-                              onArm={() => {
-                                setArmedMemoryDeleteId(m.id);
-                              }}
-                              onDisarm={() => setArmedMemoryDeleteId(null)}
-                              onConfirm={() => {
-                                void handleDeleteMemory(m.id);
-                              }}
-                              idleTitle="Delete memory"
-                              idleAriaLabel="Delete memory"
-                              idleVisibleClassName="group-hover/memory:opacity-100"
-                            />
-                          </div>
-                        </li>
+                          memory={m}
+                          armed={armedMemoryDeleteId === m.id}
+                          disabled={deleteMemoryMutation.isPending}
+                          onArm={() => {
+                            setArmedMemoryDeleteId(m.id);
+                          }}
+                          onDisarm={() => setArmedMemoryDeleteId(null)}
+                          onConfirm={() => {
+                            void handleDeleteMemory(m.id);
+                          }}
+                        />
                       ))}
                     </ul>
                   )}
                 </div>
               ) : (
-                <div className="relative min-h-0 flex-1">
-                  <div className={`min-h-0 flex-1 overflow-y-auto overscroll-none pr-1 ${googleConnected ? '' : 'opacity-35'}`}>
-                    {!isConnected ? (
-                      <p className="text-sm text-zinc-500 font-secondary">
-                        Actions load after this device registers as a client.
-                      </p>
-                    ) : actionsQuery.isLoading ? (
+                <div className="relative flex min-h-0 flex-1 flex-col">
+                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
+                    {actionsQuery.isLoading ? (
                       <p className="text-sm text-zinc-500 font-secondary">Loading actions…</p>
                     ) : actionsQuery.isError ? (
                       <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(actionsQuery.error)}</p>
@@ -434,61 +579,23 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                     ) : (
                       <ul className="space-y-2">
                         {workspaceActionRows.map((action: NetworkAction) => (
-                          <li
+                          <WorkspaceActionRow
                             key={action.id}
-                            className="group/action rounded-lg border border-white/[0.07] bg-zinc-950/40 px-3 py-2.5"
-                          >
-                            <div className="flex items-start gap-2">
-                              <div className="min-w-0 flex-1">
-                                <p className="text-sm leading-snug text-zinc-100">
-                                  {actionDisplayText(action)}
-                                </p>
-                                <p className="mt-1 text-xs text-zinc-500 font-secondary">
-                                  {action.status}
-                                  {action.scheduled_time
-                                    ? ` · ${formatWhen(action.scheduled_time)}`
-                                    : ''}
-                                  {` · ${formatWhen(action.created_at)}`}
-                                </p>
-                              </div>
-                              <SplitDeleteToolbar
-                                armed={armedActionDeleteId === action.id}
-                                disabled={deleteActionMutation.isPending}
-                                onArm={() => {
-                                  setArmedActionDeleteId(action.id);
-                                }}
-                                onDisarm={() => setArmedActionDeleteId(null)}
-                                onConfirm={() => {
-                                  void handleDeleteAction(action.id);
-                                }}
-                                idleTitle="Delete action"
-                                idleAriaLabel="Delete action"
-                                idleVisibleClassName="group-hover/action:opacity-100"
-                              />
-                            </div>
-                          </li>
+                            action={action}
+                            armed={armedActionDeleteId === action.id}
+                            disabled={deleteActionMutation.isPending}
+                            onArm={() => {
+                              setArmedActionDeleteId(action.id);
+                            }}
+                            onDisarm={() => setArmedActionDeleteId(null)}
+                            onConfirm={() => {
+                              void handleDeleteAction(action.id);
+                            }}
+                          />
                         ))}
                       </ul>
                     )}
                   </div>
-                  {!googleConnected ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-xl bg-zinc-900/60 backdrop-blur-sm">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-white">
-                        <FcGoogle className="h-6 w-6" aria-hidden />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleGoogleConnect()}
-                        disabled={connectingGoogle}
-                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-zinc-800/85 px-4 py-2 text-sm font-medium text-zinc-100 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {connectingGoogle ? 'Connecting…' : 'Connect Google'}
-                      </button>
-                      {googleConnectError ? (
-                        <p className="text-xs text-rose-300/90 font-secondary">{googleConnectError}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
                 </div>
               )}
             </section>

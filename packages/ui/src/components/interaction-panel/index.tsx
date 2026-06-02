@@ -21,7 +21,7 @@ export default function InteractionPanel() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-none bg-zinc-950/30">
-      <div className="flex items-center justify-between gap-4 border-b border-white/[0.06] bg-zinc-950/95 px-6 py-5 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-4 border-b border-white/6 bg-zinc-950/95 px-6 py-5 backdrop-blur-sm">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold tracking-tight text-zinc-100">Interactions</h2>
           <p className="text-xs leading-relaxed text-zinc-500 font-secondary">
@@ -34,7 +34,7 @@ export default function InteractionPanel() {
             void handleClearAll();
           }}
           disabled={conversationGroups.length === 0 || loading}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.06] bg-zinc-800/90 px-3.5 py-2 text-sm font-medium text-zinc-400 transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-white/10 hover:bg-zinc-700/90 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/6 bg-zinc-800/90 px-3.5 py-2 text-sm font-medium text-zinc-400 transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-white/10 hover:bg-zinc-700/90 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <i className="fas fa-trash text-[11px] opacity-80" aria-hidden />
           Clear all

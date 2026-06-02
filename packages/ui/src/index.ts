@@ -4,12 +4,15 @@ export { default as LoginPage } from './pages/LoginPage';
 export { AuthProvider, AuthContext, useAuth } from './contexts/AuthContext';
 export { ServiceProvider, ServiceContext, useService } from './contexts/ServiceContext';
 export { AudioProvider, AudioContext, useAudio } from './contexts/AudioContext';
-export { CommandProvider, useCommand } from './contexts/CommandContext';
-export type { CommandMode } from './contexts/CommandContext';
-export { default as CommandBubble } from './components/ui/CommandBubble';
+export {
+  CommandProvider,
+  useCommand,
+  CommandBubbleStackHost,
+} from './contexts/CommandContext';
+export type { CommandState, CommandMode } from './contexts/CommandContext';
+export { default as CommandBubble } from './components/command/CommandBubble';
 export {
   NotificationProvider,
-  NotificationBannerSlot,
   useNotifications,
 } from './contexts/NotificationContext';
 export type { ShowBannerInput, BannerItem } from './contexts/NotificationContext';
@@ -18,6 +21,6 @@ export { default as LoginOverlay } from './components/modals/LoginModal';
 export { default as Header } from './components/Header';
 export { default as MicrophoneButton } from './components/MicrophoneButton';
 export { default as InteractionPanel } from './components/interaction-panel';
-export { default as ActionWebhookBanners } from './components/ui/ActionWebhookBanners';
+export { default as Banner } from './components/ui/Banner';
 export { default as Toast } from './components/ui/Toast';
 export { default as PeoplePanel } from './components/PeoplePanel';

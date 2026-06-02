@@ -54,7 +54,7 @@ export default function SplitDeleteToolbar({
         duration: reduceMotion ? 0.01 : 0.26,
         ease: DEFAULT_EASE,
       }}
-      className={cn('relative h-9 shrink-0 self-center overflow-hidden', containerClassName)}
+      className={cn('relative h-9 shrink-0 self-center overflow-visible', containerClassName)}
       onClick={e => e.stopPropagation()}
     >
       <AnimatePresence initial={false} mode="wait">

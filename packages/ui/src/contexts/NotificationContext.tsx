@@ -8,27 +8,51 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { AnimatePresence } from 'framer-motion';
+import Banner from '@dadei/ui/components/ui/Banner';
 import Toast from '@dadei/ui/components/ui/Toast';
-import { cn } from '@dadei/ui/lib/cn';
-import { teardropEnter, teardropExit } from '@dadei/ui/lib/motion';
-import { ToastType } from '@dadei/ui/types/models.types';
+import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { actionsApi } from '@dadei/ui/lib/api/actions';
+import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notificationConstants';
+import { playNotificationPing } from '@dadei/ui/lib/notificationSound';
+import { queryKeys } from '@dadei/ui/lib/queryKeys';
+import { useActionsQuery } from '@dadei/ui/lib/queryHooks';
+import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
+import { actionBannerMeta, actionDisplayTitle } from '@dadei/ui/utils/actionDisplay';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
 
+const ACTION_LABELS: Record<string, string> = {
+  calendar: 'Calendar event',
+  calendar_event: 'Calendar event',
+  todo: 'Task',
+  task: 'Task',
+  email: 'Email',
+};
+
 export type ShowBannerInput = {
   id?: string;
+  category?: string;
   title: string;
   body?: string;
   durationMs?: number;
+  showCountdown?: boolean;
+  countdownEndsAt?: string;
+  cancelLabel?: string;
+  onCancel?: () => Promise<void> | void;
 };
 
 export type BannerItem = {
   id: string;
+  category?: string;
   title: string;
   body?: string;
   durationMs: number;
+  showCountdown?: boolean;
+  countdownEndsAt?: string;
+  cancelLabel?: string;
+  onCancel?: () => Promise<void> | void;
 };
 
 type ToastMessage = {
@@ -41,9 +65,10 @@ type NotificationsContextValue = {
   toasts: ToastMessage[];
   showToast: (message: string, type: ToastType) => void;
   removeToast: (id: string) => void;
-  banner: BannerItem | null;
+  banners: BannerItem[];
   showBanner: (input: ShowBannerInput) => string;
-  dismissBanner: () => void;
+  dismissBanner: (id: string) => void;
+  dismissBannerById: (id: string) => void;
 };
 
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined);
@@ -55,16 +80,87 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function ToastStackHost() {
+/** Keeps proposed action banners in sync with the actions query while authenticated. */
+function useActionBannerSync(
+  enabled: boolean,
+  showBanner: (input: ShowBannerInput) => string,
+  dismissBannerById: (id: string) => void,
+) {
+  const queryClient = useQueryClient();
+  const { data: actions } = useActionsQuery(enabled);
+
+  const activeActions = useMemo<NetworkAction[]>(
+    () => (actions ?? []).filter((a) => a.status === 'proposed' && a.scheduled_at !== null),
+    [actions],
+  );
+
+  const seenActionIdsRef = useRef<Set<string>>(new Set());
+  const activeBannerIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const current = new Set(activeActions.map((a) => a.id));
+    let hasNew = false;
+    for (const id of current) {
+      if (!seenActionIdsRef.current.has(id)) {
+        hasNew = true;
+        break;
+      }
+    }
+    seenActionIdsRef.current = current;
+    if (hasNew) playNotificationPing();
+  }, [activeActions]);
+
+  useEffect(() => {
+    const currentBannerIds = new Set<string>();
+
+    for (const action of activeActions) {
+      const bannerId = `action:${action.id}`;
+      currentBannerIds.add(bannerId);
+      const label = ACTION_LABELS[action.action_type] ?? action.action_type;
+      showBanner({
+        id: bannerId,
+        category: label,
+        title: actionDisplayTitle(action),
+        body: actionBannerMeta(action),
+        durationMs: AUTO_FIRE_DELAY_MS,
+        showCountdown: true,
+        countdownEndsAt: action.scheduled_at || undefined,
+        cancelLabel: 'Cancel',
+        onCancel: async () => {
+          const updated = await actionsApi.reject(action.id);
+          queryClient.setQueriesData<NetworkAction[]>(
+            { queryKey: queryKeys.actions },
+            (prev) => {
+              if (!prev) return prev;
+              const idx = prev.findIndex((item) => item.id === updated.id);
+              if (idx === -1) return prev;
+              const next = [...prev];
+              next[idx] = updated;
+              return next;
+            },
+          );
+          dismissBannerById(bannerId);
+        },
+      });
+    }
+
+    for (const bannerId of activeBannerIdsRef.current) {
+      if (!currentBannerIds.has(bannerId)) {
+        dismissBannerById(bannerId);
+      }
+    }
+
+    activeBannerIdsRef.current = currentBannerIds;
+  }, [activeActions, showBanner, dismissBannerById, queryClient]);
+}
+
+export function ToastStackHost({ className = '' }: { className?: string }) {
   const ctx = useContext(NotificationsContext);
   if (!ctx) return null;
   const { toasts, removeToast } = ctx;
 
   return (
-    <div
-      className="pointer-events-none fixed bottom-5 right-5 z-180 flex max-w-sm flex-col-reverse gap-2"
-      aria-live="polite"
-    >
+    <div className={`pointer-events-none flex max-w-sm flex-col-reverse gap-2 ${className}`} aria-live="polite">
       {toasts.map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
           <Toast
@@ -78,81 +174,40 @@ function ToastStackHost() {
   );
 }
 
-export function NotificationBannerSlot({ className }: { className?: string }) {
+export function BannerStackHost({ className = '' }: { className?: string }) {
   const ctx = useContext(NotificationsContext);
-  const prefersReducedMotion = useReducedMotion();
-  const banner = ctx?.banner ?? null;
-  const dismissBanner = ctx?.dismissBanner;
-
-  useEffect(() => {
-    if (!banner || !dismissBanner) return;
-    const t = window.setTimeout(dismissBanner, banner.durationMs);
-    return () => window.clearTimeout(t);
-  }, [banner?.id, banner?.durationMs, dismissBanner]);
-
-  if (!ctx) return null;
-
-  const enter = prefersReducedMotion ? { duration: 0.12 } : teardropEnter;
-  const exitTr = prefersReducedMotion ? { duration: 0.1 } : teardropExit;
+  if (!ctx || ctx.banners.length === 0) return null;
 
   return (
-    <div className={cn('min-h-0 shrink-0', className)} aria-live="polite">
-      <AnimatePresence initial={false} mode="wait">
-        {banner ? (
-          <motion.div
+    <div
+      className={`pointer-events-none flex w-full flex-col gap-2 ${className}`}
+      aria-live="polite"
+    >
+      <AnimatePresence initial={false}>
+        {ctx.banners.map((banner) => (
+          <Banner
             key={banner.id}
-            layout
-            initial={
-              prefersReducedMotion
-                ? { opacity: 0 }
-                : { opacity: 0, y: -8, scale: 0.98, transformOrigin: '50% 0%' }
-            }
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={
-              prefersReducedMotion
-                ? { opacity: 0, transition: exitTr }
-                : { opacity: 0, y: -6, scale: 0.98, transformOrigin: '50% 0%', transition: exitTr }
-            }
-            transition={enter}
-            className="mb-4 w-full"
-          >
-            <div className="relative flex w-full gap-3 overflow-hidden rounded-2xl border border-emerald-500/30 bg-zinc-900/88 px-4 py-3 pr-10 shadow-[0_16px_40px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-              <div
-                className="mt-0.5 min-w-0 flex-1 pt-0.5"
-                role="status"
-              >
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-400/85 font-secondary">
-                  Notification
-                </p>
-                <p className="mt-0.5 text-sm font-semibold leading-snug text-zinc-50">{banner.title}</p>
-                {banner.body ? (
-                  <p className="mt-1 line-clamp-4 text-xs leading-relaxed text-zinc-400 font-secondary">
-                    {banner.body}
-                  </p>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={dismissBanner}
-                className="absolute right-2 top-2 rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
-                aria-label="Dismiss"
-              >
-                <X className="h-4 w-4" strokeWidth={2} />
-              </button>
-            </div>
-          </motion.div>
-        ) : null}
+            id={banner.id}
+            category={banner.category}
+            title={banner.title}
+            body={banner.body}
+            durationMs={banner.durationMs}
+            showCountdown={banner.showCountdown}
+            countdownEndsAt={banner.countdownEndsAt}
+            cancelLabel={banner.cancelLabel}
+            onCancel={banner.onCancel}
+            onDismiss={() => ctx.dismissBannerById(banner.id)}
+          />
+        ))}
       </AnimatePresence>
     </div>
   );
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  /** FIFO: only the head is shown; advancing is dismiss or duration expiry (see NotificationBannerSlot). */
-  const [bannerQueue, setBannerQueue] = useState<BannerItem[]>([]);
-
-  const banner = bannerQueue.length > 0 ? bannerQueue[0] : null;
+  const [banners, setBanners] = useState<BannerItem[]>([]);
 
   const showToast = useCallback((message: string, type: ToastType) => {
     const id = newId();
@@ -163,36 +218,59 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const dismissBanner = useCallback(() => {
-    setBannerQueue((prev) => prev.slice(1));
+  const dismissBannerById = useCallback((id: string) => {
+    setBanners((prev) => prev.filter((b) => b.id !== id));
   }, []);
+
+  const dismissBanner = useCallback(
+    (id: string) => {
+      dismissBannerById(id);
+    },
+    [dismissBannerById]
+  );
 
   const showBanner = useCallback((input: ShowBannerInput) => {
     const id = input.id ?? newId();
     const durationMs = input.durationMs ?? DEFAULT_BANNER_DURATION_MS;
-    setBannerQueue((prev) => {
-      if (prev.some((b) => b.id === id)) return prev;
-      return [...prev, { id, title: input.title, body: input.body, durationMs }];
+    setBanners((prev) => {
+      const next: BannerItem = {
+        id,
+        category: input.category,
+        title: input.title,
+        body: input.body,
+        durationMs,
+        showCountdown: input.showCountdown,
+        countdownEndsAt: input.countdownEndsAt,
+        cancelLabel: input.cancelLabel,
+        onCancel: input.onCancel,
+      };
+      const idx = prev.findIndex((b) => b.id === id);
+      if (idx === -1) return [...prev, next];
+      const updated = [...prev];
+      updated[idx] = next;
+      return updated;
     });
     return id;
   }, []);
+
+  useActionBannerSync(isAuthenticated && !isLoading, showBanner, dismissBannerById);
 
   const value = useMemo(
     () => ({
       toasts,
       showToast,
       removeToast,
-      banner,
+      banners,
       showBanner,
       dismissBanner,
+      dismissBannerById,
     }),
-    [toasts, showToast, removeToast, banner, showBanner, dismissBanner]
+    [toasts, showToast, removeToast, banners, showBanner, dismissBanner, dismissBannerById]
   );
 
   return (
     <NotificationsContext.Provider value={value}>
       {children}
-      <ToastStackHost />
     </NotificationsContext.Provider>
   );
 }
