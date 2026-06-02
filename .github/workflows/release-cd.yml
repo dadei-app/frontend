@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  statuses: write
 
 concurrency:
   group: desktop-cd-${{ github.ref }}
@@ -97,7 +98,16 @@ jobs:
   publish:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      statuses: write
     steps:
+      - name: Notify Vercel
+        uses: vercel/repository-dispatch/actions/status@v1
+        with:
+          name: Vercel - dadei: deploy
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -154,7 +164,6 @@ jobs:
           TAG_SHA=$(git rev-parse "refs/tags/${TAG}^{commit}")
           if [ "$TAG_SHA" != "${{ github.sha }}" ]; then
             echo "Tag ${TAG} points at ${TAG_SHA}, expected ${{ github.sha }}."
-            echo "If you re-used the same version, bump package.json before releasing again."
             exit 1
           fi
           echo "Verified ${TAG} -> ${TAG_SHA}"

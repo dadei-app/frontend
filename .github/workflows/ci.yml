@@ -41,11 +41,16 @@ jobs:
         if: github.event_name == 'pull_request'
         run: node scripts/check-version-bump.mjs origin/${{ github.base_ref }}
 
+      - name: Verify version bump before release
+        if: github.event_name == 'push'
+        run: node scripts/check-version-bump.mjs HEAD^
+
   release:
     name: Desktop CD
     needs: ci
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
+      statuses: write
     uses: ./.github/workflows/release-cd.yml
     secrets: inherit

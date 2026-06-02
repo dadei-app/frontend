@@ -73,4 +73,26 @@ if (compareSemver(currentVersion, baseVersion) <= 0) {
   process.exit(1);
 }
 
+const tag = `v${currentVersion}`;
+try {
+  git(['fetch', '--tags', 'origin']);
+} catch {
+  // Best effort; local tags may still be enough in CI.
+}
+
+try {
+  const tagSha = git(['rev-parse', `refs/tags/${tag}^{commit}`]);
+  const headSha = git(['rev-parse', 'HEAD']);
+  if (tagSha !== headSha) {
+    console.error(
+      `Release tag ${tag} already exists at ${tagSha}, but this commit is ${headSha}.`,
+    );
+    console.error('Bump the version before releasing again.');
+    process.exit(1);
+  }
+  console.log(`${tag} already points at this commit.`);
+} catch {
+  console.log(`No existing ${tag}; ready to release ${currentVersion}.`);
+}
+
 console.log(`Version bumped ${baseVersion} -> ${currentVersion}.`);
