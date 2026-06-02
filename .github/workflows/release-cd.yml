@@ -1,9 +1,7 @@
 name: Desktop CD
 
 on:
-  workflow_run:
-    workflows: ["Continuous Integration"]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
 
@@ -16,7 +14,9 @@ concurrency:
 
 jobs:
   build:
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     strategy:
       fail-fast: true
       matrix:
@@ -32,8 +32,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - uses: actions/setup-node@v6
         with:
@@ -102,12 +100,12 @@ jobs:
 
   publish:
     needs: build
-    if: github.event.workflow_run.conclusion == 'success'
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Read version
         id: pkg
@@ -138,7 +136,7 @@ jobs:
         with:
           tag: ${{ steps.pkg.outputs.tag }}
           name: Dadei App ${{ steps.pkg.outputs.tag }}
-          commit: ${{ github.event.workflow_run.head_sha }}
+          commit: ${{ github.sha }}
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true

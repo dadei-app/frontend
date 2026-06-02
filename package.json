@@ -1,6 +1,6 @@
 {
   "name": "dadei-frontend",
-  "version": "5.1.4",
+  "version": "5.1.2",
   "private": true,
   "workspaces": [
     "apps/*",
