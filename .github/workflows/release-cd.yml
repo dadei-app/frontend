@@ -37,8 +37,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -110,7 +108,7 @@ jobs:
       - name: Read version
         id: pkg
         run: |
-          VERSION=$(jq -r .version apps/desktop/package.json)
+          VERSION=$(jq -r .version package.json)
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 

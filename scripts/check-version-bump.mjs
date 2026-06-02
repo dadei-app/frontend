@@ -2,9 +2,9 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { ROOT_VERSION_PACKAGE } from './version-packages.mjs';
 
 const baseRef = process.argv[2] ?? 'origin/main';
-const desktopPkg = 'apps/desktop/package.json';
 const sourcePrefixes = ['apps/', 'packages/'];
 
 function readVersion(path) {
@@ -51,13 +51,13 @@ function hasSourceChanges() {
     .some((file) => !file.endsWith('package.json') && !file.endsWith('package-lock.json'));
 }
 
-const currentVersion = readVersion(desktopPkg);
+const currentVersion = readVersion(ROOT_VERSION_PACKAGE);
 let baseVersion = '0.0.0';
 
 try {
-  baseVersion = JSON.parse(git(['show', `${baseRef}:${desktopPkg}`])).version;
+  baseVersion = JSON.parse(git(['show', `${baseRef}:${ROOT_VERSION_PACKAGE}`])).version;
 } catch {
-  console.warn(`No ${desktopPkg} on ${baseRef}; treating base version as 0.0.0.`);
+  console.warn(`No ${ROOT_VERSION_PACKAGE} on ${baseRef}; treating base version as 0.0.0.`);
 }
 
 if (!hasSourceChanges()) {
@@ -67,9 +67,9 @@ if (!hasSourceChanges()) {
 
 if (compareSemver(currentVersion, baseVersion) <= 0) {
   console.error(
-    `Source files changed but app version was not incremented (${baseVersion} -> ${currentVersion}).`,
+    `Source files changed but version was not incremented (${baseVersion} -> ${currentVersion}).`,
   );
-  console.error(`Bump ${desktopPkg} (and matching workspace packages) before merging.`);
+  console.error('From frontend/, run: npm run version:patch (or version:minor / version:major).');
   process.exit(1);
 }
 
