@@ -146,7 +146,7 @@ export default function Banner({
         }}
         className="pointer-events-auto group relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900/82 backdrop-blur-xl shadow-[0_1px_0_rgba(255,255,255,0.03)_inset,0_16px_44px_-22px_rgba(0,0,0,0.72)] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-white/14 hover:shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_18px_48px_-22px_rgba(0,0,0,0.78)]"
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-zinc-200/20 to-transparent" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-zinc-200/20 to-transparent" />
         {showCountdown ? (
           <CountdownBar durationMs={durationMs} countdownEndsAt={countdownEndsAt} />
         ) : null}
@@ -173,7 +173,7 @@ export default function Banner({
                 type="button"
                 onClick={handleCancel}
                 disabled={cancelling}
-                className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/[0.04] hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+                className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
               >
                 {cancelling ? 'Cancelling…' : cancelLabel || 'Cancel'}
               </button>
@@ -229,7 +229,7 @@ function CountdownBar({
 
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-0 h-[3px] overflow-hidden bg-white/[0.06]"
+      className="pointer-events-none absolute inset-x-0 top-0 h-[3px] overflow-hidden bg-white/6"
       aria-hidden
     >
       <div

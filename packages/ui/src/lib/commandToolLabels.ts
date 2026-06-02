@@ -1,35 +1,194 @@
 const TOOL_LABELS: Record<string, string> = {
-  create_calendar_event: 'Creating Calendar Event',
-  create_task: 'Creating Task',
-  store_memory: 'Saving Memory',
-  search_memory: 'Searching Memory',
-  get_current_time: 'Getting The Time',
-  send_email: 'Sending Email',
-  web_search: 'Searching The Web',
-  update_memory: 'Updating Memory',
-  update_action: 'Updating Action',
-  list_calendar_events: 'Checking Your Calendar',
-  calendar_list_events: 'Checking Your Calendar',
-  update_calendar_event: 'Updating Calendar Event',
-  delete_calendar_event: 'Deleting Calendar Event',
-  list_tasks: 'Checking Tasks',
-  update_task: 'Updating Task',
-  delete_task: 'Deleting Task',
-  search_contacts: 'Finding A Contact',
-  read_email: 'Reading Email',
-  search_email: 'Searching Email',
-  search_interactions: 'Searching Past Conversations',
-  query_person_memory: 'Recalling What I Know',
-  assign_person_name: 'Saving A Name',
-  get_weather: 'Checking The Weather',
-  get_weather_forecast: 'Checking The Forecast',
-  get_current_location: 'Getting Your Location',
-  get_client_context: 'Getting Client Context',
-  maps_search_places: 'Searching For A Location',
-  maps_directions: 'Getting Directions',
-  maps_distance_matrix: 'Checking Travel Time',
-  load_tool_groups: 'Summoning Specialist Tools',
-  end_assistant_session: 'Ending Session',
+  // Session & meta
+  load_tool_groups: 'Preparing my tools',
+  end_assistant_session: 'Wrapping up',
+
+  // Time, location, weather
+  get_current_time: 'Checking the time',
+  get_current_location: 'Pinpointing your location',
+  get_weather: 'Checking the weather',
+  get_weather_forecast: 'Looking at the forecast',
+  get_client_context: "Talking to your device",
+
+  // Memory & context
+  store_memory: 'Making a mental note',
+  search_memory: 'Digging through my memory',
+  query_person_memory: 'Recalling someone\'s information',
+  assign_person_name: 'Saving someone\'s name',
+  search_interactions: 'Searching conversations',
+
+  // Web & maps
+  web_search: 'Checing google',
+  maps_search_places: 'Checking the map',
+  maps_directions: 'Plotting the route',
+  maps_distance_matrix: 'Simulating a trip',
+
+  // Calendar
+  calendar_create_event: 'Creating an event',
+  calendar_list_events: 'Checking my calendar',
+  calendar_get_event: 'Scanning the calendar',
+  calendar_update_event: 'Updating an event',
+  calendar_delete_event: 'Deleting an event',
+
+  // Gmail
+  gmail_send: 'Sending an email',
+  gmail_read: 'Opening an email',
+  gmail_search: 'Searching the inbox',
+  gmail_list: 'Scanning the inbox',
+  gmail_delete: 'Trashing an email',
+  gmail_modify_labels: 'Updating email labels',
+
+  // Tasks
+  tasks_create: 'Adding a task',
+  tasks_list: 'Checking my tasks',
+  tasks_get: 'Looking at that task',
+  tasks_update: 'Updating my task',
+  tasks_delete: 'Removing that task',
+  tasklist_create: 'Creating a task list',
+  tasklist_list: 'Checking my task lists',
+  tasklist_delete: 'Deleting that task list',
+
+  // Contacts
+  contacts_create: 'Adding a contact',
+  contacts_list: 'Flipping through contacts',
+  contacts_search: 'Searching contacts',
+  contacts_get: 'Reading someone\'s contact',
+  contacts_update: 'Updating a contact',
+  contacts_delete: 'Removing a contact',
+
+  // Docs
+  docs_create: 'Creating a doc',
+  docs_list: 'Flipping through docs',
+  docs_read: 'Reading a doc',
+  docs_append: 'Adding to a doc',
+  docs_update: 'Updating a doc',
+  docs_delete: 'Deleting a doc',
+
+  // Drive
+  drive_list_files: 'Sorting through drive files',
+  drive_search_files: 'Searching drive files',
+  drive_get_file: 'Opening a drive file',
+  drive_create_file: 'Creating a drive file',
+  drive_update_file_metadata: 'Updating a drive file',
+  drive_delete_file: 'Deleting a drive file',
+
+  // Sheets
+  sheets_create: 'Creating a spreadsheet',
+  sheets_list: 'Flipping through spreadsheets',
+  sheets_read: 'Reading a spreadsheet',
+  sheets_append_row: 'Adding a row',
+  sheets_update_range: 'Updating a spreadsheet',
+  sheets_delete: 'Deleting a spreadsheet',
+
+  // Device & media controls
+  set_device_volume: 'Adjusting the volume',
+  device_volume_up: 'Turning it up',
+  device_volume_down: 'Turning it down',
+  device_volume_mute: 'Muting the volume',
+  media_play_pause: 'Toggling playback',
+  media_next_track: 'Skipping to the next track',
+  media_previous_track: 'Going back a track',
+  media_stop: 'Stopping playback',
+  set_device_brightness: 'Adjusting the brightness',
+  device_brightness_up: 'Brightening the screen',
+  device_brightness_down: 'Dimming the screen',
+  toggle_dark_mode: 'Toggling dark mode',
+  lock_device: 'Locking the device',
+  sleep_device: 'Putting the device to sleep',
+  open_app: 'Opening an app',
+  close_focused_app: 'Closing that app',
+  minimize_focused_window: 'Minimizing the window',
+  toggle_fullscreen: 'Toggling fullscreen',
+  dismiss_notifications: 'Clearing notifications',
+};
+
+/** Prefix + action suffix fallbacks when a tool is not in TOOL_LABELS. */
+const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
+  gmail_: {
+    list: 'Scanning my inbox',
+    read: 'Opening that email',
+    search: 'Searching my inbox',
+    send: 'Sending an email',
+    delete: 'Moving that to trash',
+    modify_labels: 'Updating email labels',
+  },
+  calendar_: {
+    list_events: 'Checking my calendar',
+    create_event: 'Adding to my calendar',
+    get_event: 'Looking at that event',
+    update_event: 'Updating my calendar',
+    delete_event: 'Removing from my calendar',
+  },
+  tasks_: {
+    list: 'Checking my tasks',
+    create: 'Adding a task',
+    get: 'Looking at that task',
+    update: 'Updating my task',
+    delete: 'Removing that task',
+  },
+  tasklist_: {
+    list: 'Checking my task lists',
+    create: 'Creating a task list',
+    delete: 'Deleting that task list',
+  },
+  contacts_: {
+    list: 'Looking through my contacts',
+    search: 'Finding someone\'s contact',
+    create: 'Adding a contact',
+    get: 'Opening a contact',
+    update: 'Updating a contact',
+    delete: 'Removing a contact',
+  },
+  docs_: {
+    list: 'Looking through my docs',
+    read: 'Opening that doc',
+    create: 'Starting a new doc',
+    append: 'Adding to my doc',
+    update: 'Updating my doc',
+    delete: 'Deleting that doc',
+  },
+  drive_: {
+    list_files: 'Sorting through my drive',
+    search_files: 'Searching my drive',
+    get_file: 'Opening that file',
+    create_file: 'Creating a file',
+    update_file_metadata: 'Updating file details',
+    delete_file: 'Removing from my drive',
+  },
+  sheets_: {
+    list: 'Looking through my spreadsheets',
+    read: 'Opening that spreadsheet',
+    create: 'Starting a new spreadsheet',
+    append_row: 'Adding a row',
+    update_range: 'Updating my spreadsheet',
+    delete: 'Deleting that spreadsheet',
+  },
+  device_: {
+    volume_up: 'Turning it up',
+    volume_down: 'Turning it down',
+    volume_mute: 'Muting the volume',
+    brightness_up: 'Brightening the screen',
+    brightness_down: 'Dimming the screen',
+  },
+  media_: {
+    play_pause: 'Toggling playback',
+    next_track: 'Skipping to the next track',
+    previous_track: 'Going back a track',
+    stop: 'Stopping playback',
+  },
+};
+
+const PREFIX_DEFAULT_LABELS: Record<string, string> = {
+  gmail_: 'Checking my email',
+  calendar_: 'Checking my calendar',
+  tasks_: 'Checking my tasks',
+  tasklist_: 'Checking my task lists',
+  contacts_: 'Looking through my contacts',
+  docs_: 'Working in my docs',
+  drive_: 'Sorting through my drive',
+  sheets_: 'Working in my spreadsheets',
+  device_: 'Adjusting the device',
+  media_: 'Controlling playback',
 };
 
 /** Strip trailing ASCII or unicode ellipses from status copy. */
@@ -51,11 +210,24 @@ function titleCaseFromSnake(tool: string): string {
   return titleCaseWords(tool.replace(/_/g, ' '));
 }
 
+function labelFromPrefix(tool: string): string | null {
+  for (const [prefix, actions] of Object.entries(PREFIX_ACTION_LABELS)) {
+    if (!tool.startsWith(prefix)) continue;
+    const suffix = tool.slice(prefix.length);
+    const actionLabel = actions[suffix];
+    if (actionLabel) return actionLabel;
+    return PREFIX_DEFAULT_LABELS[prefix] ?? null;
+  }
+  return null;
+}
+
 /** Human label for a backend tool name (voice command SSE). */
 export function commandToolLabel(tool: string): string {
   if (!tool || tool.startsWith('_')) return '';
   const mapped = TOOL_LABELS[tool];
   if (mapped) return mapped;
+  const prefixed = labelFromPrefix(tool);
+  if (prefixed) return prefixed;
   return titleCaseFromSnake(tool);
 }
 

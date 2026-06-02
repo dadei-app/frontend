@@ -1,8 +1,11 @@
 {
   "name": "dadei-frontend",
-  "version": "5.1.1",
+  "version": "5.1.2",
   "private": true,
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "concurrently -n \"WEB,APP\" -c \"cyan,magenta\" \"npm run dev:website\" \"npm run dev:desktop\"",
     "dev:website": "npm run dev --workspace=apps/website",
