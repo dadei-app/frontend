@@ -1,7 +1,9 @@
 name: Desktop CD
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Continuous Integration"]
+    types: [completed]
     branches: [main]
   workflow_dispatch:
 
@@ -32,6 +34,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v6
         with:
@@ -106,6 +110,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Read version
         id: pkg
@@ -136,7 +142,7 @@ jobs:
         with:
           tag: ${{ steps.pkg.outputs.tag }}
           name: Dadei App ${{ steps.pkg.outputs.tag }}
-          commit: ${{ github.sha }}
+          commit: ${{ github.event.workflow_run.head_sha || github.sha }}
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
