@@ -1,13 +1,12 @@
 name: Desktop CD
 
 on:
-  workflow_run:
-    workflows: ["Continuous Integration"]
-    types: [completed]
+  push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -15,10 +14,60 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  ci-gate:
+    name: Wait for CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Continuous Integration on this commit
+        if: github.event_name == 'push'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const core = require('@actions/core');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const sha = context.sha;
+            const thisRunId = context.runId;
+            const timeoutMs = 30 * 60 * 1000;
+            const pollMs = 15000;
+            const started = Date.now();
+
+            while (Date.now() - started < timeoutMs) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: 'ci.yml',
+                head_sha: sha,
+                branch: 'main',
+                event: 'push',
+                per_page: 10,
+              });
+
+              // Exclude this workflow run if it appears in results.
+              const ciRun = data.workflow_runs.find((run) => run.id !== thisRunId);
+
+              if (ciRun) {
+                core.info(`Found CI run #${ciRun.run_number} status=${ciRun.status} conclusion=${ciRun.conclusion}`);
+                if (ciRun.status !== 'completed') {
+                  await new Promise((resolve) => setTimeout(resolve, pollMs));
+                  continue;
+                }
+                if (ciRun.conclusion === 'success') {
+                  core.info('CI succeeded for this commit. Proceeding with CD.');
+                  return;
+                }
+                core.setFailed(`CI did not succeed for ${sha}. Conclusion: ${ciRun.conclusion}`);
+                return;
+              }
+
+              core.info('CI run not visible yet; polling again...');
+              await new Promise((resolve) => setTimeout(resolve, pollMs));
+            }
+
+            core.setFailed(`Timed out waiting for CI on ${sha}`);
+
   build:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
+    needs: ci-gate
     strategy:
       fail-fast: true
       matrix:
@@ -34,8 +83,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - uses: actions/setup-node@v6
         with:
@@ -104,14 +151,9 @@ jobs:
 
   publish:
     needs: build
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Read version
         id: pkg
@@ -142,7 +184,7 @@ jobs:
         with:
           tag: ${{ steps.pkg.outputs.tag }}
           name: Dadei App ${{ steps.pkg.outputs.tag }}
-          commit: ${{ github.event.workflow_run.head_sha || github.sha }}
+          commit: ${{ github.sha }}
           allowUpdates: true
           removeArtifacts: true
           replacesArtifacts: true
