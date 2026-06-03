@@ -5,12 +5,14 @@ import { ServiceProvider } from '@dadei/ui/contexts/ServiceContext';
 import { CommandProvider } from '@dadei/ui/contexts/CommandContext';
 import { AudioProvider } from '@dadei/ui/contexts/AudioContext';
 import { AppQueryProvider } from '@dadei/ui/contexts/QueryProvider';
+import { HotkeyProvider } from '@dadei/ui/contexts/HotkeyContext';
 import AssistantLayout from '@dadei/ui/pages/AssistantLayout';
 import LoginPage from '@dadei/ui/pages/LoginPage';
 
 export function App() {
   return (
     <AppQueryProvider>
+      <HotkeyProvider>
       <MemoryRouter initialEntries={['/assistant']}>
         <AuthProvider>
           <NotificationProvider>
@@ -35,6 +37,7 @@ export function App() {
           </NotificationProvider>
         </AuthProvider>
       </MemoryRouter>
+      </HotkeyProvider>
     </AppQueryProvider>
   );
 }

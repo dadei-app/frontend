@@ -126,6 +126,7 @@ function ensureAutoUpdaterRegistered(): void {
   registered = true;
 
   autoUpdater.disableDifferentialDownload = true;
+  autoUpdater.allowDowngrade = false;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
@@ -295,4 +296,50 @@ export async function runPackagedStartupFlow(): Promise<PackagedStartupOutcome> 
   installInProgress = true;
   setImmediate(() => autoUpdater.quitAndInstall(false, true));
   return 'quit_for_install';
+}
+
+const GITHUB_RELEASES = 'https://github.com/dadei-app/frontend/releases';
+
+export type UpdaterCheckResult = {
+  status: 'up_to_date' | 'update_available' | 'manual_required' | 'error';
+  version?: string;
+  downloadUrl?: string;
+  error?: string;
+};
+
+export async function manualUpdaterCheck(): Promise<UpdaterCheckResult> {
+  if (!app.isPackaged) {
+    return { status: 'up_to_date', version: app.getVersion() };
+  }
+
+  ensureAutoUpdaterRegistered();
+
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    if (!result?.updateInfo) {
+      return { status: 'up_to_date', version: app.getVersion() };
+    }
+    const candidate = result.updateInfo.version;
+    if (compareSemver(candidate, app.getVersion()) <= 0) {
+      return { status: 'up_to_date', version: app.getVersion() };
+    }
+    if (process.platform === 'darwin' && !process.env.MAC_SIGNED) {
+      return {
+        status: 'manual_required',
+        version: candidate,
+        downloadUrl: GITHUB_RELEASES,
+      };
+    }
+    return { status: 'update_available', version: candidate };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (process.platform === 'darwin' && /code sign|developer id|signature/i.test(msg)) {
+      return {
+        status: 'manual_required',
+        downloadUrl: GITHUB_RELEASES,
+        error: msg,
+      };
+    }
+    return { status: 'error', error: msg };
+  }
 }

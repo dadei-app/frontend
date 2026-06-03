@@ -6,6 +6,9 @@ import { getBackendVersionGate, isUpdateInstallInProgress, runPackagedStartupFlo
 import { TokenStorage } from './auth/token-storage';
 import { handleGoogleOAuth } from './auth/oauth-handler';
 import { registerDeviceControlIpcHandlers } from './device-control';
+import { buildApplicationMenu } from './menu';
+import { registerSettingsIpc } from './settings-ipc';
+import { getStartup } from './settings-store';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -54,11 +57,26 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
   }
 
+  mainWindow.on('close', event => {
+    if (
+      process.platform !== 'darwin' &&
+      getStartup().minimizeToTray &&
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  mainWindow.setMenuBarVisibility(false);
+  const isMacOrLinux = process.platform === 'darwin' || process.platform === 'linux';
+  if (!isMacOrLinux) {
+    mainWindow.setMenuBarVisibility(false);
+  }
 }
 
 ipcMain.handle('auth:store-tokens', async (_, accessToken: string, refreshToken: string) => {
@@ -158,7 +176,9 @@ ipcMain.handle('window:is-maximized', (event) => {
 registerDeviceControlIpcHandlers();
 
 app.whenReady().then(async () => {
-  Menu.setApplicationMenu(null);
+  registerSettingsIpc();
+  const menu = buildApplicationMenu();
+  Menu.setApplicationMenu(menu ?? null);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

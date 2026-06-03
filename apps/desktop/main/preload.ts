@@ -86,4 +86,45 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeFocusedWindow: () => ipcRenderer.invoke('device:minimize-focused-window'),
   toggleFullscreen: () => ipcRenderer.invoke('device:toggle-fullscreen'),
   dismissNotifications: () => ipcRenderer.invoke('device:dismiss-notifications'),
+
+  appGetVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
+  appGetBuildHash: () => ipcRenderer.invoke('app:get-build-hash') as Promise<string | null>,
+  openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url) as Promise<void>,
+
+  onOpenSettingsSection: (callback: (payload: { section: string; action?: string }) => void) => {
+    const listener = (_e: unknown, payload: { section: string; action?: string }) => callback(payload);
+    ipcRenderer.on('app:open-settings-section', listener);
+    return () => {
+      ipcRenderer.removeListener('app:open-settings-section', listener);
+    };
+  },
+
+  onBootstrapState: (callback: (payload: unknown) => void) => {
+    const listener = (_e: unknown, payload: unknown) => callback(payload);
+    ipcRenderer.on('app:bootstrap-state', listener);
+    return () => {
+      ipcRenderer.removeListener('app:bootstrap-state', listener);
+    };
+  },
+
+  updaterManualCheck: () => ipcRenderer.invoke('updater:manual-check'),
+
+  audio: {
+    getSettings: () => ipcRenderer.invoke('audio:get-settings'),
+    setSettings: (s: Record<string, unknown>) => ipcRenderer.invoke('audio:set-settings', s),
+  },
+
+  startup: {
+    getLaunchAtLogin: () => ipcRenderer.invoke('startup:get-launch-at-login') as Promise<boolean>,
+    setLaunchAtLogin: (enabled: boolean) =>
+      ipcRenderer.invoke('startup:set-launch-at-login', enabled) as Promise<boolean>,
+    getMinimizeToTray: () => ipcRenderer.invoke('startup:get-minimize-to-tray') as Promise<boolean>,
+    setMinimizeToTray: (enabled: boolean) =>
+      ipcRenderer.invoke('startup:set-minimize-to-tray', enabled) as Promise<boolean>,
+  },
+
+  hotkey: {
+    get: () => ipcRenderer.invoke('hotkey:get'),
+    set: (h: Record<string, unknown>) => ipcRenderer.invoke('hotkey:set', h),
+  },
 });

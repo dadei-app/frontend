@@ -5,6 +5,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
+import { HotkeyDisplay } from '@dadei/ui/components/HotkeyDisplay';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
@@ -18,9 +19,6 @@ import { Mic } from 'lucide-react';
 
 const ASSISTANT_HINT_ROW =
   'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
-
-const KEY_HINT_CLASS =
-  'rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40';
 
 function SpokenWakeWord({
   children,
@@ -193,7 +191,7 @@ export default function AssistantLayout() {
                   ) : null}
                 </AnimatePresence>
                 <p className={ASSISTANT_HINT_ROW}>
-                  <kbd className={KEY_HINT_CLASS}>Space</kbd>
+                  <HotkeyDisplay />
                   <span>to toggle</span>
                 </p>
               </motion.div>

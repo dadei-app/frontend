@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useHotkey } from '@dadei/ui/contexts/HotkeyContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
@@ -93,6 +94,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     registrationConflict,
     isAssistantMode,
   } = useService();
+  const { matchesHotkey } = useHotkey();
   const { state, cancel, micShowsProcessingRing } = useCommand();
 
   const micBlocked = isTogglingService || registrationConflict || state === 'locked';
@@ -125,25 +127,14 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     if (disableSpaceToggle) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && !micBlocked) {
-        e.preventDefault();
-        if (inActiveSession) {
-          stopSessionOnly();
-        } else {
-          void toggleService();
-        }
-      }
+      if (!matchesHotkey(e) || micBlocked) return;
+      e.preventDefault();
+      void toggleService();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    micBlocked,
-    toggleService,
-    disableSpaceToggle,
-    inActiveSession,
-    stopSessionOnly,
-  ]);
+  }, [matchesHotkey, micBlocked, toggleService, disableSpaceToggle]);
 
   const handleClick = async () => {
     if (micBlocked) return;
