@@ -1,4 +1,4 @@
-/** In-flight proposed action from GET /actions or realtime `action` events. */
+/** In-flight proposed action from realtime `action_queue` pushes. */
 export type ActionOperation = 'create' | 'update' | 'delete';
 
 export interface NetworkAction {
@@ -18,6 +18,8 @@ export interface NetworkAction {
   conversation_id: string | null;
   interaction_id: string | null;
   scheduled_job_id?: string | null;
+  /** True when this action owns the network countdown slot. */
+  is_active?: boolean;
 }
 
 /** Episodic memory from GET /memories. */

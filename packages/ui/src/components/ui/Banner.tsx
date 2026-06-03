@@ -21,6 +21,11 @@ export interface BannerProps {
   cancelLabel?: string;
   onCancel?: () => Promise<void> | void;
   onDismiss: () => void;
+  /** Top of stack — only front card runs countdown auto-dismiss. */
+  isStackFront?: boolean;
+  stackDepth?: number;
+  /** Waiting in serial queue behind the active countdown. */
+  queued?: boolean;
 }
 
 const ENTER_EASE = [0.16, 1, 0.3, 1] as const;
@@ -40,6 +45,9 @@ export default function Banner({
   cancelLabel,
   onCancel,
   onDismiss,
+  isStackFront = true,
+  stackDepth = 0,
+  queued = false,
 }: BannerProps) {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,12 +61,14 @@ export default function Banner({
   const crumbleStartedRef = useRef(false);
 
   useEffect(() => {
+    // Action approval banners are removed when the server queue updates, not on a local timer.
+    if (!isStackFront || !showCountdown || queued || id.startsWith('action:')) return;
     const now = Date.now();
     const end = countdownEndsAt ? parseApiDateTimeMs(countdownEndsAt) : now + durationMs;
     const delay = Math.max(end - now, 0);
     const t = window.setTimeout(() => onDismiss(), delay);
     return () => window.clearTimeout(t);
-  }, [id, durationMs, countdownEndsAt, onDismiss]);
+  }, [id, durationMs, countdownEndsAt, onDismiss, isStackFront, showCountdown, queued]);
 
   useEffect(() => {
     if (exitMode !== 'cancel' || crumbleStartedRef.current) return;
@@ -91,6 +101,11 @@ export default function Banner({
       setCancelling(false);
     }
   };
+
+  const backdropBlur =
+    stackDepth > 0
+      ? `blur(${Math.min(16 + stackDepth * 8, 36)}px) saturate(112%)`
+      : theme.shell.backdropFilter;
 
   const variants = {
     enter: { opacity: 0, y: -40, scale: 0.96, filter: 'blur(8px)' },
@@ -136,17 +151,19 @@ export default function Banner({
       </svg>
 
       <motion.div
-        layout
-        initial="enter"
+        initial={isStackFront ? 'enter' : false}
         animate="visible"
         exit={exitMode}
         variants={variants}
         style={{
           ...theme.shell,
+          backdropFilter: backdropBlur,
+          WebkitBackdropFilter: backdropBlur,
           filter: exitMode === 'cancel' ? `url(#${filterId})` : undefined,
           willChange: 'transform, opacity, filter',
+          pointerEvents: isStackFront ? 'auto' : 'none',
         }}
-        className="pointer-events-auto group relative w-full overflow-hidden rounded-xl transition-[box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className="group relative w-full overflow-hidden rounded-xl transition-[box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
       >
         <div
           className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"
@@ -154,7 +171,15 @@ export default function Banner({
           aria-hidden
         />
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/12 to-transparent" />
-        {showCountdown ? (
+        {queued ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-[3px] items-center justify-center bg-black/25"
+            aria-hidden
+          >
+            <div className={`h-full w-full opacity-40 ${theme.countdownBarClass}`} />
+          </div>
+        ) : null}
+        {showCountdown && !queued ? (
           <CountdownBar
             durationMs={durationMs}
             countdownEndsAt={countdownEndsAt}
@@ -173,6 +198,12 @@ export default function Banner({
                 </>
               ) : null}
               <span className="text-zinc-400/90">{category || 'Notification'}</span>
+              {queued ? (
+                <>
+                  <span className="text-zinc-500/80"> · </span>
+                  <span className="text-zinc-500/90">Queued</span>
+                </>
+              ) : null}
             </p>
             <p className="mt-1 truncate text-sm font-semibold leading-snug text-zinc-100">
               {title}

@@ -237,34 +237,23 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
     const actionKey = queryKeys.actions;
 
-    const mergeAction = (action: NetworkAction) => {
-      queryClient.setQueryData<NetworkAction[]>(actionKey, prev => {
-        const list = prev ?? [];
-        if (action.status !== 'proposed' || !action.scheduled_at) {
-          return list.filter(a => a.id !== action.id);
-        }
-        const idx = list.findIndex(a => a.id === action.id);
-        if (idx === -1) {
-          return [action, ...list];
-        }
-        const next = [...list];
-        next[idx] = action;
-        return next;
-      });
+    const applyActionQueue = (queue: NetworkAction[]) => {
+      queryClient.setQueryData<NetworkAction[]>(actionKey, queue);
     };
 
     const offWs = subscribeRealtimeMessages(msg => {
-      if (msg.event === 'action') {
-        if (!isNetworkAction(msg.data)) return;
-        mergeAction(msg.data);
+      if (msg.event === 'action_queue') {
+        if (!isNetworkActionQueue(msg.data)) return;
+        applyActionQueue(msg.data);
       }
     });
 
     let offElectron: (() => void) | undefined;
     if (window.electronAPI?.onWebhookAction) {
       offElectron = window.electronAPI.onWebhookAction(payload => {
-        if (!isNetworkAction(payload?.data)) return;
-        mergeAction(payload.data);
+        if (payload?.event === 'action_queue' && isNetworkActionQueue(payload?.data)) {
+          applyActionQueue(payload.data);
+        }
       });
     }
 

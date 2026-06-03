@@ -10,7 +10,7 @@ import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import AssistantSettingsModal from '@dadei/ui/components/modals/SettingsModal';
 import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
-import { useMemoriesQuery, useActiveActionsQuery } from '@dadei/ui/lib/query/queryHooks';
+import { useMemoriesQuery } from '@dadei/ui/lib/query/queryHooks';
 import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS, isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { cn } from '@dadei/ui/lib/shared/cn';
@@ -65,9 +65,7 @@ export default function AssistantLayout() {
   const location = useLocation();
 
   const sessionDataEnabled = isAuthenticated && !isLoading;
-  const actionBannerEnabled = isAuthenticated && !isLoading;
   useMemoriesQuery(sessionDataEnabled);
-  useActiveActionsQuery(actionBannerEnabled);
 
   useLayoutEffect(() => {
     const root = document.documentElement;

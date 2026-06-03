@@ -142,12 +142,15 @@ export function useMemoriesQuery(enabled = true, limit = ASSISTANT_MEMORIES_LIST
   });
 }
 
-export function useActiveActionsQuery(enabled = true) {
-  return useQuery({
+/** Push-only cache for notification banners (`action_queue` WebSocket events). */
+export function useNotificationActionsQuery() {
+  return useQuery<NetworkAction[]>({
     queryKey: queryKeys.actions,
-    queryFn: () => actionsApi.listActive(),
-    enabled,
-    staleTime: 5_000,
+    queryFn: () => [],
+    initialData: [],
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: Number.POSITIVE_INFINITY,
+    enabled: false,
   });
 }
 
