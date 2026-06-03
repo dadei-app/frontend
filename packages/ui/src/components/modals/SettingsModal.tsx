@@ -30,13 +30,10 @@ import {
   useIntegrationsStatusQuery,
   useMemoriesQuery,
   useDeleteMemoryMutation,
-  useActionsQuery,
-  useDeleteActionMutation,
 } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
-import type { EpisodicMemory, NetworkAction } from '@dadei/ui/types/models.types';
+import type { EpisodicMemory } from '@dadei/ui/types/models.types';
 import { MemorySettingsRow } from '@dadei/ui/components/settings/MemorySettingsRow';
-import { WorkspaceActionRow } from '@dadei/ui/components/settings/WorkspaceActionRow';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 
 import { veilEase } from '@dadei/ui/lib/shared/motion';
@@ -46,28 +43,11 @@ type AssistantSettingsModalProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-type SidebarView = 'integrations' | 'memories' | 'events' | 'tasks' | 'mail';
+type SidebarView = 'integrations' | 'memories';
 
-const viewMeta: Record<SidebarView, { label: string; Icon: typeof CalendarDays }> = {
+const viewMeta: Record<SidebarView, { label: string; Icon: typeof Plug }> = {
   integrations: { label: 'Integrations', Icon: Plug },
   memories: { label: 'Memories', Icon: Brain },
-  events: { label: 'Events', Icon: CalendarDays },
-  tasks: { label: 'Tasks', Icon: CheckSquare },
-  mail: { label: 'Mail', Icon: Mail },
-};
-
-const ACTION_TYPES_BY_VIEW: Record<Extract<SidebarView, 'events' | 'tasks' | 'mail'>, string[]> = {
-  events: ['calendar', 'calendar_event'],
-  tasks: ['todo', 'task'],
-  mail: ['email', 'message'],
-};
-
-const EMPTY_ACTION_COPY_BY_VIEW: Record<Extract<SidebarView, 'events' | 'tasks' | 'mail'>, string> = {
-  events: 'No events yet. Calendar items will show up here when plans with dates get picked up from your chats.',
-  tasks:
-    'No tasks yet. This list fills in once conversations include concrete next steps to track.',
-  mail:
-    'No mail actions yet. Drafts and send actions appear here when a message is prepared from conversation context.',
 };
 
 const INTEGRATION_ICONS: Record<string, typeof CalendarDays> = {
@@ -104,16 +84,13 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const authMeQuery = useAuthMeQuery(open);
   const integrationsStatusQuery = useIntegrationsStatusQuery(open);
   const memoriesQuery = useMemoriesQuery(open && isAuthenticated);
-  const actionsQuery = useActionsQuery(open && isAuthenticated);
   const deleteMemoryMutation = useDeleteMemoryMutation();
-  const deleteActionMutation = useDeleteActionMutation();
   const [deletePhrase, setDeletePhrase] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [googleConnectError, setGoogleConnectError] = useState('');
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
-  const [armedActionDeleteId, setArmedActionDeleteId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<SidebarView>('integrations');
   const prefersReducedMotion = useReducedMotion();
 
@@ -195,12 +172,6 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     typeof e === 'object' && e !== null && 'message' in e ? String((e as Error).message) : 'Request failed';
 
   const memoryRows = memoriesQuery.data ?? [];
-  const workspaceActionRows =
-    activeView === 'memories' || activeView === 'integrations'
-      ? []
-      : (actionsQuery.data ?? []).filter((action) =>
-          ACTION_TYPES_BY_VIEW[activeView].includes(action.action_type)
-        );
 
   useEffect(() => {
     if (!open) return;
@@ -216,18 +187,6 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       showToast('Failed to delete memory', 'error');
     } finally {
       setArmedMemoryDeleteId(null);
-    }
-  };
-
-  const handleDeleteAction = async (actionId: string) => {
-    try {
-      await deleteActionMutation.mutateAsync(actionId);
-      showToast('Action deleted', 'success');
-    } catch (error) {
-      console.error('Failed to delete action:', error);
-      showToast('Failed to delete action', 'error');
-    } finally {
-      setArmedActionDeleteId(null);
     }
   };
 
@@ -250,26 +209,6 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       window.removeEventListener('keydown', onKey);
     };
   }, [armedMemoryDeleteId]);
-
-  useEffect(() => {
-    if (!armedActionDeleteId) return;
-    const onDown = (e: MouseEvent) => {
-      const el = e.target as HTMLElement;
-      if (el.closest('[data-split-delete]')) return;
-      setArmedActionDeleteId(null);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setArmedActionDeleteId(null);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [armedActionDeleteId]);
 
   const overlayTransition = prefersReducedMotion
     ? { duration: 0.12 }
@@ -319,7 +258,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 Settings
               </Dialog.Title>
               <p className="text-sm text-zinc-500 font-secondary">
-                Integrations, memories, and workspace data
+                Integrations and memories
               </p>
             </div>
             <Dialog.Close asChild>
@@ -361,33 +300,6 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   Memories
                 </button>
               </nav>
-
-              <div className="mt-5 border-t border-white/10 pt-4">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 font-secondary">
-                  Workspace data
-                </p>
-                <nav className="space-y-1">
-                  {(['events', 'tasks', 'mail'] as SidebarView[]).map((view) => {
-                    const { label, Icon } = viewMeta[view];
-                    const isActive = activeView === view;
-                    return (
-                      <button
-                        key={view}
-                        type="button"
-                        onClick={() => setActiveView(view)}
-                        className={`inline-flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-secondary transition-colors ${
-                          isActive
-                            ? 'bg-emerald-500/15 text-emerald-300'
-                            : 'text-zinc-300 hover:bg-white/5 hover:text-zinc-100'
-                        }`}
-                      >
-                        <Icon className="h-4 w-4" />
-                        {label}
-                      </button>
-                    );
-                  })}
-                </nav>
-              </div>
 
               <div className="mt-auto flex flex-col gap-3 border-t border-white/10 pt-5">
                 <button
@@ -565,39 +477,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                     </ul>
                   )}
                 </div>
-              ) : (
-                <div className="relative flex min-h-0 flex-1 flex-col">
-                  <div className="min-h-0 flex-1 overflow-y-auto overscroll-none pr-1">
-                    {actionsQuery.isLoading ? (
-                      <p className="text-sm text-zinc-500 font-secondary">Loading actions…</p>
-                    ) : actionsQuery.isError ? (
-                      <p className="text-sm text-rose-300/90 font-secondary">{fetchErr(actionsQuery.error)}</p>
-                    ) : workspaceActionRows.length === 0 ? (
-                      <p className="text-sm text-zinc-500 font-secondary">
-                        {EMPTY_ACTION_COPY_BY_VIEW[activeView]}
-                      </p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {workspaceActionRows.map((action: NetworkAction) => (
-                          <WorkspaceActionRow
-                            key={action.id}
-                            action={action}
-                            armed={armedActionDeleteId === action.id}
-                            disabled={deleteActionMutation.isPending}
-                            onArm={() => {
-                              setArmedActionDeleteId(action.id);
-                            }}
-                            onDisarm={() => setArmedActionDeleteId(null)}
-                            onConfirm={() => {
-                              void handleDeleteAction(action.id);
-                            }}
-                          />
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              )}
+              ) : null}
             </section>
           </div>
               </motion.div>

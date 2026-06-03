@@ -25,7 +25,8 @@ export const VOICE_EASE = [0.22, 1, 0.36, 1] as const;
  * Lower RMS = quieter speech counts as active (aura + end-of-utterance timing).
  */
 export const COMMAND_SPEECH_RMS = 0.11;
-export const COMMAND_UTTERANCE_END_SILENCE_MS = 720;
+/** Sustained silence after speech before ending capture (covers ~1s mid-sentence pauses). */
+export const COMMAND_UTTERANCE_END_SILENCE_MS = 2_000;
 /** Analyser level multiplier while capturing a command (mic aura only). */
 export const COMMAND_MIC_LEVEL_GAIN = 2.45;
 

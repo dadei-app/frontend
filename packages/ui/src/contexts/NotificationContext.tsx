@@ -17,23 +17,22 @@ import { actionsApi } from '@dadei/ui/lib/api/actions';
 import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notifications/notificationConstants';
 import { playNotificationPing } from '@dadei/ui/lib/notifications/notificationSound';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
-import { useActionsQuery } from '@dadei/ui/lib/query/queryHooks';
+import { useActiveActionsQuery } from '@dadei/ui/lib/query/queryHooks';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
-import { actionBannerMeta, actionDisplayTitle } from '@dadei/ui/utils/actionDisplay';
+import {
+  actionBannerMeta,
+  actionDisplayTitle,
+  actionDomainLabel,
+  isNotificationAction,
+  resolveActionOperation,
+} from '@dadei/ui/utils/actionDisplay';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
-
-const ACTION_LABELS: Record<string, string> = {
-  calendar: 'Calendar event',
-  calendar_event: 'Calendar event',
-  todo: 'Task',
-  task: 'Task',
-  email: 'Email',
-};
 
 export type ShowBannerInput = {
   id?: string;
   category?: string;
+  operation?: 'create' | 'update' | 'delete';
   title: string;
   body?: string;
   durationMs?: number;
@@ -46,6 +45,7 @@ export type ShowBannerInput = {
 export type BannerItem = {
   id: string;
   category?: string;
+  operation?: 'create' | 'update' | 'delete';
   title: string;
   body?: string;
   durationMs: number;
@@ -87,10 +87,16 @@ function useActionBannerSync(
   dismissBannerById: (id: string) => void,
 ) {
   const queryClient = useQueryClient();
-  const { data: actions } = useActionsQuery(enabled);
+  const { data: actions } = useActiveActionsQuery(enabled);
 
   const activeActions = useMemo<NetworkAction[]>(
-    () => (actions ?? []).filter((a) => a.status === 'proposed' && a.scheduled_at !== null),
+    () =>
+      (actions ?? []).filter(
+        (a) =>
+          a.status === 'proposed' &&
+          a.scheduled_at !== null &&
+          isNotificationAction(a),
+      ),
     [actions],
   );
 
@@ -116,10 +122,10 @@ function useActionBannerSync(
     for (const action of activeActions) {
       const bannerId = `action:${action.id}`;
       currentBannerIds.add(bannerId);
-      const label = ACTION_LABELS[action.action_type] ?? action.action_type;
       showBanner({
         id: bannerId,
-        category: label,
+        category: actionDomainLabel(action.action_type),
+        operation: resolveActionOperation(action),
         title: actionDisplayTitle(action),
         body: actionBannerMeta(action),
         durationMs: AUTO_FIRE_DELAY_MS,
@@ -127,17 +133,10 @@ function useActionBannerSync(
         countdownEndsAt: action.scheduled_at || undefined,
         cancelLabel: 'Cancel',
         onCancel: async () => {
-          const updated = await actionsApi.reject(action.id);
+          await actionsApi.reject(action.id);
           queryClient.setQueriesData<NetworkAction[]>(
             { queryKey: queryKeys.actions },
-            (prev) => {
-              if (!prev) return prev;
-              const idx = prev.findIndex((item) => item.id === updated.id);
-              if (idx === -1) return prev;
-              const next = [...prev];
-              next[idx] = updated;
-              return next;
-            },
+            (prev) => (prev ?? []).filter((item) => item.id !== action.id),
           );
           dismissBannerById(bannerId);
         },
@@ -189,6 +188,7 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
             key={banner.id}
             id={banner.id}
             category={banner.category}
+            operation={banner.operation}
             title={banner.title}
             body={banner.body}
             durationMs={banner.durationMs}
@@ -236,6 +236,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       const next: BannerItem = {
         id,
         category: input.category,
+        operation: input.operation,
         title: input.title,
         body: input.body,
         durationMs,

@@ -1,5 +1,6 @@
 import { api } from '@dadei/ui/lib/api/http/client';
 import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
 import { buildEndpoint, getClientIpAddresses, retryWithBackoff } from './utils';
 
 interface ClientRegistration {
@@ -97,5 +98,16 @@ export const serviceApi = {
     await api.patch(ENDPOINTS.SERVICE_ASSISTANT_MODE_RELEASE, {
       session_token: sessionToken,
     });
+  },
+
+  /**
+   * Google integration scope status for the settings UI.
+   * GET /api/v1/service/integrations/status (v2 when BETA=true)
+   */
+  async integrationsStatus(): Promise<IntegrationsStatusResponse> {
+    const { data } = await api.get<IntegrationsStatusResponse>(
+      ENDPOINTS.SERVICE_INTEGRATIONS_STATUS,
+    );
+    return data;
   },
 };

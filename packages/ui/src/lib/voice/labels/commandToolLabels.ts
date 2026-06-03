@@ -18,15 +18,15 @@ const TOOL_LABELS: Record<string, string> = {
   search_interactions: 'Searching conversations',
 
   // Web & maps
-  web_search: 'Checing google',
+  web_search: 'Checking Google',
   maps_search_places: 'Checking the map',
   maps_directions: 'Plotting the route',
   maps_distance_matrix: 'Simulating a trip',
 
   // Calendar
   calendar_create_event: 'Creating an event',
-  calendar_list_events: 'Checking my calendar',
-  calendar_get_event: 'Scanning the calendar',
+  calendar_list_events: 'Checking the calendar',
+  calendar_get_event: 'Loading an event',
   calendar_update_event: 'Updating an event',
   calendar_delete_event: 'Deleting an event',
 
@@ -40,13 +40,13 @@ const TOOL_LABELS: Record<string, string> = {
 
   // Tasks
   tasks_create: 'Adding a task',
-  tasks_list: 'Checking my tasks',
-  tasks_get: 'Looking at that task',
-  tasks_update: 'Updating my task',
-  tasks_delete: 'Removing that task',
+  tasks_list: 'Checking tasks',
+  tasks_get: 'Getting a task',
+  tasks_update: 'Updating a task',
+  tasks_delete: 'Deleting a task',
   tasklist_create: 'Creating a task list',
-  tasklist_list: 'Checking my task lists',
-  tasklist_delete: 'Deleting that task list',
+  tasklist_list: 'Checking task lists',
+  tasklist_delete: 'Deleting a task list',
 
   // Contacts
   contacts_create: 'Adding a contact',

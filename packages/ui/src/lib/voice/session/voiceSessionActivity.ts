@@ -14,3 +14,20 @@ export function notifyVoiceSpeechActivity(): void {
     listener();
   }
 }
+
+/** Stop forwarding mic chunks and seal the utterance on the server (sync, no React wait). */
+
+type CaptureCommitListener = () => void;
+
+const captureCommitListeners = new Set<CaptureCommitListener>();
+
+export function subscribeCommandCaptureCommit(listener: CaptureCommitListener): () => void {
+  captureCommitListeners.add(listener);
+  return () => captureCommitListeners.delete(listener);
+}
+
+export function notifyCommandCaptureCommit(): void {
+  for (const listener of captureCommitListeners) {
+    listener();
+  }
+}

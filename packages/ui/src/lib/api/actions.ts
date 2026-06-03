@@ -4,37 +4,14 @@ import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 import { buildEndpoint } from './utils';
 
-export interface ListActionsParams {
-  limit?: number;
-  offset?: number;
-  action_type?: string;
-}
-
 export const actionsApi = {
-  async list(params?: ListActionsParams): Promise<NetworkAction[]> {
-    const { data } = await api.get<NetworkAction[]>(ENDPOINTS.ACTIONS, {
-      params: {
-        limit: params?.limit ?? 100,
-        offset: params?.offset ?? 0,
-        ...(params?.action_type ? { action_type: params.action_type } : {}),
-      },
-    });
+  async listActive(): Promise<NetworkAction[]> {
+    const { data } = await api.get<NetworkAction[]>(ENDPOINTS.ACTIONS);
     return data;
   },
 
-  async updateStatus(id: string, status: 'confirmed' | 'dismissed'): Promise<NetworkAction> {
-    const endpoint = buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId: id });
-    const { data } = await api.patch<NetworkAction>(endpoint, { status });
-    return data;
-  },
-
-  async delete(id: string): Promise<void> {
-    const endpoint = buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId: id });
-    await api.delete(endpoint);
-  },
-
-  async reject(id: string): Promise<NetworkAction> {
-    const endpoint = `${buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId: id })}/reject`;
+  async reject(actionId: string): Promise<NetworkAction> {
+    const endpoint = `${buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId })}/reject`;
     const { data } = await api.post<NetworkAction>(endpoint);
     return data;
   },

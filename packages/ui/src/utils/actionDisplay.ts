@@ -1,15 +1,131 @@
+import type { CSSProperties } from 'react';
 import { formatForUser } from '@dadei/ui/utils/time';
+import type { ActionOperation, NetworkAction } from '@dadei/ui/types/models.types';
 
-import type { NetworkAction } from '@dadei/ui/types/models.types';
+/** Domains that surface approval notification banners. */
+export const NOTIFICATION_ACTION_TYPES = new Set([
+  'calendar_event',
+  'calendar',
+  'task',
+  'todo',
+  'email',
+  'message',
+]);
 
-const ACTION_TYPE_LABELS: Record<string, string> = {
-  calendar: 'Calendar event',
-  calendar_event: 'Calendar event',
+const DOMAIN_LABELS: Record<string, string> = {
+  calendar: 'Calendar',
+  calendar_event: 'Calendar',
   todo: 'Task',
   task: 'Task',
   email: 'Email',
-  message: 'Message',
+  message: 'Email',
 };
+
+const OPERATION_LABELS: Record<ActionOperation, string> = {
+  create: 'Create',
+  update: 'Update',
+  delete: 'Delete',
+};
+
+const SEND_TOOLS = new Set(['send_email', 'send_draft', 'gmail_send', 'gmail_send_draft']);
+const UPDATE_TOOLS = new Set(['modify_email_labels', 'gmail_modify_labels']);
+
+function matchesOp(name: string, op: string): boolean {
+  return name.startsWith(`${op}_`) || name.includes(`_${op}_`) || name.endsWith(`_${op}`);
+}
+
+/** Client fallback when API payload omits operation (mirrors backend action_metadata). */
+export function operationForToolName(toolName: string | null | undefined): ActionOperation | undefined {
+  const name = (toolName ?? '').trim().toLowerCase();
+  if (!name) return undefined;
+  if (SEND_TOOLS.has(name) || matchesOp(name, 'create')) return 'create';
+  if (UPDATE_TOOLS.has(name) || matchesOp(name, 'update')) return 'update';
+  if (matchesOp(name, 'delete')) return 'delete';
+  return undefined;
+}
+
+export function resolveActionOperation(
+  action: Pick<NetworkAction, 'operation' | 'tool_name'>,
+): ActionOperation | undefined {
+  if (action.operation) return action.operation;
+  return operationForToolName(action.tool_name);
+}
+
+export type OperationBannerTheme = {
+  shell: CSSProperties;
+  tint: string;
+  operationTextClass: string;
+  countdownBarClass: string;
+};
+
+/** Translucent glass shells — dark green / blue / red (aligned with command bubbles). */
+export const OPERATION_BANNER_THEME: Record<ActionOperation, OperationBannerTheme> = {
+  create: {
+    shell: {
+      backdropFilter: 'blur(6px) saturate(104%)',
+      WebkitBackdropFilter: 'blur(6px) saturate(104%)',
+      background: 'rgba(10, 28, 22, 0.8)',
+      border: '1px solid rgba(52, 211, 153, 0.2)',
+      boxShadow:
+        'inset 0 1px 0 rgba(110, 231, 183, 0.07), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 8px 22px -14px rgba(0, 0, 0, 0.36)',
+    },
+    tint: 'radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.16), transparent 72%)',
+    operationTextClass: 'text-emerald-300/95',
+    countdownBarClass: 'bg-emerald-200/85',
+  },
+  update: {
+    shell: {
+      backdropFilter: 'blur(6px) saturate(104%)',
+      WebkitBackdropFilter: 'blur(6px) saturate(104%)',
+      background: 'rgba(12, 22, 38, 0.8)',
+      border: '1px solid rgba(56, 189, 248, 0.2)',
+      boxShadow:
+        'inset 0 1px 0 rgba(125, 211, 252, 0.07), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 8px 22px -14px rgba(0, 0, 0, 0.36)',
+    },
+    tint: 'radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.16), transparent 72%)',
+    operationTextClass: 'text-sky-300/95',
+    countdownBarClass: 'bg-sky-200/85',
+  },
+  delete: {
+    shell: {
+      backdropFilter: 'blur(6px) saturate(104%)',
+      WebkitBackdropFilter: 'blur(6px) saturate(104%)',
+      background: 'rgba(36, 14, 18, 0.8)',
+      border: '1px solid rgba(251, 113, 133, 0.22)',
+      boxShadow:
+        'inset 0 1px 0 rgba(253, 164, 175, 0.07), inset 0 -1px 0 rgba(0, 0, 0, 0.12), 0 8px 22px -14px rgba(0, 0, 0, 0.36)',
+    },
+    tint: 'radial-gradient(circle at 50% 0%, rgba(244, 63, 94, 0.16), transparent 72%)',
+    operationTextClass: 'text-rose-300/95',
+    countdownBarClass: 'bg-rose-200/85',
+  },
+};
+
+export const NEUTRAL_BANNER_THEME: OperationBannerTheme = {
+  shell: {
+    backdropFilter: 'blur(6px) saturate(104%)',
+    WebkitBackdropFilter: 'blur(6px) saturate(104%)',
+    background: 'rgba(24, 24, 27, 0.8)',
+    border: '1px solid rgba(255, 255, 255, 0.07)',
+    boxShadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 0 rgba(0, 0, 0, 0.08), 0 8px 22px -14px rgba(0, 0, 0, 0.32)',
+  },
+  tint: 'radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.04), transparent 70%)',
+  operationTextClass: 'text-zinc-300/90',
+  countdownBarClass: 'bg-zinc-100',
+};
+
+export function isNotificationAction(action: Pick<NetworkAction, 'action_type'>): boolean {
+  return NOTIFICATION_ACTION_TYPES.has(action.action_type);
+}
+
+export function actionDomainLabel(actionType: string): string {
+  return DOMAIN_LABELS[actionType] ?? actionType.replace(/_/g, ' ');
+}
+
+export function actionOperationLabel(operation: ActionOperation): string {
+  return OPERATION_LABELS[operation];
+}
 
 export function truncatePreview(text: string | null | undefined, maxLen = 80): string | null {
   const trimmed = (text ?? '').trim();
@@ -51,62 +167,15 @@ export function formatActionTimeRange(
   return startLabel ?? endLabel;
 }
 
-export function formatAttendeeSummary(emails: string[] | null | undefined): string | null {
-  if (!emails?.length) return null;
-  if (emails.length === 1) return emails[0];
-  return `${emails.length} attendees`;
-}
-
 export function actionDisplayTitle(action: NetworkAction): string {
   const title = action.title?.trim();
   if (title) return title;
-
-  const canonical = action.canonical_text?.trim();
-  if (canonical) return canonical;
-
-  return ACTION_TYPE_LABELS[action.action_type] ?? action.action_type;
-}
-
-export function calendarActionMeta(action: NetworkAction): string {
-  return formatMetaLine([
-    formatActionTimeRange(action.start_time, action.end_time),
-    action.location?.trim(),
-    formatAttendeeSummary(action.attendee_emails),
-    action.description ? truncatePreview(action.description, 60) : null,
-    action.status,
-  ]);
-}
-
-export function taskActionMeta(action: NetworkAction): string {
-  return formatMetaLine([
-    action.start_time ? `Due ${formatActionWhen(action.start_time)}` : null,
-    action.notes ? truncatePreview(action.notes, 60) : null,
-    action.status,
-  ]);
-}
-
-export function mailActionMeta(action: NetworkAction): string {
-  return formatMetaLine([
-    action.recipient_to?.trim() ? `To ${action.recipient_to.trim()}` : null,
-    truncatePreview(action.body, 80),
-    action.status,
-  ]);
+  return actionDomainLabel(action.action_type);
 }
 
 export function actionBannerMeta(action: NetworkAction): string | undefined {
-  const parts: string[] = [];
   const timeRange = formatActionTimeRange(action.start_time, action.end_time);
-  if (timeRange) parts.push(timeRange);
-
-  const detail =
-    action.description?.trim() ||
-    action.body?.trim() ||
-    action.notes?.trim() ||
-    action.recipient_to?.trim();
-  const preview = truncatePreview(detail, 80);
-  if (preview) parts.push(preview);
-
-  return parts.length ? parts.join(' · ') : undefined;
+  return timeRange ?? undefined;
 }
 
 export function formatConfidence(confidence: number | null | undefined): string | null {

@@ -38,7 +38,10 @@ import {
   formatAssistantStatusLine,
 } from '@dadei/ui/lib/voice/labels/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/session/sessionEndDetection';
-import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/session/voiceSessionActivity';
+import {
+  notifyCommandCaptureCommit,
+  subscribeVoiceSpeechActivity,
+} from '@dadei/ui/lib/voice/session/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/utils/time';
 
@@ -379,6 +382,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (current !== 'listening' && current !== 'follow_up') return;
     if (commandStreamInFlightRef.current) return;
 
+    notifyCommandCaptureCommit();
     utteranceEndNotifiedRef.current = true;
     awaitingTranscriptRef.current = true;
     transcribeFromFollowUpRef.current = current === 'follow_up';
@@ -695,6 +699,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const submitVisibleCommandText = useCallback(
     (raw: string, fromFollowUp: boolean) => {
+      const captureState = stateRef.current;
+      if (captureState === 'listening' || captureState === 'follow_up') {
+        notifyCommandCaptureCommit();
+      }
       const cleaned = cleanTranscript(raw);
       if (!cleaned) return;
       const displayText = liveCommandCaptionText(cleaned, fromFollowUp);
@@ -904,6 +912,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           const trimmed = text.trim();
           if (!trimmed) return;
           clearWakeFalsePositiveIfCommandInProgress(trimmed);
+          if (!utteranceEndNotifiedRef.current) {
+            utteranceEndNotifiedRef.current = true;
+            awaitingTranscriptRef.current = true;
+            setState('transcribing');
+          }
           submitVisibleCommandText(text, false);
           return;
         }

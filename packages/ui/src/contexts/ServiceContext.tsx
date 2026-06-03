@@ -9,10 +9,7 @@ import {
   subscribeRealtimeMessages,
 } from '@dadei/ui/lib/realtime/realtimeClient';
 import { getRealtimeSessionId } from '@dadei/ui/lib/realtime/realtimeClient';
-import {
-  ASSISTANT_ACTIONS_LIST_LIMIT,
-  clearAssistantSessionCaches,
-} from '@dadei/ui/lib/query/queryHooks';
+import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { useQueryClient } from '@tanstack/react-query';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
@@ -238,11 +235,14 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isConnected) return;
 
-    const actionKey = queryKeys.actionsList(ASSISTANT_ACTIONS_LIST_LIMIT, 0);
+    const actionKey = queryKeys.actions;
 
     const mergeAction = (action: NetworkAction) => {
       queryClient.setQueryData<NetworkAction[]>(actionKey, prev => {
         const list = prev ?? [];
+        if (action.status !== 'proposed' || !action.scheduled_at) {
+          return list.filter(a => a.id !== action.id);
+        }
         const idx = list.findIndex(a => a.id === action.id);
         if (idx === -1) {
           return [action, ...list];
