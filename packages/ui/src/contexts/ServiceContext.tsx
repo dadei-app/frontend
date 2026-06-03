@@ -1,6 +1,8 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
+import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/errors/userMessage';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import {
   sendRealtimeMessage,
@@ -96,6 +98,7 @@ async function buildClientContextResponse(keys: ClientContextKey[]): Promise<Rec
 
 export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading, getAccessToken } = useAuth();
+  const { showToast } = useNotifications();
   const queryClient = useQueryClient();
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
@@ -145,6 +148,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         setRegistrationConflict(true);
         setIsConnected(false);
         stopRealtimeClient();
+        showToast(getUserErrorMessage(error, ERROR_CODES.invalid_session), 'error');
       }
     };
 
@@ -153,7 +157,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, isAuthLoading]);
+  }, [isAuthenticated, isAuthLoading, showToast]);
 
   useEffect(() => {
     const handleServiceStatusChanged = (status: { enabled: boolean }) => {
@@ -233,39 +237,54 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isConnected) return;
-
     const actionKey = queryKeys.actions;
 
     const applyActionQueue = (queue: NetworkAction[]) => {
       queryClient.setQueryData<NetworkAction[]>(actionKey, queue);
     };
 
-    const offWs = subscribeRealtimeMessages(msg => {
-      if (msg.event === 'action_queue') {
-        if (!isNetworkActionQueue(msg.data)) return;
+    const handleActionMessage = (msg: { event?: string; data?: unknown }) => {
+      if (msg.event === 'action_queue' && isNetworkActionQueue(msg.data)) {
         applyActionQueue(msg.data);
+        return;
       }
-    });
+      // Legacy single-action pushes (still emitted by some paths): refresh from payload.
+      if (msg.event === 'action' && isNetworkAction(msg.data)) {
+        const action = msg.data;
+        if (action.status !== 'proposed') {
+          queryClient.setQueryData<NetworkAction[]>(actionKey, (prev) =>
+            (prev ?? []).filter((a) => a.id !== action.id),
+          );
+          return;
+        }
+        queryClient.setQueryData<NetworkAction[]>(actionKey, (prev) => {
+          const list = prev ?? [];
+          const idx = list.findIndex((a) => a.id === action.id);
+          if (idx === -1) return [...list, action];
+          return list.map((a, i) => (i === idx ? action : a));
+        });
+      }
+    };
+
+    const offWs = subscribeRealtimeMessages((msg) => handleActionMessage(msg));
 
     let offElectron: (() => void) | undefined;
     if (window.electronAPI?.onWebhookAction) {
-      offElectron = window.electronAPI.onWebhookAction(payload => {
-        if (payload?.event === 'action_queue' && isNetworkActionQueue(payload?.data)) {
-          applyActionQueue(payload.data);
-        }
-      });
+      offElectron = window.electronAPI.onWebhookAction((payload) => handleActionMessage(payload));
     }
 
     return () => {
       offWs();
       if (offElectron) offElectron();
     };
-  }, [isConnected, queryClient]);
+  }, [queryClient]);
 
   const toggleService = useCallback(async () => {
     if (registrationConflict) {
-      console.warn('[Service] Registration conflict: cannot toggle service');
+      showToast(
+        'Could not connect this device to the assistant. Refresh the page or restart the app.',
+        'error',
+      );
       return;
     }
 
@@ -280,13 +299,15 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         enableTimeoutRef.current = setTimeout(() => {
           console.error('[Service] Enable timeout - no status event received');
           setIsTogglingService(false);
+          showToast('The assistant did not confirm it was turned on. Try again.', 'error');
         }, ENABLE_TIMEOUT_MS);
       }
     } catch (error) {
       console.error('Failed to toggle service:', error);
       setIsTogglingService(false);
+      showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
     }
-  }, [isServiceEnabled, registrationConflict]);
+  }, [isServiceEnabled, registrationConflict, showToast]);
 
   const realtimeSessionId = getRealtimeSessionId();
   const isAssistantOwner =

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isAxiosError } from 'axios';
 import { useReducedMotion } from 'framer-motion';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ import {
   useRecentConversationsQuery,
 } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { ORPHAN_KEY } from './constants';
 import { activeConversationKey, groupKey, parseInteractionDate } from './conversationUtils';
 import type { ConversationGroupState, ConversationGroupView } from './types';
@@ -396,7 +397,7 @@ export function useInteractionPanel() {
       setArmedInteractionDeleteId(null);
     } catch (error) {
       console.error('Failed to delete interaction:', error);
-      showToast('Failed to delete interaction', 'error');
+      showToast(getUserErrorMessage(error, 'Could not delete that interaction.'), 'error');
       setArmedInteractionDeleteId(null);
     }
   };
@@ -429,7 +430,7 @@ export function useInteractionPanel() {
       setArmedConversationDeleteId(null);
     } catch (error) {
       console.error('Failed to delete conversation:', error);
-      showToast('Failed to delete conversation', 'error');
+      showToast(getUserErrorMessage(error, 'Could not delete that conversation.'), 'error');
       setArmedConversationDeleteId(null);
     }
   };
@@ -459,7 +460,7 @@ export function useInteractionPanel() {
       showToast('All interactions cleared', 'success');
     } catch (error) {
       console.error('Failed to clear:', error);
-      showToast('Failed to clear interactions', 'error');
+      showToast(getUserErrorMessage(error, 'Could not clear interactions.'), 'error');
     }
   };
 
@@ -473,6 +474,8 @@ export function useInteractionPanel() {
   return {
     containerRef,
     loading,
+    panelLoadError,
+    retryPanelLoad,
     conversationGroups,
     displayGroups,
     prefersReducedMotion,

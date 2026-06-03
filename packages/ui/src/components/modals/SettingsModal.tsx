@@ -25,6 +25,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
+import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import {
   useAuthMeQuery,
   useIntegrationsStatusQuery,
@@ -154,13 +155,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       onOpenChange(false);
       await logout();
     } catch (e: unknown) {
-      const msg =
-        typeof e === 'object' && e !== null && 'response' in e
-          ? String((e as { response?: { data?: { detail?: string } } }).response?.data?.detail)
-          : e instanceof Error
-            ? e.message
-            : 'Failed to delete account';
-      showToast(msg || 'Failed to delete account', 'error');
+      showToast(getUserErrorMessage(e, 'Could not delete your account.'), 'error');
     } finally {
       setDeleting(false);
       setAlertOpen(false);
@@ -168,8 +163,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     }
   };
 
-  const fetchErr = (e: unknown) =>
-    typeof e === 'object' && e !== null && 'message' in e ? String((e as Error).message) : 'Request failed';
+  const fetchErr = (e: unknown) => getUserErrorMessage(e, 'Could not load memories.');
 
   const memoryRows = memoriesQuery.data ?? [];
 
@@ -184,7 +178,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       showToast('Memory deleted', 'success');
     } catch (error) {
       console.error('Failed to delete memory:', error);
-      showToast('Failed to delete memory', 'error');
+      showToast(getUserErrorMessage(error, 'Could not delete that memory.'), 'error');
     } finally {
       setArmedMemoryDeleteId(null);
     }
@@ -357,7 +351,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                       <p className="mt-4 text-xs text-zinc-500 font-secondary">Loading integrations…</p>
                     ) : integrationsStatusQuery.isError ? (
                       <p className="mt-4 text-xs text-rose-300/90 font-secondary">
-                        Could not load integration scope status.
+                        {fetchErr(integrationsStatusQuery.error)}
                       </p>
                     ) : null}
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
 import type { ActionOperation } from '@dadei/ui/types/models.types';
+import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import {
   actionOperationLabel,
   NEUTRAL_BANNER_THEME,
@@ -95,7 +96,7 @@ export default function Banner({
     try {
       await onCancel();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to cancel');
+      setError(getUserErrorMessage(e, 'Could not cancel this notification.'));
       setExitMode('expire');
       crumbleStartedRef.current = false;
       setCancelling(false);

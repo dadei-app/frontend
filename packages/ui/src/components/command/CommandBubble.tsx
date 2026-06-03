@@ -1,5 +1,12 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react';
+import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import type { CommandState, AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { formatAssistantStatusLine } from '@dadei/ui/lib/voice/labels/commandToolLabels';
@@ -7,7 +14,12 @@ import {
   typewriterDelayBeforeChar,
   typewriterRevealStep,
 } from '@dadei/ui/lib/voice/ui/typewriterTiming';
-import { VOICE_EASE } from '@dadei/ui/lib/voice/session/voiceConstants';
+import {
+  COMMAND_TURN_PAIR_ENTRY_MS,
+  COMMAND_TURN_PAIR_LAYOUT_MS,
+  COMMAND_TURN_PAIR_SLIDE_PX,
+  VOICE_EASE,
+} from '@dadei/ui/lib/voice/session/voiceConstants';
 
 const STATUS_ELLIPSIS_CYCLE_MS = 480;
 /** Alpha mask fade length at clipped scroll edges (not a visible overlay). */
@@ -60,7 +72,6 @@ interface GlassBubbleProps {
   statusLine?: string | null;
   typewriterEnabled?: boolean;
   typewriterGeneration?: number;
-  animateEntry?: boolean;
   onTypewriterFirstChar?: () => void;
   onTypewriterComplete?: () => void;
 }
@@ -93,17 +104,7 @@ function AnimatedStatusLine({ base }: { base: string }) {
 
   const label = dotPhase === 0 ? base : `${base}${'.'.repeat(dotPhase)}`;
 
-  return (
-    <motion.span
-      key={`${base}-${dotPhase}`}
-      initial={{ opacity: 0.55 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.16, ease: 'easeOut' }}
-      className="text-zinc-400"
-    >
-      {label}
-    </motion.span>
-  );
+  return <span className="text-zinc-400">{label}</span>;
 }
 
 /** Tool / thinking labels scroll upward when the status line changes. */
@@ -146,7 +147,6 @@ function GlassBubble({
   statusLine = null,
   typewriterEnabled = false,
   typewriterGeneration = 0,
-  animateEntry = true,
   onTypewriterFirstChar,
   onTypewriterComplete,
 }: GlassBubbleProps) {
@@ -227,9 +227,6 @@ function GlassBubble({
 
   return (
     <motion.div
-      initial={animateEntry ? { opacity: 0, y: 10, scale: 0.98 } : false}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.32, ease: VOICE_EASE }}
       className="w-full min-w-0 shrink-0"
     >
       <div className="relative rounded-2xl" style={glassShellStyle}>
@@ -257,10 +254,45 @@ function GlassBubble({
   );
 }
 
+const turnPairTransition = {
+  duration: COMMAND_TURN_PAIR_ENTRY_MS,
+  ease: VOICE_EASE,
+  layout: { duration: COMMAND_TURN_PAIR_LAYOUT_MS, ease: VOICE_EASE },
+} as const;
+
+/** User + Dadei bubbles enter the stack together (slide up from below the mic). */
+function CommandTurnPair({
+  turnId,
+  animateEntry,
+  children,
+}: {
+  turnId: string;
+  animateEntry: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <motion.div
+      layout
+      layoutId={`command-turn-${turnId}`}
+      initial={animateEntry ? { opacity: 0, y: COMMAND_TURN_PAIR_SLIDE_PX } : false}
+      animate={{ opacity: 1, y: 0 }}
+      transition={turnPairTransition}
+      onAnimationComplete={() => {
+        if (!animateEntry) return;
+        window.dispatchEvent(new CustomEvent('command-bubble-stack-scroll'));
+      }}
+      className="flex w-full flex-col gap-3"
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 export default function CommandBubble() {
   const {
     state,
     bubbleHistory,
+    liveTurnId,
     userBubbleText,
     assistantBubbleText,
     assistantBubbleStatus,
@@ -317,7 +349,12 @@ export default function CommandBubble() {
     (assistantIsBusy || assistantBubbleText.trim().length > 0 || !!assistantStatusLine);
 
   const userBubble = liveTurnActive ? (
-    <GlassBubble role="user" label="You" text={userBubbleText} state={state} />
+    <GlassBubble
+      role="user"
+      label="You"
+      text={userBubbleText}
+      state={state}
+    />
   ) : null;
 
   const assistantBubble = showAssistant ? (
@@ -330,27 +367,31 @@ export default function CommandBubble() {
       statusLine={assistantStatusLine}
       typewriterEnabled={assistantBubbleStatus === 'revealing'}
       typewriterGeneration={typewriterGeneration}
-      animateEntry={false}
       onTypewriterFirstChar={onRevealStarted}
       onTypewriterComplete={onRevealComplete}
     />
   ) : null;
 
+  const scrollStackToBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollHeight, clientHeight } = el;
+    if (scrollHeight > clientHeight + STACK_SCROLL_EDGE_EPS) {
+      el.scrollTo({ top: scrollHeight, behavior: 'smooth' });
+    }
+    syncStackScroll();
+  }, [syncStackScroll]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
-    const run = () => {
-      const { scrollHeight, clientHeight } = el;
-      if (scrollHeight > clientHeight + STACK_SCROLL_EDGE_EPS) {
-        el.scrollTo({ top: scrollHeight, behavior: 'smooth' });
-      }
-      syncStackScroll();
-    };
+    const run = () => scrollStackToBottom();
 
     run();
     const id = window.requestAnimationFrame(run);
     el.addEventListener('scroll', syncStackScroll, { passive: true });
+    window.addEventListener('command-bubble-stack-scroll', run);
     const ro = new ResizeObserver(run);
     ro.observe(el);
     const content = el.firstElementChild;
@@ -359,14 +400,17 @@ export default function CommandBubble() {
     return () => {
       window.cancelAnimationFrame(id);
       el.removeEventListener('scroll', syncStackScroll);
+      window.removeEventListener('command-bubble-stack-scroll', run);
       ro.disconnect();
     };
   }, [
     bubbleHistory,
+    liveTurnId,
     userBubbleText,
     assistantBubbleText,
     assistantStatusLine,
     assistantBubbleStatus,
+    scrollStackToBottom,
     syncStackScroll,
   ]);
 
@@ -377,34 +421,47 @@ export default function CommandBubble() {
           ref={scrollRef}
           className="h-full min-h-0 overflow-y-auto overscroll-contain scroll-smooth px-1 py-4 [scrollbar-color:rgba(161,161,170,0.5)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/50"
         >
-          <div className="flex w-full flex-col gap-3">
-            {bubbleHistory.map((turn) => (
-              <div key={turn.id} className="flex w-full flex-col gap-3">
-                {turn.userText.trim() ? (
-                  <GlassBubble
-                    role="user"
-                    label="You"
-                    text={turn.userText}
-                    state="follow_up"
-                    animateEntry={false}
-                  />
-                ) : null}
-                {turn.assistantText.trim() ? (
-                  <GlassBubble
-                    role="assistant"
-                    label="Dadei"
-                    text={turn.assistantText}
-                    state="follow_up"
-                    assistantStatus="done"
-                    typewriterEnabled={false}
-                    animateEntry={false}
-                  />
-                ) : null}
-              </div>
-            ))}
-            {userBubble}
-            {assistantBubble}
-          </div>
+          <LayoutGroup id="command-bubble-stack">
+            <div className="flex w-full flex-col gap-3">
+              {bubbleHistory.map((turn) => (
+                <CommandTurnPair key={turn.id} turnId={turn.id} animateEntry={false}>
+                  {turn.userText.trim() ? (
+                    <GlassBubble
+                      role="user"
+                      label="You"
+                      text={turn.userText}
+                      state="follow_up"
+                    />
+                  ) : null}
+                  {turn.assistantText.trim() ? (
+                    <GlassBubble
+                      role="assistant"
+                      label="Dadei"
+                      text={turn.assistantText}
+                      state="follow_up"
+                      assistantStatus="done"
+                      typewriterEnabled={false}
+                    />
+                  ) : null}
+                </CommandTurnPair>
+              ))}
+              {liveTurnId && liveTurnActive ? (
+                <CommandTurnPair
+                  key={liveTurnId}
+                  turnId={liveTurnId}
+                  animateEntry
+                >
+                  {userBubble}
+                  {assistantBubble}
+                </CommandTurnPair>
+              ) : (
+                <>
+                  {userBubble}
+                  {assistantBubble}
+                </>
+              )}
+            </div>
+          </LayoutGroup>
         </div>
       </div>
     </div>

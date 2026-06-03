@@ -1,4 +1,10 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { actionsApi } from '@dadei/ui/lib/api/actions';
@@ -142,16 +148,28 @@ export function useMemoriesQuery(enabled = true, limit = ASSISTANT_MEMORIES_LIST
   });
 }
 
-/** Push-only cache for notification banners (`action_queue` WebSocket events). */
+/** Push-only state for notification banners (`action_queue` WebSocket events). */
 export function useNotificationActionsQuery() {
-  return useQuery<NetworkAction[]>({
-    queryKey: queryKeys.actions,
-    queryFn: () => [],
-    initialData: [],
-    staleTime: Number.POSITIVE_INFINITY,
-    gcTime: Number.POSITIVE_INFINITY,
-    enabled: false,
-  });
+  const queryClient = useQueryClient();
+  const [actions, setActions] = useState<NetworkAction[]>(
+    () => queryClient.getQueryData<NetworkAction[]>(queryKeys.actions) ?? [],
+  );
+
+  useEffect(() => {
+    const key = queryKeys.actions;
+    const sync = () => {
+      setActions(queryClient.getQueryData<NetworkAction[]>(key) ?? []);
+    };
+    sync();
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (event?.query?.queryKey?.[0] !== key[0]) return;
+      if (event.type === 'updated' || event.type === 'added') {
+        sync();
+      }
+    });
+  }, [queryClient]);
+
+  return { data: actions };
 }
 
 export function useDeleteMemoryMutation() {
