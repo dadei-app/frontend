@@ -48,7 +48,7 @@ const VIEWS: { id: SidebarView; label: string; Icon: LucideIcon }[] = [
   { id: 'about', label: 'About', Icon: Info },
 ];
 
-const PANELS: Record<SidebarView, React.ComponentType<SettingsPanelProps>> = {
+const PANELS: Record<SidebarView, ComponentType<SettingsPanelProps>> = {
   integrations: IntegrationsPanel,
   memories: MemoriesPanel,
   account: AccountPanel,

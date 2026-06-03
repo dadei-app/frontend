@@ -1,8 +1,13 @@
 import './env';
 import { app, BrowserWindow, dialog, ipcMain, Menu, type WebContents } from 'electron';
 import path from 'path';
-import { closeUpdaterSplashWindow, createUpdaterSplashWindow } from './updater-window';
-import { getBackendVersionGate, isUpdateInstallInProgress, runPackagedStartupFlow } from './updater';
+import {
+  emitBootstrapState,
+  getBackendVersionGate,
+  isUpdateInstallInProgress,
+  replayBootstrapState,
+  runPackagedStartupFlow,
+} from './updater';
 import { TokenStorage } from './auth/token-storage';
 import { handleGoogleOAuth } from './auth/oauth-handler';
 import { registerDeviceControlIpcHandlers } from './device-control';
@@ -29,7 +34,7 @@ function createWindow() {
     width: 1500,
     height: 800,
     autoHideMenuBar: true,
-    backgroundColor: '#09090b',
+    backgroundColor: '#000000',
     ...(isDarwin
       ? {
           titleBarStyle: 'hiddenInset' as const,
@@ -49,6 +54,10 @@ function createWindow() {
   });
   mainWindow.on('unmaximize', () => {
     mainWindow?.webContents.send('window:maximized-changed', false);
+  });
+
+  mainWindow.webContents.on('did-finish-load', () => {
+    replayBootstrapState();
   });
 
   if (isDev) {
@@ -176,9 +185,12 @@ ipcMain.handle('window:is-maximized', (event) => {
 registerDeviceControlIpcHandlers();
 
 app.whenReady().then(async () => {
-  registerSettingsIpc();
   const menu = buildApplicationMenu();
   Menu.setApplicationMenu(menu ?? null);
+
+  registerSettingsIpc();
+
+  createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -196,24 +208,13 @@ app.whenReady().then(async () => {
       app.quit();
       return;
     }
-    createWindow();
+    emitBootstrapState({ phase: 'ready', appVersion: app.getVersion() });
     return;
   }
 
-  await createUpdaterSplashWindow();
-  const outcome = await runPackagedStartupFlow();
+  emitBootstrapState({ phase: 'booting', appVersion: app.getVersion() });
 
-  if (outcome === 'launch_main') {
-    closeUpdaterSplashWindow();
-    createWindow();
-    return;
-  }
-
-  if (outcome === 'quit_for_install') {
-    return;
-  }
-
-  // quit_manual: splash stays open with Open releases / Quit until the user exits.
+  void runPackagedStartupFlow();
 });
 
 app.on('window-all-closed', () => {

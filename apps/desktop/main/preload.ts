@@ -99,8 +99,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
   },
 
-  onBootstrapState: (callback: (payload: unknown) => void) => {
-    const listener = (_e: unknown, payload: unknown) => callback(payload);
+  onBootstrapState: (callback: (payload: Record<string, unknown>) => void) => {
+    const listener = (_e: unknown, payload: Record<string, unknown>) => callback(payload);
     ipcRenderer.on('app:bootstrap-state', listener);
     return () => {
       ipcRenderer.removeListener('app:bootstrap-state', listener);

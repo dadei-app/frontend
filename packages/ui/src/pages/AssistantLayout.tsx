@@ -2,6 +2,8 @@ import { useLayoutEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useBootstrap } from '@dadei/ui/contexts/BootstrapContext';
+import { DadeiLoadingScreen } from '@dadei/ui/components/loading/DadeiLoadingScreen';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
@@ -55,6 +57,7 @@ function SpokenWakeWord({
  */
 export default function AssistantLayout() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { isReady: bootstrapReady } = useBootstrap();
   const { isConnected, isServiceEnabled } = useService();
   const { state } = useCommand();
   const showWakeHint = state === 'idle' && isServiceEnabled;
@@ -87,27 +90,11 @@ export default function AssistantLayout() {
     };
   }, []);
 
-  if (isLoading) {
+  if (!bootstrapReady || isLoading) {
     return (
-      <div className="flex h-screen flex-col overscroll-none bg-zinc-950">
-        {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
-        <div className="relative flex min-h-0 flex-1 items-center justify-center">
-          <div
-            className="absolute inset-0 opacity-40"
-            style={{
-              background:
-                'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16,185,129,0.25), transparent), radial-gradient(circle at 100% 0%, rgba(6,182,212,0.12), transparent 50%)',
-            }}
-            aria-hidden
-          />
-          <div className="relative flex flex-col items-center gap-4">
-            <Mic className="h-16 w-16 animate-pulse text-emerald-400/90" strokeWidth={1.5} />
-            <p className="text-lg font-medium tracking-tight text-zinc-300">
-              <span className="font-secondary">Loading dadei…</span>
-            </p>
-          </div>
-        </div>
-      </div>
+      <DadeiLoadingScreen
+        subtitleOverride={bootstrapReady && isLoading ? 'Signing in…' : undefined}
+      />
     );
   }
 

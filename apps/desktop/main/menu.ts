@@ -50,10 +50,6 @@ export function buildApplicationMenu(): Menu | null {
                 accelerator: 'CmdOrCtrl+,',
                 click: () => openSettings('account'),
               },
-              {
-                label: 'Check for Updates…',
-                click: () => openSettings('about', 'check-updates'),
-              },
               { type: 'separator' as const },
               { role: 'hide' as const },
               { role: 'hideOthers' as const },
@@ -79,6 +75,11 @@ export function buildApplicationMenu(): Menu | null {
     {
       label: 'Help',
       submenu: [
+        {
+          label: 'Check for Updates…',
+          click: () => openSettings('about', 'check-updates'),
+        },
+        { type: 'separator' as const },
         ...(isMac
           ? []
           : [
@@ -87,10 +88,6 @@ export function buildApplicationMenu(): Menu | null {
                 label: 'Settings…',
                 accelerator: 'CmdOrCtrl+,',
                 click: () => openSettings('account'),
-              },
-              {
-                label: 'Check for Updates…',
-                click: () => openSettings('about', 'check-updates'),
               },
               { type: 'separator' as const },
             ]),
