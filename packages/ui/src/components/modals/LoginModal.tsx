@@ -7,6 +7,7 @@ import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
+import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 
 const veilEase = [0.22, 1, 0.36, 1] as const;
 
@@ -75,7 +76,9 @@ export default function LoginOverlay({
       await register({ email, password });
       onAuthenticated?.();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : isLoginMode ? 'Sign in failed' : 'Registration failed');
+      setError(
+        getUserErrorMessage(err, isLoginMode ? 'Sign in failed. Try again.' : 'Registration failed. Try again.'),
+      );
     } finally {
       setLoading(false);
     }

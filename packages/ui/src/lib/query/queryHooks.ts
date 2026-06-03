@@ -1,4 +1,10 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
 import { actionsApi } from '@dadei/ui/lib/api/actions';
@@ -7,7 +13,7 @@ import { personsApi } from '@dadei/ui/lib/api/persons';
 import { interactionsApi } from '@dadei/ui/lib/api/interactions';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { authApi } from '@dadei/ui/lib/api/auth';
-import { integrationsApi } from '@dadei/ui/lib/api/integrations';
+import { serviceApi } from '@dadei/ui/lib/api/service';
 import type { Conversation, Person } from '@dadei/ui/types/models.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
@@ -38,7 +44,6 @@ export function removeAllConversationQueries(queryClient: QueryClient) {
 
 /** Default list sizes for assistant shell + settings (matches interaction panel style scoped keys). */
 export const ASSISTANT_MEMORIES_LIST_LIMIT = 100;
-export const ASSISTANT_ACTIONS_LIST_LIMIT = 100;
 
 /**
  * Drop cached network-scoped data (conversations, interactions, memory, actions, persons, service).
@@ -136,19 +141,6 @@ export function memoriesListQueryOptions(limit = ASSISTANT_MEMORIES_LIST_LIMIT) 
   };
 }
 
-export function actionsListQueryOptions(
-  limit = ASSISTANT_ACTIONS_LIST_LIMIT,
-  offset = 0,
-  actionType?: string
-) {
-  return {
-    queryKey: queryKeys.actionsList(limit, offset, actionType),
-    queryFn: () => actionsApi.list({ limit, offset, action_type: actionType }),
-    staleTime: 30_000,
-    refetchOnMount: false,
-  };
-}
-
 export function useMemoriesQuery(enabled = true, limit = ASSISTANT_MEMORIES_LIST_LIMIT) {
   return useQuery({
     ...memoriesListQueryOptions(limit),
@@ -156,16 +148,28 @@ export function useMemoriesQuery(enabled = true, limit = ASSISTANT_MEMORIES_LIST
   });
 }
 
-export function useActionsQuery(
-  enabled = true,
-  limit = ASSISTANT_ACTIONS_LIST_LIMIT,
-  offset = 0,
-  actionType?: string
-) {
-  return useQuery({
-    ...actionsListQueryOptions(limit, offset, actionType),
-    enabled,
-  });
+/** Push-only state for notification banners (`action_queue` WebSocket events). */
+export function useNotificationActionsQuery() {
+  const queryClient = useQueryClient();
+  const [actions, setActions] = useState<NetworkAction[]>(
+    () => queryClient.getQueryData<NetworkAction[]>(queryKeys.actions) ?? [],
+  );
+
+  useEffect(() => {
+    const key = queryKeys.actions;
+    const sync = () => {
+      setActions(queryClient.getQueryData<NetworkAction[]>(key) ?? []);
+    };
+    sync();
+    return queryClient.getQueryCache().subscribe((event) => {
+      if (event?.query?.queryKey?.[0] !== key[0]) return;
+      if (event.type === 'updated' || event.type === 'added') {
+        sync();
+      }
+    });
+  }, [queryClient]);
+
+  return { data: actions };
 }
 
 export function useDeleteMemoryMutation() {
@@ -174,16 +178,6 @@ export function useDeleteMemoryMutation() {
     mutationFn: (memoryId: string) => memoriesApi.delete(memoryId),
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.memories });
-    },
-  });
-}
-
-export function useDeleteActionMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (actionId: string) => actionsApi.delete(actionId),
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.actions });
     },
   });
 }
@@ -241,7 +235,7 @@ export function useAuthMeQuery(enabled = true) {
 export function useIntegrationsStatusQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.integrationsStatus,
-    queryFn: (): Promise<IntegrationsStatusResponse> => integrationsApi.status(),
+    queryFn: (): Promise<IntegrationsStatusResponse> => serviceApi.integrationsStatus(),
     enabled,
   });
 }

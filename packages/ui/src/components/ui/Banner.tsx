@@ -2,10 +2,18 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
+import type { ActionOperation } from '@dadei/ui/types/models.types';
+import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import {
+  actionOperationLabel,
+  NEUTRAL_BANNER_THEME,
+  OPERATION_BANNER_THEME,
+} from '@dadei/ui/utils/actionDisplay';
 
 export interface BannerProps {
   id: string;
   category?: string;
+  operation?: ActionOperation;
   title: string;
   body?: string;
   durationMs: number;
@@ -14,6 +22,11 @@ export interface BannerProps {
   cancelLabel?: string;
   onCancel?: () => Promise<void> | void;
   onDismiss: () => void;
+  /** Top of stack — only front card runs countdown auto-dismiss. */
+  isStackFront?: boolean;
+  stackDepth?: number;
+  /** Waiting in serial queue behind the active countdown. */
+  queued?: boolean;
 }
 
 const ENTER_EASE = [0.16, 1, 0.3, 1] as const;
@@ -24,6 +37,7 @@ const CRUMBLE_DURATION_MS = 520;
 export default function Banner({
   id,
   category,
+  operation,
   title,
   body,
   durationMs,
@@ -32,28 +46,31 @@ export default function Banner({
   cancelLabel,
   onCancel,
   onDismiss,
+  isStackFront = true,
+  stackDepth = 0,
+  queued = false,
 }: BannerProps) {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exitMode, setExitMode] = useState<'expire' | 'cancel'>('expire');
 
-  // Unique filter id per instance so multiple banners don't share displacement state.
+  const theme = operation ? OPERATION_BANNER_THEME[operation] : NEUTRAL_BANNER_THEME;
+
   const rawId = useId();
   const filterId = `dadei-crumble-${rawId.replace(/:/g, '')}`;
   const displaceRef = useRef<SVGFEDisplacementMapElement>(null);
   const crumbleStartedRef = useRef(false);
 
-  // Auto-expiry timer.
   useEffect(() => {
+    // Action approval banners are removed when the server queue updates, not on a local timer.
+    if (!isStackFront || !showCountdown || queued || id.startsWith('action:')) return;
     const now = Date.now();
     const end = countdownEndsAt ? parseApiDateTimeMs(countdownEndsAt) : now + durationMs;
     const delay = Math.max(end - now, 0);
     const t = window.setTimeout(() => onDismiss(), delay);
     return () => window.clearTimeout(t);
-  }, [id, durationMs, countdownEndsAt, onDismiss]);
+  }, [id, durationMs, countdownEndsAt, onDismiss, isStackFront, showCountdown, queued]);
 
-  // Drive the SVG displacement scale during the crumble exit.
-  // Framer can't animate SVG attribute values, so we rAF it manually.
   useEffect(() => {
     if (exitMode !== 'cancel' || crumbleStartedRef.current) return;
     crumbleStartedRef.current = true;
@@ -61,7 +78,6 @@ export default function Banner({
     let raf = 0;
     const tick = (now: number) => {
       const progress = Math.min((now - start) / CRUMBLE_DURATION_MS, 1);
-      // Ease-in (quadratic) so the banner sits still, then violently breaks apart.
       const eased = progress * progress;
       if (displaceRef.current) {
         displaceRef.current.setAttribute('scale', String(eased * 110));
@@ -76,19 +92,21 @@ export default function Banner({
     if (!onCancel || cancelling) return;
     setCancelling(true);
     setError(null);
-    // Set the exit variant BEFORE awaiting so the next render captures it.
-    // The parent will dismiss after onCancel resolves; framer reads the latest exit prop at unmount.
     setExitMode('cancel');
     try {
       await onCancel();
     } catch (e) {
-      // Cancel failed — restore the banner, drop the crumble intent.
-      setError(e instanceof Error ? e.message : 'Failed to cancel');
+      setError(getUserErrorMessage(e, 'Could not cancel this notification.'));
       setExitMode('expire');
       crumbleStartedRef.current = false;
       setCancelling(false);
     }
   };
+
+  const backdropBlur =
+    stackDepth > 0
+      ? `blur(${Math.min(16 + stackDepth * 8, 36)}px) saturate(112%)`
+      : theme.shell.backdropFilter;
 
   const variants = {
     enter: { opacity: 0, y: -40, scale: 0.96, filter: 'blur(8px)' },
@@ -114,7 +132,6 @@ export default function Banner({
 
   return (
     <>
-      {/* Crumble filter — defined inline per-instance, invisible. */}
       <svg
         aria-hidden
         width="0"
@@ -135,25 +152,59 @@ export default function Banner({
       </svg>
 
       <motion.div
-        layout
-        initial="enter"
+        initial={isStackFront ? 'enter' : false}
         animate="visible"
         exit={exitMode}
         variants={variants}
         style={{
+          ...theme.shell,
+          backdropFilter: backdropBlur,
+          WebkitBackdropFilter: backdropBlur,
           filter: exitMode === 'cancel' ? `url(#${filterId})` : undefined,
           willChange: 'transform, opacity, filter',
+          pointerEvents: isStackFront ? 'auto' : 'none',
         }}
-        className="pointer-events-auto group relative w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900/82 backdrop-blur-xl shadow-[0_1px_0_rgba(255,255,255,0.03)_inset,0_16px_44px_-22px_rgba(0,0,0,0.72)] transition-[border-color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-white/14 hover:shadow-[0_1px_0_rgba(255,255,255,0.04)_inset,0_18px_48px_-22px_rgba(0,0,0,0.78)]"
+        className="group relative w-full overflow-hidden rounded-xl transition-[box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-zinc-200/20 to-transparent" />
-        {showCountdown ? (
-          <CountdownBar durationMs={durationMs} countdownEndsAt={countdownEndsAt} />
+        <div
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"
+          style={{ background: theme.tint }}
+          aria-hidden
+        />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/12 to-transparent" />
+        {queued ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-[3px] items-center justify-center bg-black/25"
+            aria-hidden
+          >
+            <div className={`h-full w-full opacity-40 ${theme.countdownBarClass}`} />
+          </div>
         ) : null}
-        <div className="flex items-center gap-4 px-4 py-3.5">
+        {showCountdown && !queued ? (
+          <CountdownBar
+            durationMs={durationMs}
+            countdownEndsAt={countdownEndsAt}
+            fillClassName={theme.countdownBarClass}
+          />
+        ) : null}
+        <div className="relative flex items-center gap-4 px-4 py-3.5">
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-400/90 font-secondary">
-              {category || 'Notification'}
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
+              {operation ? (
+                <>
+                  <span className={theme.operationTextClass}>
+                    {actionOperationLabel(operation)}
+                  </span>
+                  <span className="text-zinc-500/80"> · </span>
+                </>
+              ) : null}
+              <span className="text-zinc-400/90">{category || 'Notification'}</span>
+              {queued ? (
+                <>
+                  <span className="text-zinc-500/80"> · </span>
+                  <span className="text-zinc-500/90">Queued</span>
+                </>
+              ) : null}
             </p>
             <p className="mt-1 truncate text-sm font-semibold leading-snug text-zinc-100">
               {title}
@@ -197,9 +248,11 @@ export default function Banner({
 function CountdownBar({
   durationMs,
   countdownEndsAt,
+  fillClassName,
 }: {
   durationMs: number;
   countdownEndsAt?: string;
+  fillClassName: string;
 }) {
   const [progress, setProgress] = useState(1);
 
@@ -229,11 +282,11 @@ function CountdownBar({
 
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 top-0 h-[3px] overflow-hidden bg-white/6"
+      className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] overflow-hidden bg-black/20"
       aria-hidden
     >
       <div
-        className="absolute inset-y-0 left-0 bg-zinc-100"
+        className={`absolute inset-y-0 left-0 ${fillClassName}`}
         style={{
           width: `${progress * 100}%`,
           willChange: 'width',

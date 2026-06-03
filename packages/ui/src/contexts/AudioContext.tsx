@@ -2,7 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
-import { notifyVoiceSpeechActivity } from '@dadei/ui/lib/voice/session/voiceSessionActivity';
+import {
+  notifyVoiceSpeechActivity,
+  subscribeCommandCaptureCommit,
+} from '@dadei/ui/lib/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
   COMMAND_SPEECH_RMS,
@@ -24,7 +27,6 @@ const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['transcribing', 'thinking', 'responding'];
 
 interface AudioContextType {
-  isProcessing: boolean;
   isAudioPipelineReady: boolean;
   micLevel: number;
 }
@@ -67,7 +69,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     useService();
   const { state, startListening, notifyCommandUtteranceEnded } = useCommand();
 
-  const [isProcessing] = useState(false);
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [streamAnalyserReady, setStreamAnalyserReady] = useState(false);
@@ -88,6 +89,16 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const wakeDetectorFailureLoggedRef = useRef(false);
   const commandSpeechSeenRef = useRef(false);
   const commandSilenceStartedMsRef = useRef<number | null>(null);
+  const commandAudioEndSentRef = useRef(false);
+
+  const commitCommandCapture = useCallback(() => {
+    forwardChunksRef.current = false;
+    commandSpeechSeenRef.current = false;
+    commandSilenceStartedMsRef.current = null;
+    if (!commandStreamActiveRef.current || commandAudioEndSentRef.current) return;
+    commandAudioEndSentRef.current = true;
+    sendRealtimeMessage({ type: 'command_audio_end' });
+  }, []);
 
   useEffect(() => {
     stateRef.current = state;
@@ -97,10 +108,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     forwardChunksRef.current = CHUNK_FORWARD_STATES.includes(state);
   }, [state]);
 
+  useEffect(() => subscribeCommandCaptureCommit(commitCommandCapture), [commitCommandCapture]);
+
   useEffect(() => {
     const prev = prevStateRef.current;
     if (prev === 'listening' && (state === 'transcribing' || ASSISTANT_BUSY_STATES.includes(state))) {
-      sendRealtimeMessage({ type: 'command_audio_end' });
+      commitCommandCapture();
     } else if (
       (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
       (state === 'follow_up' && ASSISTANT_BUSY_STATES.includes(prev))
@@ -115,10 +128,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       lastCommandStartAttemptMsRef.current = 0;
     }
     prevStateRef.current = state;
-  }, [state]);
+  }, [state, commitCommandCapture]);
 
   useEffect(() => {
     if (state === 'listening' || state === 'follow_up') {
+      commandAudioEndSentRef.current = false;
       commandSpeechSeenRef.current = false;
       commandSilenceStartedMsRef.current = null;
     }
@@ -348,7 +362,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => () => stopCommandAudioStream(true), [stopCommandAudioStream]);
 
   return (
-    <AudioContext.Provider value={{ isProcessing, isAudioPipelineReady, micLevel }}>
+    <AudioContext.Provider value={{ isAudioPipelineReady, micLevel }}>
       {children}
     </AudioContext.Provider>
   );

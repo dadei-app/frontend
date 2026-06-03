@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Person } from '@dadei/ui/types/models.types';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
+import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import {
@@ -34,7 +35,7 @@ export default function PeoplePanel({ isOpen, onClose, excludeElement }: PeopleP
 
   useEffect(() => {
     if (personsQuery.isError) {
-      showToast('Failed to load people', 'error');
+      showToast(getUserErrorMessage(personsQuery.error, 'Could not load people.'), 'error');
     }
   }, [personsQuery.isError, showToast]);
 
@@ -59,7 +60,7 @@ export default function PeoplePanel({ isOpen, onClose, excludeElement }: PeopleP
       setArmedPersonDeleteId(null);
     } catch (error) {
       console.error('Failed to delete person:', error);
-      showToast('Failed to delete person', 'error');
+      showToast(getUserErrorMessage(error, 'Could not delete that person.'), 'error');
       setArmedPersonDeleteId(null);
     }
   };

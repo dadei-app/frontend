@@ -9,36 +9,31 @@ import {
   type ReactNode,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AnimatePresence } from 'framer-motion';
-import Banner from '@dadei/ui/components/ui/Banner';
+import StackedNotificationBanners from '@dadei/ui/components/notifications/StackedNotificationBanners';
 import Toast from '@dadei/ui/components/ui/Toast';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { actionsApi } from '@dadei/ui/lib/api/actions';
-import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notifications/notificationConstants';
 import { playNotificationPing } from '@dadei/ui/lib/notifications/notificationSound';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
-import { useActionsQuery } from '@dadei/ui/lib/query/queryHooks';
+import { useNotificationActionsQuery } from '@dadei/ui/lib/query/queryHooks';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
-import { actionBannerMeta, actionDisplayTitle } from '@dadei/ui/utils/actionDisplay';
+import {
+  networkActionsToBannerItems,
+  normalizeNotificationActions,
+} from '@dadei/ui/lib/notifications/actionBannerSync';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
-
-const ACTION_LABELS: Record<string, string> = {
-  calendar: 'Calendar event',
-  calendar_event: 'Calendar event',
-  todo: 'Task',
-  task: 'Task',
-  email: 'Email',
-};
 
 export type ShowBannerInput = {
   id?: string;
   category?: string;
+  operation?: 'create' | 'update' | 'delete';
   title: string;
   body?: string;
   durationMs?: number;
   showCountdown?: boolean;
   countdownEndsAt?: string;
+  queued?: boolean;
   cancelLabel?: string;
   onCancel?: () => Promise<void> | void;
 };
@@ -46,11 +41,13 @@ export type ShowBannerInput = {
 export type BannerItem = {
   id: string;
   category?: string;
+  operation?: 'create' | 'update' | 'delete';
   title: string;
   body?: string;
   durationMs: number;
   showCountdown?: boolean;
   countdownEndsAt?: string;
+  queued?: boolean;
   cancelLabel?: string;
   onCancel?: () => Promise<void> | void;
 };
@@ -80,25 +77,23 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** Keeps proposed action banners in sync with the actions query while authenticated. */
+/** Replaces action banners from the actions query (single source of truth, no duplicates). */
 function useActionBannerSync(
   enabled: boolean,
-  showBanner: (input: ShowBannerInput) => string,
-  dismissBannerById: (id: string) => void,
+  setActionBanners: (items: BannerItem[]) => void,
 ) {
   const queryClient = useQueryClient();
-  const { data: actions } = useActionsQuery(enabled);
+  const { data: actions } = useNotificationActionsQuery();
 
-  const activeActions = useMemo<NetworkAction[]>(
-    () => (actions ?? []).filter((a) => a.status === 'proposed' && a.scheduled_at !== null),
+  const notificationActions = useMemo(
+    () => normalizeNotificationActions(actions ?? []),
     [actions],
   );
 
   const seenActionIdsRef = useRef<Set<string>>(new Set());
-  const activeBannerIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    const current = new Set(activeActions.map((a) => a.id));
+    const current = new Set(notificationActions.map((a) => a.id));
     let hasNew = false;
     for (const id of current) {
       if (!seenActionIdsRef.current.has(id)) {
@@ -108,50 +103,33 @@ function useActionBannerSync(
     }
     seenActionIdsRef.current = current;
     if (hasNew) playNotificationPing();
-  }, [activeActions]);
+  }, [notificationActions]);
+
+  const rejectAction = useCallback(
+    async (actionId: string) => {
+      await actionsApi.reject(actionId);
+      queryClient.setQueryData<NetworkAction[]>(queryKeys.actions, (prev) =>
+        (prev ?? []).filter((item) => item.id !== actionId),
+      );
+    },
+    [queryClient],
+  );
 
   useEffect(() => {
-    const currentBannerIds = new Set<string>();
-
-    for (const action of activeActions) {
-      const bannerId = `action:${action.id}`;
-      currentBannerIds.add(bannerId);
-      const label = ACTION_LABELS[action.action_type] ?? action.action_type;
-      showBanner({
-        id: bannerId,
-        category: label,
-        title: actionDisplayTitle(action),
-        body: actionBannerMeta(action),
-        durationMs: AUTO_FIRE_DELAY_MS,
-        showCountdown: true,
-        countdownEndsAt: action.scheduled_at || undefined,
-        cancelLabel: 'Cancel',
-        onCancel: async () => {
-          const updated = await actionsApi.reject(action.id);
-          queryClient.setQueriesData<NetworkAction[]>(
-            { queryKey: queryKeys.actions },
-            (prev) => {
-              if (!prev) return prev;
-              const idx = prev.findIndex((item) => item.id === updated.id);
-              if (idx === -1) return prev;
-              const next = [...prev];
-              next[idx] = updated;
-              return next;
-            },
-          );
-          dismissBannerById(bannerId);
-        },
-      });
+    if (!enabled) {
+      setActionBanners([]);
+      return;
     }
+    setActionBanners(
+      networkActionsToBannerItems(notificationActions, { onReject: rejectAction }),
+    );
+  }, [enabled, notificationActions, rejectAction, setActionBanners]);
 
-    for (const bannerId of activeBannerIdsRef.current) {
-      if (!currentBannerIds.has(bannerId)) {
-        dismissBannerById(bannerId);
-      }
+  useEffect(() => {
+    if (!enabled) {
+      queryClient.setQueryData<NetworkAction[]>(queryKeys.actions, []);
     }
-
-    activeBannerIdsRef.current = currentBannerIds;
-  }, [activeActions, showBanner, dismissBannerById, queryClient]);
+  }, [enabled, queryClient]);
 }
 
 export function ToastStackHost({ className = '' }: { className?: string }) {
@@ -179,35 +157,23 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
   if (!ctx || ctx.banners.length === 0) return null;
 
   return (
-    <div
-      className={`pointer-events-none flex w-full flex-col gap-2 ${className}`}
-      aria-live="polite"
-    >
-      <AnimatePresence initial={false}>
-        {ctx.banners.map((banner) => (
-          <Banner
-            key={banner.id}
-            id={banner.id}
-            category={banner.category}
-            title={banner.title}
-            body={banner.body}
-            durationMs={banner.durationMs}
-            showCountdown={banner.showCountdown}
-            countdownEndsAt={banner.countdownEndsAt}
-            cancelLabel={banner.cancelLabel}
-            onCancel={banner.onCancel}
-            onDismiss={() => ctx.dismissBannerById(banner.id)}
-          />
-        ))}
-      </AnimatePresence>
-    </div>
+    <StackedNotificationBanners
+      className={className}
+      banners={ctx.banners}
+      onDismiss={ctx.dismissBannerById}
+    />
   );
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [banners, setBanners] = useState<BannerItem[]>([]);
+  const [manualBanners, setManualBanners] = useState<BannerItem[]>([]);
+  const [actionBanners, setActionBanners] = useState<BannerItem[]>([]);
+  const banners = useMemo(
+    () => [...actionBanners, ...manualBanners.filter((m) => !actionBanners.some((a) => a.id === m.id))],
+    [actionBanners, manualBanners],
+  );
 
   const showToast = useCallback((message: string, type: ToastType) => {
     const id = newId();
@@ -219,7 +185,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const dismissBannerById = useCallback((id: string) => {
-    setBanners((prev) => prev.filter((b) => b.id !== id));
+    setActionBanners((prev) => prev.filter((b) => b.id !== id));
+    setManualBanners((prev) => prev.filter((b) => b.id !== id));
   }, []);
 
   const dismissBanner = useCallback(
@@ -232,10 +199,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const showBanner = useCallback((input: ShowBannerInput) => {
     const id = input.id ?? newId();
     const durationMs = input.durationMs ?? DEFAULT_BANNER_DURATION_MS;
-    setBanners((prev) => {
+    setManualBanners((prev) => {
       const next: BannerItem = {
         id,
         category: input.category,
+        operation: input.operation,
         title: input.title,
         body: input.body,
         durationMs,
@@ -253,7 +221,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     return id;
   }, []);
 
-  useActionBannerSync(isAuthenticated && !isLoading, showBanner, dismissBannerById);
+  useActionBannerSync(isAuthenticated && !isLoading, setActionBanners);
 
   const value = useMemo(
     () => ({

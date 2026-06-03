@@ -3,6 +3,8 @@ export const API_CONFIG = {
     DEFAULT: 10000,
     INTERACTION: 30000,
     SERVICE_STOP: 10000,
+    /** Wake-word claim can queue behind Whisper / passive ingest on a single API worker. */
+    ASSISTANT_MODE: 30000,
   },
 
   RETRY: {
@@ -24,11 +26,9 @@ export const ENDPOINTS = {
   AUTH_GOOGLE_WEB_LOGIN: '/auth/google/web/login',
   AUTH_ME: '/auth/me',
 
-  // Integrations (scope verification for settings; v2 when BETA=true)
-  INTEGRATIONS_STATUS: '/integrations/status',
-
   // Service
   SERVICE_CLIENTS: '/service/clients',
+  SERVICE_INTEGRATIONS_STATUS: '/service/integrations/status',
   SERVICE_CLIENT_BY_ID: '/service/clients/:clientId',
   SERVICE_NETWORK_ENABLE: '/service/network/enable',
   SERVICE_NETWORK_DISABLE: '/service/network/disable',
@@ -53,6 +53,6 @@ export const ENDPOINTS = {
   MEMORY_BY_ID: '/memories/:memoryId',
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
-  COMMAND: '/command',
-  COMMAND_TEXT: '/actions/voice/text',
+  COMMAND: '/service/command',
+  COMMAND_TEXT: '/service/command/text',
 } as const;

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import axios from 'axios';
 import {
@@ -18,6 +19,13 @@ import {
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import { getRealtimeSessionToken } from '@dadei/ui/lib/realtime/realtimeClient';
 import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
+import {
+  ERROR_CODES,
+  formatCommandStreamError,
+  formatToolResultUserMessage,
+  formatWsTranscriptError,
+  getUserErrorMessage,
+} from '@dadei/ui/lib/errors/userMessage';
 import {
   isInstructionalTranscriptBleed,
   sanitizeCommandTranscript,
@@ -38,7 +46,10 @@ import {
   formatAssistantStatusLine,
 } from '@dadei/ui/lib/voice/labels/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/session/sessionEndDetection';
-import { subscribeVoiceSpeechActivity } from '@dadei/ui/lib/voice/session/voiceSessionActivity';
+import {
+  notifyCommandCaptureCommit,
+  subscribeVoiceSpeechActivity,
+} from '@dadei/ui/lib/voice/session/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/utils/time';
 
@@ -71,6 +82,8 @@ interface CommandContextValue {
   /** Single in-bubble status while processing (Thinking… / current tool); cleared when text streams. */
   assistantStatusLine: string | null;
   bubbleHistory: CommandTurnHistory[];
+  /** Stable id for the in-flight user+assistant pair (shared with history on commit). */
+  liveTurnId: string | null;
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
@@ -93,7 +106,9 @@ const MIN_FOLLOW_UP_INTERIM_CHARS = 4;
 const INTERIM_SHRINK_GUARD_RATIO = 0.7;
 
 function formatToolSummarySnippet(summary: string, ok: boolean): string {
-  if (!summary.trim()) return ok ? '' : 'Something went wrong.';
+  const toolErr = formatToolResultUserMessage(summary, ok);
+  if (!ok && toolErr) return toolErr;
+  if (!summary.trim()) return ok ? '' : ERROR_CODES.request_failed;
   try {
     const parsed = JSON.parse(summary) as Record<string, unknown>;
     if (!ok) {
@@ -258,6 +273,7 @@ export function stabilizeInterimCaptionState(
 
 export function CommandProvider({ children }: { children: ReactNode }) {
   const { getAccessToken } = useAuth();
+  const { showToast } = useNotifications();
   const {
     isServiceEnabled,
     isConnected,
@@ -273,8 +289,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     useState<AssistantBubbleStatus>('pending');
   const [assistantStatusLine, setAssistantStatusLine] = useState<string | null>(null);
   const [bubbleHistory, setBubbleHistory] = useState<CommandTurnHistory[]>([]);
+  const [liveTurnId, setLiveTurnId] = useState<string | null>(null);
 
   const stateRef = useRef(state);
+  const liveTurnIdRef = useRef<string | null>(null);
   const followUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
@@ -301,11 +319,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
-      setAssistantBubbleText((prev) => {
-        const next = typeof value === 'function' ? value(prev) : value;
-        assistantBubbleTextRef.current = next;
-        return next;
-      });
+      if (typeof value === 'function') {
+        setAssistantBubbleText((prev) => {
+          const next = value(prev);
+          assistantBubbleTextRef.current = next;
+          return next;
+        });
+        return;
+      }
+      assistantBubbleTextRef.current = value;
+      setAssistantBubbleText(value);
     },
     [],
   );
@@ -319,6 +342,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       utteranceEndNotifiedRef.current = false;
       awaitingTranscriptRef.current = false;
       responseRevealStartedRef.current = false;
+    }
+    if (state === 'follow_up') {
+      utteranceEndNotifiedRef.current = false;
+      awaitingTranscriptRef.current = false;
     }
   }, [state]);
 
@@ -379,6 +406,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (current !== 'listening' && current !== 'follow_up') return;
     if (commandStreamInFlightRef.current) return;
 
+    notifyCommandCaptureCommit();
     utteranceEndNotifiedRef.current = true;
     awaitingTranscriptRef.current = true;
     transcribeFromFollowUpRef.current = current === 'follow_up';
@@ -393,6 +421,20 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setState('follow_up');
   }, []);
 
+  const newTurnId = () => `turn-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+
+  const assignLiveTurnId = useCallback(() => {
+    const id = newTurnId();
+    liveTurnIdRef.current = id;
+    setLiveTurnId(id);
+    return id;
+  }, []);
+
+  const clearLiveTurnId = useCallback(() => {
+    liveTurnIdRef.current = null;
+    setLiveTurnId(null);
+  }, []);
+
   const commitLiveTurnToHistory = useCallback(() => {
     const user = userBubbleTextRef.current.trim();
     const assistant = assistantBubbleTextRef.current.trim();
@@ -400,7 +442,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const dedupeKey = `${user}::${assistant}`;
     if (lastCommittedTurnRef.current === dedupeKey) return;
     lastCommittedTurnRef.current = dedupeKey;
-    const id = `turn-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+    const id = liveTurnIdRef.current ?? newTurnId();
+    liveTurnIdRef.current = null;
+    setLiveTurnId(null);
     setBubbleHistory((prev) => [...prev.slice(-7), { id, userText: user, assistantText: assistant }]);
   }, []);
 
@@ -408,11 +452,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
     lastToolBubbleSnippetRef.current = '';
+    clearLiveTurnId();
     setAssistantStatusLine(null);
     setUserBubbleText('');
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
-  }, [setAssistantBubbleTextSynced]);
+  }, [clearLiveTurnId, setAssistantBubbleTextSynced]);
 
   const resetInterimCaptionState = useCallback(() => {
     interimCaptionRef.current = '';
@@ -655,6 +700,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
               setAssistantStatusLine(null);
               setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
               setAssistantBubbleStatus('revealing');
+            } else if (snippet) {
+              setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
+              setAssistantBubbleStatus('streaming');
             } else {
               setAssistantBubbleStatus('streaming');
             }
@@ -664,7 +712,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         case 'error':
           streamHadOutputRef.current = true;
           setAssistantStatusLine(null);
-          setAssistantBubbleTextSynced(ev.message);
+          setAssistantBubbleTextSynced(
+            formatCommandStreamError(ev.message, 'code' in ev ? String(ev.code) : undefined),
+          );
           setAssistantBubbleStatus('revealing');
           setState('responding');
           break;
@@ -678,9 +728,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
           if (!assistantBubbleTextRef.current.trim()) {
-            const fallback =
-              lastToolBubbleSnippetRef.current.trim() ||
-              'I completed the lookup but could not phrase the result. Please try again.';
+            const snippet = lastToolBubbleSnippetRef.current.trim();
+            const fallback = snippet || ERROR_CODES.tool_reply_failed;
             setAssistantBubbleTextSynced(fallback);
           }
           setAssistantBubbleStatus('revealing');
@@ -695,6 +744,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const submitVisibleCommandText = useCallback(
     (raw: string, fromFollowUp: boolean) => {
+      const captureState = stateRef.current;
+      if (captureState === 'listening' || captureState === 'follow_up') {
+        notifyCommandCaptureCommit();
+      }
       const cleaned = cleanTranscript(raw);
       if (!cleaned) return;
       const displayText = liveCommandCaptionText(cleaned, fromFollowUp);
@@ -736,6 +789,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setAssistantBubbleTextSynced('');
       setAssistantBubbleStatus('pending');
       pendingNewResponseRef.current = true;
+      assignLiveTurnId();
       startRequestActivity();
       userBubbleTextRef.current = displayText;
       awaitingTranscriptRef.current = false;
@@ -747,8 +801,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         const claimed = await claimAssistantMode();
         if (!claimed) {
           const msg = fromFollowUp
-            ? 'Could not keep assistant mode for follow-up'
-            : 'Could not claim assistant mode';
+            ? ERROR_CODES.assistant_mode_not_owner
+            : ERROR_CODES.invalid_session;
           setAssistantBubbleTextSynced(msg);
           setAssistantBubbleStatus('revealing');
           setState('responding');
@@ -757,14 +811,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          setAssistantBubbleTextSynced('Not authenticated');
+          setAssistantBubbleTextSynced('Sign in to use the assistant.');
           setAssistantBubbleStatus('revealing');
           setState('responding');
           return;
         }
 
         if (!isConnected || !getRealtimeSessionToken()) {
-          setAssistantBubbleTextSynced('Not connected to the assistant service yet');
+          setAssistantBubbleTextSynced(ERROR_CODES.invalid_session);
           setAssistantBubbleStatus('revealing');
           setState('responding');
           return;
@@ -804,9 +858,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             }
             return;
           }
-          const message = e instanceof Error ? e.message : 'Command failed';
           streamHadOutputRef.current = true;
-          setAssistantBubbleTextSynced(message);
+          setAssistantBubbleTextSynced(getUserErrorMessage(e));
           setAssistantBubbleStatus('revealing');
           setState('responding');
         } finally {
@@ -817,6 +870,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     },
     [
       abortActiveStream,
+      assignLiveTurnId,
       claimAssistantMode,
       clearFollowUpTimer,
       endSession,
@@ -836,6 +890,20 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const off = subscribeRealtimeMessages((msg) => {
       const current = stateRef.current;
+
+      if (msg.event === 'command_transcript_error') {
+        const text = formatWsTranscriptError({
+          code: msg.code,
+          message: msg.message,
+        });
+        setAssistantStatusLine(null);
+        setAssistantBubbleTextSynced(text);
+        setAssistantBubbleStatus('revealing');
+        if (current === 'transcribing' || current === 'thinking') {
+          setState('responding');
+        }
+        return;
+      }
 
       if (msg.event === 'command_transcript_interim') {
         if (current === 'transcribing' || current === 'thinking' || current === 'responding') return;
@@ -904,6 +972,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           const trimmed = text.trim();
           if (!trimmed) return;
           clearWakeFalsePositiveIfCommandInProgress(trimmed);
+          if (!utteranceEndNotifiedRef.current) {
+            utteranceEndNotifiedRef.current = true;
+            awaitingTranscriptRef.current = true;
+            setState('transcribing');
+          }
           submitVisibleCommandText(text, false);
           return;
         }
@@ -980,6 +1053,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setState('locked');
       setBubbleHistory([]);
       resetLiveBubbles();
+      showToast(ERROR_CODES.assistant_mode_not_owner, 'error');
       return;
     }
     if (stateRef.current === 'locked' && (!isAssistantMode || isAssistantOwner)) {
@@ -993,6 +1067,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     isAssistantMode,
     isAssistantOwner,
     resetLiveBubbles,
+    showToast,
   ]);
 
   useEffect(() => {
@@ -1047,6 +1122,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     assistantBubbleStatus,
     assistantStatusLine,
     bubbleHistory,
+    liveTurnId,
     cancel,
     startListening,
     notifyCommandUtteranceEnded,

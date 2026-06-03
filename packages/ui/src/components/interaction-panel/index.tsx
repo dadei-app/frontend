@@ -5,6 +5,8 @@ export default function InteractionPanel() {
   const {
     containerRef,
     loading,
+    panelLoadError,
+    retryPanelLoad,
     conversationGroups,
     displayGroups,
     prefersReducedMotion,
@@ -45,7 +47,18 @@ export default function InteractionPanel() {
         ref={containerRef}
         className="flex-1 space-y-3 overflow-y-auto overscroll-none px-6 py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0"
       >
-        {loading ? (
+        {panelLoadError ? (
+          <div className="flex h-full flex-col items-center justify-center gap-4 px-6 text-center">
+            <p className="max-w-sm text-sm text-rose-200/90">{panelLoadError}</p>
+            <button
+              type="button"
+              onClick={() => retryPanelLoad()}
+              className="rounded-lg border border-white/10 bg-zinc-800/90 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-700/90"
+            >
+              Try again
+            </button>
+          </div>
+        ) : loading ? (
           <div className="flex h-full items-center justify-center">
             <i className="fas fa-spinner fa-spin text-3xl text-emerald-400/80" />
           </div>

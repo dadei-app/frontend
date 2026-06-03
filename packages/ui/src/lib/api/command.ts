@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '@dadei/ui/lib/api/http/client';
 import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import { formatCommandStreamError, getUserErrorMessage, parseHttpResponseBody } from '@dadei/ui/lib/errors/userMessage';
 import { getRealtimeSessionToken } from '@dadei/ui/lib/realtime/realtimeClient';
 
 export type CommandSSEEvent =
@@ -7,7 +8,7 @@ export type CommandSSEEvent =
   | { type: 'token'; text: string }
   | { type: 'tool_call'; tool: string; status: string }
   | { type: 'tool_result'; tool: string; ok: boolean; summary?: string }
-  | { type: 'error'; message: string }
+  | { type: 'error'; message: string; code?: string }
   | { type: 'session_end' }
   | { type: 'done' };
 
@@ -65,39 +66,32 @@ export async function* streamCommand(
       yield { type: 'done' };
       return;
     }
-    const message = e instanceof Error ? e.message : 'Network error';
-    yield { type: 'error', message };
+    yield { type: 'error', message: getUserErrorMessage(e, 'Network error') };
     yield { type: 'done' };
     return;
   }
 
   if (!response.ok || !response.body) {
-    let detail = `HTTP ${response.status}`;
+    let message = `HTTP ${response.status}`;
+    let code: string | undefined;
     try {
       const t = await response.text();
       if (t) {
         try {
           const parsed = JSON.parse(t) as { detail?: unknown };
-          if (typeof parsed.detail === 'string') {
-            detail = parsed.detail.slice(0, 240);
-          } else if (parsed.detail && typeof parsed.detail === 'object') {
-            const detailObj = parsed.detail as { message?: unknown; code?: unknown };
-            if (typeof detailObj.message === 'string' && typeof detailObj.code === 'string') {
-              detail = `${detailObj.code}: ${detailObj.message}`.slice(0, 240);
-            } else {
-              detail = t.slice(0, 240);
-            }
-          } else {
-            detail = t.slice(0, 240);
+          message = parseHttpResponseBody(parsed, response.status);
+          if (parsed.detail && typeof parsed.detail === 'object' && parsed.detail !== null) {
+            const detailObj = parsed.detail as { code?: unknown };
+            if (typeof detailObj.code === 'string') code = detailObj.code;
           }
         } catch {
-          detail = t.slice(0, 240);
+          message = t.slice(0, 240);
         }
       }
     } catch {
       /* ignore */
     }
-    yield { type: 'error', message: detail };
+    yield { type: 'error', message: formatCommandStreamError(message, code), code };
     yield { type: 'done' };
     return;
   }
@@ -140,8 +134,7 @@ export async function* streamCommand(
       yield { type: 'done' };
       return;
     }
-    const message = e instanceof Error ? e.message : 'Stream read failed';
-    yield { type: 'error', message };
+    yield { type: 'error', message: getUserErrorMessage(e, 'Stream read failed') };
     yield { type: 'done' };
     return;
   }
@@ -182,39 +175,32 @@ export async function* streamCommandFromText(
       yield { type: 'done' };
       return;
     }
-    const message = e instanceof Error ? e.message : 'Network error';
-    yield { type: 'error', message };
+    yield { type: 'error', message: getUserErrorMessage(e, 'Network error') };
     yield { type: 'done' };
     return;
   }
 
   if (!response.ok || !response.body) {
-    let detail = `HTTP ${response.status}`;
+    let message = `HTTP ${response.status}`;
+    let code: string | undefined;
     try {
       const t = await response.text();
       if (t) {
         try {
           const parsed = JSON.parse(t) as { detail?: unknown };
-          if (typeof parsed.detail === 'string') {
-            detail = parsed.detail.slice(0, 240);
-          } else if (parsed.detail && typeof parsed.detail === 'object') {
-            const detailObj = parsed.detail as { message?: unknown; code?: unknown };
-            if (typeof detailObj.message === 'string' && typeof detailObj.code === 'string') {
-              detail = `${detailObj.code}: ${detailObj.message}`.slice(0, 240);
-            } else {
-              detail = t.slice(0, 240);
-            }
-          } else {
-            detail = t.slice(0, 240);
+          message = parseHttpResponseBody(parsed, response.status);
+          if (parsed.detail && typeof parsed.detail === 'object' && parsed.detail !== null) {
+            const detailObj = parsed.detail as { code?: unknown };
+            if (typeof detailObj.code === 'string') code = detailObj.code;
           }
         } catch {
-          detail = t.slice(0, 240);
+          message = t.slice(0, 240);
         }
       }
     } catch {
       /* ignore */
     }
-    yield { type: 'error', message: detail };
+    yield { type: 'error', message: formatCommandStreamError(message, code), code };
     yield { type: 'done' };
     return;
   }
@@ -257,8 +243,7 @@ export async function* streamCommandFromText(
       yield { type: 'done' };
       return;
     }
-    const message = e instanceof Error ? e.message : 'Stream read failed';
-    yield { type: 'error', message };
+    yield { type: 'error', message: getUserErrorMessage(e, 'Stream read failed') };
     yield { type: 'done' };
     return;
   }
