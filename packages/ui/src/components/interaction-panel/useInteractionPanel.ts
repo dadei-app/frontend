@@ -239,19 +239,34 @@ export function useInteractionPanel() {
     };
   }, [armedInteractionDeleteId, armedConversationDeleteId]);
 
-  useEffect(() => {
-    if (!isConnected) return;
+  const panelLoadError = useMemo(() => {
+    if (!isConnected) return null;
     if (recentConversationsQuery.isError) {
-      showToast('Failed to load conversations', 'error');
+      return getUserErrorMessage(
+        recentConversationsQuery.error,
+        'Could not load conversations.',
+      );
     }
-  }, [recentConversationsQuery.isError, isConnected, showToast]);
-
-  useEffect(() => {
-    if (!isConnected) return;
     if (interactionsBootstrapQuery.isError) {
-      showToast('Failed to load interactions', 'error');
+      return getUserErrorMessage(
+        interactionsBootstrapQuery.error,
+        'Could not load interactions.',
+      );
     }
-  }, [interactionsBootstrapQuery.isError, isConnected, showToast]);
+    return null;
+  }, [
+    isConnected,
+    recentConversationsQuery.isError,
+    recentConversationsQuery.error,
+    interactionsBootstrapQuery.isError,
+    interactionsBootstrapQuery.error,
+  ]);
+
+  const retryPanelLoad = useCallback(() => {
+    void recentConversationsQuery.refetch();
+    void interactionsBootstrapQuery.refetch();
+    void personsQuery.refetch();
+  }, [interactionsBootstrapQuery, personsQuery, recentConversationsQuery]);
 
   useEffect(() => {
     setConversationGroups(previous => buildConversationGroups(interactions, conversationById, previous));

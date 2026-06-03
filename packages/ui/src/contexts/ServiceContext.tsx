@@ -34,7 +34,6 @@ interface ServiceContextType {
 
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
-const ENABLE_TIMEOUT_MS = 5000;
 const CLIENT_CONTEXT_LOCATION_TIMEOUT_MS = 3500;
 
 function isNetworkAction(data: unknown): data is NetworkAction {
@@ -112,7 +111,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const [assistantOwnerSessionId, setAssistantOwnerSessionId] = useState<string | null>(null);
   const [assistantModeExpiresAt, setAssistantModeExpiresAt] = useState<string | null>(null);
 
-  const enableTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const applyServiceStatus = useCallback((enabled: boolean) => {
+    setIsServiceEnabled(enabled);
+    setIsTogglingService(false);
+  }, []);
+
   useEffect(() => {
     if (!isAuthenticated) {
       stopRealtimeClient();
@@ -162,14 +165,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const handleServiceStatusChanged = (status: { enabled: boolean }) => {
       console.log('[Service] Status event:', status.enabled ? 'ENABLED' : 'DISABLED');
-
-      if (enableTimeoutRef.current) {
-        clearTimeout(enableTimeoutRef.current);
-        enableTimeoutRef.current = null;
-      }
-
-      setIsServiceEnabled(status.enabled);
-      setIsTogglingService(false);
+      applyServiceStatus(status.enabled);
     };
     const handleAssistantModeChanged = (payload: {
       active: boolean;
@@ -234,7 +230,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       offWs();
       if (offElectron) offElectron();
     };
-  }, []);
+  }, [applyServiceStatus]);
 
   useEffect(() => {
     const actionKey = queryKeys.actions;
@@ -293,21 +289,17 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     try {
       if (isServiceEnabled) {
         await serviceApi.disable();
+        setIsTogglingService(false);
       } else {
         await serviceApi.enable();
-
-        enableTimeoutRef.current = setTimeout(() => {
-          console.error('[Service] Enable timeout - no status event received');
-          setIsTogglingService(false);
-          showToast('The assistant did not confirm it was turned on. Try again.', 'error');
-        }, ENABLE_TIMEOUT_MS);
+        applyServiceStatus(true);
       }
     } catch (error) {
       console.error('Failed to toggle service:', error);
       setIsTogglingService(false);
       showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
     }
-  }, [isServiceEnabled, registrationConflict, showToast]);
+  }, [applyServiceStatus, isServiceEnabled, registrationConflict, showToast]);
 
   const realtimeSessionId = getRealtimeSessionId();
   const isAssistantOwner =

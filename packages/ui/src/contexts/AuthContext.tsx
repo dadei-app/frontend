@@ -1,5 +1,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { isAxiosError } from 'axios';
 import { api } from '@dadei/ui/lib/api/http/client';
 import { authApi } from '@dadei/ui/lib/api/auth';
 import { webTokenStore } from '@dadei/ui/lib/auth/webTokenStore';
@@ -124,7 +125,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`;
             return api(originalRequest);
           } catch (_refreshError) {
-            // Refresh failed, clear everything
+            // Only clear session when refresh is rejected — not when the API is unreachable.
+            const status = isAxiosError(_refreshError) ? _refreshError.response?.status : undefined;
+            if (status !== 401 && status !== 403) {
+              return Promise.reject(_refreshError);
+            }
             console.error('Token refresh failed, logging out');
 
             await clearAllStoredTokens();
@@ -174,13 +179,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             console.log('Authentication verified');
           } catch (_refreshError) {
-            console.error('Token verification failed, clearing tokens');
-            await clearAllStoredTokens();
-            applyTokens(null);
-            setIsAuthenticated(false);
-            setUser(null);
-            clearAssistantSessionCaches(queryClient);
-            queryClient.removeQueries({ queryKey: queryKeys.authMe });
+            const status = isAxiosError(_refreshError) ? _refreshError.response?.status : undefined;
+            if (status === 401 || status === 403) {
+              console.error('Token verification failed, clearing tokens');
+              await clearAllStoredTokens();
+              applyTokens(null);
+              setIsAuthenticated(false);
+              setUser(null);
+              clearAssistantSessionCaches(queryClient);
+              queryClient.removeQueries({ queryKey: queryKeys.authMe });
+            } else {
+              console.warn('Token verification skipped (API unreachable); keeping stored session');
+              applyTokens(stored);
+              setIsAuthenticated(true);
+            }
           }
         } else {
           console.log('No stored tokens found');

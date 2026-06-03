@@ -3,6 +3,8 @@ export const API_CONFIG = {
     DEFAULT: 10000,
     INTERACTION: 30000,
     SERVICE_STOP: 10000,
+    /** Wake-word claim can queue behind Whisper / passive ingest on a single API worker. */
+    ASSISTANT_MODE: 30000,
   },
 
   RETRY: {

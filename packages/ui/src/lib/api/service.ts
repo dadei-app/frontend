@@ -1,5 +1,5 @@
 import { api } from '@dadei/ui/lib/api/http/client';
-import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import { API_CONFIG, ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
 import { buildEndpoint, getClientIpAddresses, retryWithBackoff } from './utils';
 
@@ -83,10 +83,14 @@ export const serviceApi = {
    * PATCH /api/v1/service/network/assistant-mode/claim
    */
   async claimAssistantMode(sessionToken: string, holdSeconds = 5): Promise<AssistantModeState> {
-    const { data } = await api.patch<AssistantModeState>(ENDPOINTS.SERVICE_ASSISTANT_MODE_CLAIM, {
-      session_token: sessionToken,
-      hold_seconds: holdSeconds,
-    });
+    const { data } = await api.patch<AssistantModeState>(
+      ENDPOINTS.SERVICE_ASSISTANT_MODE_CLAIM,
+      {
+        session_token: sessionToken,
+        hold_seconds: holdSeconds,
+      },
+      { timeout: API_CONFIG.TIMEOUTS.ASSISTANT_MODE },
+    );
     return data;
   },
 
@@ -95,9 +99,13 @@ export const serviceApi = {
    * PATCH /api/v1/service/network/assistant-mode/release
    */
   async releaseAssistantMode(sessionToken: string): Promise<void> {
-    await api.patch(ENDPOINTS.SERVICE_ASSISTANT_MODE_RELEASE, {
-      session_token: sessionToken,
-    });
+    await api.patch(
+      ENDPOINTS.SERVICE_ASSISTANT_MODE_RELEASE,
+      {
+        session_token: sessionToken,
+      },
+      { timeout: API_CONFIG.TIMEOUTS.ASSISTANT_MODE },
+    );
   },
 
   /**
