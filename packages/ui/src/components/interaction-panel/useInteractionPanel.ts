@@ -275,78 +275,37 @@ export function useInteractionPanel() {
   useEffect(() => {
     if (!isConnected) return;
 
-    const mergeIntoCaches = (interaction: Interaction) => {
-      queryClient.setQueriesData<Interaction[]>(
-        { queryKey: [...queryKeys.interactions, 'bootstrap'] },
-        prev => {
-          if (!prev) return [interaction];
-          if (prev.some(item => item.id === interaction.id)) return prev;
-          return [...prev, interaction];
-        }
-      );
-      queryClient.setQueryData<Interaction[]>(queryKeys.interactions, prev => {
-        if (!prev) return [interaction];
-        if (prev.some(item => item.id === interaction.id)) return prev;
-        return [...prev, interaction];
-      });
+    const trackInteractionConversation = (interaction: Interaction) => {
       const convId = interaction.conversation_id?.trim();
-      if (convId) {
-        void queryClient.prefetchQuery(conversationQueryOptions(convId));
-        setExtraBootstrapConversationIds(prev => {
-          if (prev.some(x => x.trim() === convId)) return prev;
-          if (recentIds.some(x => x.trim() === convId)) return prev;
-          return [...prev, convId];
-        });
-      }
-    };
-
-    const handleNewInteraction = (payload: { data?: Interaction }) => {
-      const interaction = payload.data;
-      if (!interaction) return;
-      mergeIntoCaches(interaction);
-    };
-
-    const handleConversationUpdate = (payload: { data?: Conversation }) => {
-      const conv = payload.data;
-      if (!conv?.id) return;
-      queryClient.setQueryData<Conversation>(queryKeys.conversationById(conv.id), conv);
-      queryClient.setQueryData<Conversation[]>(
-        queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
-        prev => {
-          if (!prev?.length) return prev;
-          const idx = prev.findIndex(c => c.id === conv.id);
-          if (idx === -1) return prev;
-          const next = [...prev];
-          next[idx] = { ...next[idx], ...conv };
-          return next;
-        }
-      );
+      if (!convId) return;
+      void queryClient.prefetchQuery(conversationQueryOptions(convId));
+      setExtraBootstrapConversationIds(prev => {
+        if (prev.some(x => x.trim() === convId)) return prev;
+        if (recentIds.some(x => x.trim() === convId)) return prev;
+        return [...prev, convId];
+      });
     };
 
     const offWs = subscribeRealtimeMessages(msg => {
-      if (msg.event === 'interaction') {
-        const data = msg.data;
-        if (!data || typeof data !== 'object') return;
-        handleNewInteraction({ data: data as Interaction });
-        return;
-      }
-      if (msg.event === 'conversation') {
-        const data = msg.data;
-        if (!data || typeof data !== 'object') return;
-        handleConversationUpdate({ data: data as Conversation });
-      }
+      if (msg.event !== 'interaction') return;
+      const data = msg.data;
+      if (!data || typeof data !== 'object') return;
+      trackInteractionConversation(data as Interaction);
     });
 
     let offElectron: (() => void) | undefined;
     if (window.electronAPI?.onNewInteraction) {
-      offElectron = window.electronAPI.onNewInteraction(handleNewInteraction);
+      offElectron = window.electronAPI.onNewInteraction(payload => {
+        const interaction = payload.data;
+        if (interaction) trackInteractionConversation(interaction);
+      });
     }
 
     return () => {
       offWs();
       if (offElectron) offElectron();
     };
-  }, [isConnected, queryClient, interactionsBootstrapKey, recentIds]);
+  }, [isConnected, queryClient, recentIds]);
 
   useEffect(() => {
     if (!containerRef.current) return;

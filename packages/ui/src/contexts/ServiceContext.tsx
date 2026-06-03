@@ -11,10 +11,8 @@ import {
   subscribeRealtimeMessages,
 } from '@dadei/ui/lib/realtime/realtimeClient';
 import { getRealtimeSessionId } from '@dadei/ui/lib/realtime/realtimeClient';
-import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/queryHooks';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/cacheUtils';
 import { useQueryClient } from '@tanstack/react-query';
-import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 interface ServiceContextType {
   isServiceEnabled: boolean;
@@ -35,12 +33,6 @@ interface ServiceContextType {
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
 
 const CLIENT_CONTEXT_LOCATION_TIMEOUT_MS = 3500;
-
-function isNetworkAction(data: unknown): data is NetworkAction {
-  if (!data || typeof data !== 'object') return false;
-  const o = data as Record<string, unknown>;
-  return typeof o.id === 'string' && typeof o.action_type === 'string' && typeof o.status === 'string';
-}
 
 type ClientContextKey = 'timezone' | 'location';
 
@@ -231,49 +223,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       if (offElectron) offElectron();
     };
   }, [applyServiceStatus]);
-
-  useEffect(() => {
-    const actionKey = queryKeys.actions;
-
-    const applyActionQueue = (queue: NetworkAction[]) => {
-      queryClient.setQueryData<NetworkAction[]>(actionKey, queue);
-    };
-
-    const handleActionMessage = (msg: { event?: string; data?: unknown }) => {
-      if (msg.event === 'action_queue' && isNetworkActionQueue(msg.data)) {
-        applyActionQueue(msg.data);
-        return;
-      }
-      // Legacy single-action pushes (still emitted by some paths): refresh from payload.
-      if (msg.event === 'action' && isNetworkAction(msg.data)) {
-        const action = msg.data;
-        if (action.status !== 'proposed') {
-          queryClient.setQueryData<NetworkAction[]>(actionKey, (prev) =>
-            (prev ?? []).filter((a) => a.id !== action.id),
-          );
-          return;
-        }
-        queryClient.setQueryData<NetworkAction[]>(actionKey, (prev) => {
-          const list = prev ?? [];
-          const idx = list.findIndex((a) => a.id === action.id);
-          if (idx === -1) return [...list, action];
-          return list.map((a, i) => (i === idx ? action : a));
-        });
-      }
-    };
-
-    const offWs = subscribeRealtimeMessages((msg) => handleActionMessage(msg));
-
-    let offElectron: (() => void) | undefined;
-    if (window.electronAPI?.onWebhookAction) {
-      offElectron = window.electronAPI.onWebhookAction((payload) => handleActionMessage(payload));
-    }
-
-    return () => {
-      offWs();
-      if (offElectron) offElectron();
-    };
-  }, [queryClient]);
 
   const toggleService = useCallback(async () => {
     if (registrationConflict) {

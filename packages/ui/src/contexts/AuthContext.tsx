@@ -6,7 +6,7 @@ import { authApi } from '@dadei/ui/lib/api/auth';
 import { webTokenStore } from '@dadei/ui/lib/auth/webTokenStore';
 import { AuthTokens, LoginCredentials, RegisterData, UserMe } from '@dadei/ui/types/auth.types';
 import { useQueryClient } from '@tanstack/react-query';
-import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/queryHooks';
+import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/cacheUtils';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 
 interface AuthContextType {

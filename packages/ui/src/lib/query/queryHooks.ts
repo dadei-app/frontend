@@ -13,14 +13,15 @@ import { personsApi } from '@dadei/ui/lib/api/persons';
 import { interactionsApi } from '@dadei/ui/lib/api/interactions';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { authApi } from '@dadei/ui/lib/api/auth';
+import { networkApi, type NetworkUpdate } from '@dadei/ui/lib/api/network';
 import { serviceApi } from '@dadei/ui/lib/api/service';
-import type { Conversation, Person } from '@dadei/ui/types/models.types';
+import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import type { Conversation, NetworkAction, Person } from '@dadei/ui/types/models.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 
-const CONVERSATION_STALE_MS = 5 * 60_000;
-const INTERACTIONS_BOOTSTRAP_STALE_MS = 30_000;
+const AUTH_ME_STALE_MS = 5 * 60_000;
 
 /** Recent conversation page size for the interaction panel bootstrap. */
 export const INTERACTION_PANEL_RECENT_LIMIT = 10;
@@ -30,7 +31,7 @@ export function conversationQueryOptions(conversationId: string) {
   return {
     queryKey: queryKeys.conversationById(conversationId),
     queryFn: (): Promise<Conversation> => conversationsApi.getById(conversationId),
-    staleTime: CONVERSATION_STALE_MS,
+    staleTime: Infinity,
     retry: (failureCount: number, error: unknown) => {
       if (isAxiosError(error) && error.response?.status === 404) return false;
       return failureCount < 3;
@@ -38,31 +39,20 @@ export function conversationQueryOptions(conversationId: string) {
   };
 }
 
-export function removeAllConversationQueries(queryClient: QueryClient) {
-  queryClient.removeQueries({ queryKey: queryKeys.conversations });
-}
+export {
+  clearAssistantSessionCaches,
+  removeAllConversationQueries,
+} from '@dadei/ui/lib/query/cacheUtils';
 
 /** Default list sizes for assistant shell + settings (matches interaction panel style scoped keys). */
 export const ASSISTANT_MEMORIES_LIST_LIMIT = 100;
-
-/**
- * Drop cached network-scoped data (conversations, interactions, memory, actions, persons, service).
- * Call on logout or when auth is cleared so a new session never reads stale rows.
- */
-export function clearAssistantSessionCaches(queryClient: QueryClient) {
-  queryClient.removeQueries({ queryKey: queryKeys.serviceClients });
-  queryClient.removeQueries({ queryKey: queryKeys.memories });
-  queryClient.removeQueries({ queryKey: queryKeys.actions });
-  removeAllConversationQueries(queryClient);
-  queryClient.removeQueries({ queryKey: queryKeys.interactions });
-  queryClient.removeQueries({ queryKey: queryKeys.persons });
-}
 
 export function usePersonsQuery(enabled = true) {
   return useQuery({
     queryKey: queryKeys.persons,
     queryFn: () => personsApi.getAll(),
     enabled,
+    staleTime: Infinity,
   });
 }
 
@@ -129,6 +119,7 @@ export function useInteractionsQuery(enabled = true) {
     queryKey: queryKeys.interactions,
     queryFn: () => interactionsApi.getAll(),
     enabled,
+    staleTime: Infinity,
   });
 }
 
@@ -136,7 +127,7 @@ export function memoriesListQueryOptions(limit = ASSISTANT_MEMORIES_LIST_LIMIT) 
   return {
     queryKey: queryKeys.memoriesList(limit),
     queryFn: () => memoriesApi.list({ limit }),
-    staleTime: 30_000,
+    staleTime: Infinity,
     refetchOnMount: false,
   };
 }
@@ -194,7 +185,7 @@ export function useRecentConversationsQuery(enabled = true, limit = INTERACTION_
       return rows;
     },
     enabled,
-    staleTime: CONVERSATION_STALE_MS,
+    staleTime: Infinity,
   });
 }
 
@@ -211,7 +202,7 @@ export function useInteractionsBootstrapQuery(
     queryKey: queryKeys.interactionsBootstrap(idsKey),
     queryFn: () => interactionsApi.getBootstrapForConversations(conversationIds, { limit }),
     enabled,
-    staleTime: INTERACTIONS_BOOTSTRAP_STALE_MS,
+    staleTime: Infinity,
     placeholderData: keepPreviousData,
   });
 }
@@ -229,6 +220,46 @@ export function useAuthMeQuery(enabled = true) {
     queryKey: queryKeys.authMe,
     queryFn: (): Promise<UserMe> => authApi.me(),
     enabled,
+    staleTime: AUTH_ME_STALE_MS,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useUpdateNetworkMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: NetworkUpdate) => networkApi.update(payload),
+    onSuccess: data => {
+      queryClient.setQueryData<UserMe | undefined>(queryKeys.authMe, prev =>
+        prev ? { ...prev, name: data.name, timezone: data.timezone } : prev,
+      );
+    },
+  });
+}
+
+export function useSetPasswordMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (newPassword: string) => authApi.setPassword(newPassword),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+    },
+  });
+}
+
+export function useChangePasswordMutation() {
+  const queryClient = useQueryClient();
+  const { saveTokens } = useAuth();
+  return useMutation({
+    mutationFn: ({ current, next }: { current: string; next: string }) =>
+      authApi.changePassword(current, next),
+    onSuccess: async data => {
+      await saveTokens({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+    },
   });
 }
 

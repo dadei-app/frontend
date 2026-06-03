@@ -33,8 +33,17 @@ export interface AuthResponse {
 export interface UserMe {
     id: string;
     email: string;
+    name: string;
+    timezone: string;
     has_password: boolean;
     google_connected: boolean;
-    google_granted_scopes?: string[];
-    google_scopes_stale?: boolean;
+    google_granted_scopes: string[];
+    google_scopes_stale: boolean;
+}
+
+export interface TokenResponse {
+    access_token: string;
+    refresh_token: string;
+    token_type: string;
+    user: { id: string; email: string };
 }
