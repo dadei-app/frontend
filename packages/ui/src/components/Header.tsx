@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings2, LogOut, Users, Mic } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import PeoplePanel from '@dadei/ui/components/PeoplePanel';
+import PersonsPanel from '@dadei/ui/components/PersonsPanel';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 interface HeaderProps {
@@ -73,7 +73,7 @@ export default function Header({
           <LogOut className="ml-2 h-4 w-4" strokeWidth={2} />
         </button>
 
-        <PeoplePanel
+        <PersonsPanel
           isOpen={isPeoplePanelOpen}
           onClose={() => setIsPeoplePanelOpen(false)}
           excludeElement={peopleButtonRef.current}

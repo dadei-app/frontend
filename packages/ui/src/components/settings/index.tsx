@@ -1,0 +1,219 @@
+import { useEffect, useState, type ComponentType } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import * as Dialog from '@radix-ui/react-dialog';
+import {
+  Brain,
+  Info,
+  Mic,
+  Plug,
+  Power,
+  Sparkles,
+  UserCircle2,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import { AmbientShader } from '@dadei/ui/components/theme/AmbientShader';
+import { AboutPanel } from './about';
+import { AccountPanel } from './account';
+import { AudioPanel } from './audio';
+import { IntegrationsPanel } from './integrations';
+import { MemoriesPanel } from './memories';
+import { StartupPanel } from './startup';
+import { SubscriptionPanel } from './subscription';
+import type { SettingsPanelProps } from './shared/types';
+import { cn } from '@dadei/ui/lib/shared/cn';
+import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
+import { veilEase } from '@dadei/ui/lib/shared/motion';
+
+type AssistantSettingsModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+type SidebarView =
+  | 'integrations'
+  | 'memories'
+  | 'account'
+  | 'audio'
+  | 'startup'
+  | 'subscription'
+  | 'about';
+
+const ALL_VIEWS: { id: SidebarView; label: string; Icon: LucideIcon }[] = [
+  { id: 'integrations', label: 'Integrations', Icon: Plug },
+  { id: 'memories', label: 'Memories', Icon: Brain },
+  { id: 'account', label: 'Account', Icon: UserCircle2 },
+  { id: 'audio', label: 'Audio', Icon: Mic },
+  { id: 'startup', label: 'Startup', Icon: Power },
+  { id: 'subscription', label: 'Subscription', Icon: Sparkles },
+  { id: 'about', label: 'About', Icon: Info },
+];
+
+function visibleViews() {
+  const desktop = isElectronDesktop();
+  return ALL_VIEWS.filter(v => {
+    if (v.id === 'startup' && !desktop) return false;
+    if (v.id === 'about' && !desktop) return false;
+    return true;
+  });
+}
+
+const PANELS: Record<SidebarView, ComponentType<SettingsPanelProps>> = {
+  integrations: IntegrationsPanel,
+  memories: MemoriesPanel,
+  account: AccountPanel,
+  audio: AudioPanel,
+  startup: StartupPanel,
+  subscription: SubscriptionPanel,
+  about: AboutPanel,
+};
+
+const dialogContentReset =
+  'fixed inset-0 z-250 flex max-h-none w-full max-w-none translate-x-0 translate-y-0 items-center justify-center border-0 bg-transparent p-3 shadow-none outline-none sm:p-4';
+
+export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
+  const [view, setView] = useState<SidebarView>('integrations');
+  const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
+  const prefersReducedMotion = useReducedMotion();
+
+  const views = visibleViews();
+  const isCenteredPanel = view === 'about' || view === 'subscription';
+
+  useEffect(() => {
+    if (!window.electronAPI?.onOpenSettingsSection) return;
+    const off = window.electronAPI.onOpenSettingsSection(({ section, action }) => {
+      if (ALL_VIEWS.some(v => v.id === section)) {
+        const target = section as SidebarView;
+        if (target === 'startup' && !isElectronDesktop()) return;
+        setView(target);
+        setPendingAction(action);
+        onOpenChange(true);
+      }
+    });
+    return off;
+  }, [onOpenChange]);
+
+  useEffect(() => {
+    if (!isElectronDesktop() && (view === 'startup' || view === 'about')) {
+      setView('integrations');
+    }
+  }, [view]);
+
+  useEffect(() => {
+    if (open) return;
+    setView('integrations');
+    setPendingAction(undefined);
+  }, [open]);
+
+  const ActivePanel = PANELS[view];
+
+  const overlayTransition = prefersReducedMotion
+    ? { duration: 0.12 }
+    : { duration: 0.28, ease: veilEase };
+  const contentTransition = prefersReducedMotion
+    ? { duration: 0.12 }
+    : { duration: 0.32, ease: veilEase };
+  const contentInitial = prefersReducedMotion
+    ? { opacity: 0 }
+    : { opacity: 0, scale: 0.97, y: 10 };
+  const contentAnimate = { opacity: 1, scale: 1, y: 0 };
+  const contentExit = prefersReducedMotion
+    ? { opacity: 0, transition: { duration: 0.1 } }
+    : {
+        opacity: 0,
+        scale: 0.97,
+        y: 10,
+        transition: { duration: 0.2, ease: veilEase },
+      };
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <AnimatePresence>
+        {open ? (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={overlayTransition}
+                className="fixed inset-0 z-240 bg-zinc-950/65 backdrop-blur-md"
+              />
+            </Dialog.Overlay>
+            <Dialog.Content
+              className={dialogContentReset}
+              style={{ top: 0, left: 0, transform: 'none' }}
+            >
+              <motion.div
+                initial={contentInitial}
+                animate={contentAnimate}
+                exit={contentExit}
+                transition={contentTransition}
+                className="glass-panel conic-border relative grid h-[min(800px,88dvh)] w-full max-w-7xl overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]"
+              >
+                <div className="relative col-start-1 row-start-1 min-h-0 overflow-hidden rounded-2xl">
+                  <AmbientShader className="h-full w-full" intensity={0.25} />
+                </div>
+
+                <div className="relative col-start-1 row-start-1 flex min-h-0 flex-col">
+                  <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
+                    <Dialog.Title className="text-xl font-semibold text-zinc-50">Settings</Dialog.Title>
+                    <Dialog.Close asChild>
+                      <button
+                        type="button"
+                        className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
+                        aria-label="Close settings"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    </Dialog.Close>
+                  </div>
+
+                  <div className="flex min-h-0 flex-1">
+                    <aside className="w-60 shrink-0 border-r border-white/5 bg-zinc-950/30 p-4">
+                      <nav className="space-y-1">
+                        {views.map(({ id, label, Icon }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            onClick={() => {
+                              setView(id);
+                              setPendingAction(undefined);
+                            }}
+                            className={cn(
+                              'emerald-glow flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-base transition',
+                              view === id
+                                ? 'bg-emerald-500/10 text-emerald-200'
+                                : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+                            )}
+                          >
+                            <Icon className="h-5 w-5 shrink-0" />
+                            <span>{label}</span>
+                          </button>
+                        ))}
+                      </nav>
+                    </aside>
+
+                    <main
+                      className={cn(
+                        'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none p-4 sm:p-5',
+                        isCenteredPanel && 'items-center justify-center',
+                      )}
+                    >
+                      <div className="flex min-h-0 w-full flex-1 flex-col">
+                        <ActivePanel
+                          pendingAction={pendingAction}
+                          onActionConsumed={() => setPendingAction(undefined)}
+                        />
+                      </div>
+                    </main>
+                  </div>
+                </div>
+              </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        ) : null}
+      </AnimatePresence>
+    </Dialog.Root>
+  );
+}

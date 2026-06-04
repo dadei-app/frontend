@@ -1,7 +1,7 @@
-
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
+import type { Hotkey, Modifier } from '@dadei/ui/types/electron';
 import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/errors/userMessage';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import {
@@ -28,9 +28,41 @@ interface ServiceContextType {
   assistantOwnerSessionId: string | null;
   assistantModeExpiresAt: string | null;
   assistantModeRemainingMs: number;
+  hotkey: Hotkey;
+  setHotkey: (h: Hotkey) => Promise<void>;
+  formatHotkey: (h?: Hotkey) => string;
+  matchesHotkey: (event: KeyboardEvent, h?: Hotkey) => boolean;
 }
 
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
+
+const DEFAULT_HOTKEY: Hotkey = { key: 'Space', modifiers: [] };
+
+const MAC_SYMBOLS: Record<Modifier, string> = {
+  Meta: '⌘',
+  Alt: '⌥',
+  Shift: '⇧',
+  Ctrl: '⌃',
+};
+
+const KEY_LABELS: Record<string, string> = {
+  Space: 'Space',
+  Escape: 'Esc',
+  Enter: 'Enter',
+  Tab: 'Tab',
+  ArrowUp: '↑',
+  ArrowDown: '↓',
+  ArrowLeft: '←',
+  ArrowRight: '→',
+};
+
+function keyLabel(code: string): string {
+  if (KEY_LABELS[code]) return KEY_LABELS[code];
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code.startsWith('F') && /^F\d+$/.test(code)) return code;
+  return code;
+}
 
 const CLIENT_CONTEXT_LOCATION_TIMEOUT_MS = 3500;
 
@@ -102,6 +134,52 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const [isAssistantMode, setIsAssistantMode] = useState(false);
   const [assistantOwnerSessionId, setAssistantOwnerSessionId] = useState<string | null>(null);
   const [assistantModeExpiresAt, setAssistantModeExpiresAt] = useState<string | null>(null);
+  const [hotkey, setHotkeyState] = useState<Hotkey>(DEFAULT_HOTKEY);
+  const isMac =
+    typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+
+  useEffect(() => {
+    if (!window.electronAPI?.hotkey?.get) return;
+    void window.electronAPI.hotkey.get().then(setHotkeyState).catch(() => {});
+  }, []);
+
+  const setHotkey = useCallback(async (h: Hotkey) => {
+    if (window.electronAPI?.hotkey?.set) {
+      const saved = await window.electronAPI.hotkey.set(h);
+      setHotkeyState(saved);
+      return;
+    }
+    setHotkeyState(h);
+  }, []);
+
+  const formatHotkey = useCallback(
+    (h: Hotkey = hotkey) => {
+      const order: Modifier[] = ['Ctrl', 'Alt', 'Shift', 'Meta'];
+      const parts: string[] = [];
+      for (const m of order) {
+        if (h.modifiers.includes(m)) {
+          parts.push(isMac ? MAC_SYMBOLS[m] : m);
+        }
+      }
+      parts.push(keyLabel(h.key));
+      return isMac ? parts.join(' ') : parts.join(' + ');
+    },
+    [hotkey, isMac],
+  );
+
+  const matchesHotkey = useCallback(
+    (event: KeyboardEvent, h: Hotkey = hotkey) => {
+      if (event.code !== h.key) return false;
+      const has = (m: Modifier, on: boolean) => h.modifiers.includes(m) === on;
+      return (
+        has('Ctrl', event.ctrlKey) &&
+        has('Shift', event.shiftKey) &&
+        has('Alt', event.altKey) &&
+        has('Meta', event.metaKey)
+      );
+    },
+    [hotkey],
+  );
 
   const applyServiceStatus = useCallback((enabled: boolean) => {
     setIsServiceEnabled(enabled);
@@ -274,6 +352,10 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         assistantOwnerSessionId,
         assistantModeExpiresAt,
         assistantModeRemainingMs,
+        hotkey,
+        setHotkey,
+        formatHotkey,
+        matchesHotkey,
       }}
     >
       {children}

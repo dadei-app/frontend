@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
+import { micLevelAuraMotion } from '@dadei/ui/contexts/AudioContext';
 
 interface MicLevelAuraProps {
   visible: boolean;
@@ -7,14 +8,7 @@ interface MicLevelAuraProps {
 }
 
 export default function MicLevelAura({ visible, level }: MicLevelAuraProps) {
-  const aura = useMemo(() => {
-    const clamped = Math.max(0, Math.min(1, level));
-    return {
-      opacity: visible ? 0.44 + clamped * 0.56 : 0,
-      scale: visible ? 1.08 + clamped * 0.92 : 0.88,
-      y: visible ? -4 - clamped * 22 : 0,
-    };
-  }, [level, visible]);
+  const aura = useMemo(() => micLevelAuraMotion(level, visible), [level, visible]);
 
   return (
     <motion.div

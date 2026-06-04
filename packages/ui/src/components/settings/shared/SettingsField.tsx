@@ -10,10 +10,10 @@ export function SettingsField({
   children: ReactNode;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="relative space-y-3">
       <div>
-        <p className="text-sm font-medium text-zinc-100">{label}</p>
-        {hint ? <p className="mt-0.5 text-xs text-zinc-500 font-secondary">{hint}</p> : null}
+        <p className="text-base font-medium text-zinc-100">{label}</p>
+        {hint ? <p className="mt-1 text-sm text-zinc-500 font-secondary">{hint}</p> : null}
       </div>
       {children}
     </div>

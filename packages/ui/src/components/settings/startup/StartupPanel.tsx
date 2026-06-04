@@ -1,52 +1,85 @@
 import { useEffect, useState } from 'react';
-import { SettingsField } from '@dadei/ui/components/settings/panels/SettingsField';
-import { Toggle } from '@dadei/ui/components/settings/panels/SettingsControls';
+
+import { GridTile, SettingsGrid4, Toggle } from '@dadei/ui/components/settings/shared';
+
+
 
 export function StartupPanel() {
+
   const [launchAtLogin, setLaunchAtLogin] = useState(false);
+
   const [minimizeToTray, setMinimizeToTray] = useState(false);
+
   const isDarwin = window.electronAPI?.platform === 'darwin';
-  const hasStartup = Boolean(window.electronAPI?.startup);
+
+
 
   useEffect(() => {
+
     if (!window.electronAPI?.startup) return;
+
     void window.electronAPI.startup.getLaunchAtLogin().then(setLaunchAtLogin);
+
     void window.electronAPI.startup.getMinimizeToTray().then(setMinimizeToTray);
+
   }, []);
 
-  if (!hasStartup) {
-    return (
-      <div className="conic-border glass-panel max-w-2xl rounded-lg p-5">
-        <p className="text-sm text-zinc-500 font-secondary">
-          Startup preferences are available in the desktop app.
-        </p>
-      </div>
-    );
-  }
+
 
   return (
-    <div className="conic-border glass-panel max-w-2xl space-y-6 rounded-lg p-5">
-      <SettingsField label="Launch at login">
+
+    <SettingsGrid4 className="min-h-0 flex-1">
+
+      <GridTile title="Launch at login" col={1} row={1} colSpan={2} rowSpan={2}>
+
         <Toggle
+
+          portrait
+
           checked={launchAtLogin}
+
           onChange={enabled => {
+
             void window.electronAPI!.startup!.setLaunchAtLogin(enabled).then(setLaunchAtLogin);
+
           }}
-          label="Open Dadei when you sign in to your computer"
+
+          label="Open Dadei when you sign in"
+
         />
-      </SettingsField>
+
+      </GridTile>
+
+
 
       {!isDarwin ? (
-        <SettingsField label="Minimize to tray">
+
+        <GridTile title="Minimize to tray" col={3} row={1} colSpan={2} rowSpan={2}>
+
           <Toggle
+
+            portrait
+
             checked={minimizeToTray}
+
             onChange={enabled => {
+
               void window.electronAPI!.startup!.setMinimizeToTray(enabled).then(setMinimizeToTray);
+
             }}
-            label="Keep running in the background when the window is closed"
+
+            label="Keep running when the window closes"
+
           />
-        </SettingsField>
+
+        </GridTile>
+
       ) : null}
-    </div>
+
+    </SettingsGrid4>
+
   );
+
 }
+
+

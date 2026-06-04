@@ -3,16 +3,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useBootstrap } from '@dadei/ui/contexts/BootstrapContext';
-import { DadeiLoadingScreen } from '@dadei/ui/components/loading/DadeiLoadingScreen';
+import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
-import { HotkeyDisplay } from '@dadei/ui/components/HotkeyDisplay';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
-import AssistantSettingsModal from '@dadei/ui/components/modals/SettingsModal';
-import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
+import AssistantSettingsModal from '@dadei/ui/components/settings';
+import { DesktopTitleBarStrip } from '@dadei/ui/components/TitleBar';
 import { useMemoriesQuery } from '@dadei/ui/lib/query/queryHooks';
 import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS, isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
@@ -58,7 +57,7 @@ function SpokenWakeWord({
 export default function AssistantLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isReady: bootstrapReady } = useBootstrap();
-  const { isConnected, isServiceEnabled } = useService();
+  const { isConnected, isServiceEnabled, formatHotkey } = useService();
   const { state } = useCommand();
   const showWakeHint = state === 'idle' && isServiceEnabled;
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
@@ -92,7 +91,7 @@ export default function AssistantLayout() {
 
   if (!bootstrapReady || isLoading) {
     return (
-      <DadeiLoadingScreen
+      <LoadingScreen
         subtitleOverride={bootstrapReady && isLoading ? 'Signing in…' : undefined}
       />
     );
@@ -178,7 +177,9 @@ export default function AssistantLayout() {
                   ) : null}
                 </AnimatePresence>
                 <p className={ASSISTANT_HINT_ROW}>
-                  <HotkeyDisplay />
+                  <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
+                    {formatHotkey()}
+                  </kbd>
                   <span>to toggle</span>
                 </p>
               </motion.div>

@@ -38,7 +38,7 @@ function openDownloadUrl(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer');
 }
 
-export function DadeiLoadingScreen({ subtitleOverride }: { subtitleOverride?: string }) {
+export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string }) {
   const { state, isReady } = useBootstrap();
   const { phase, progress, message, downloadUrl } = state;
 

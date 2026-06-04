@@ -1,6 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useHotkey } from '@dadei/ui/contexts/HotkeyContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
@@ -93,8 +92,8 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     isTogglingService,
     registrationConflict,
     isAssistantMode,
+    matchesHotkey,
   } = useService();
-  const { matchesHotkey } = useHotkey();
   const { state, cancel, micShowsProcessingRing } = useCommand();
 
   const micBlocked = isTogglingService || registrationConflict || state === 'locked';

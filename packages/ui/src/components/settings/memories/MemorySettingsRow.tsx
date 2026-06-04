@@ -27,16 +27,16 @@ export function MemorySettingsRow({
   const evidence = firstEvidenceQuote(memory.provenance);
 
   return (
-    <li className="group/memory rounded-lg border border-white/7 bg-zinc-950/40 px-3 py-2.5">
-      <div className="flex items-start gap-2">
+    <li className="group/memory rounded-xl border border-white/7 bg-zinc-950/40 px-4 py-3">
+      <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
           <p
-            className="text-sm leading-snug text-zinc-100"
+            className="text-base leading-snug text-zinc-100"
             title={`Recorded ${formatActionWhen(memory.created_at) ?? memory.created_at}`}
           >
             {memory.canonical_text}
           </p>
-          <p className="mt-1 text-xs text-zinc-500 font-secondary">
+          <p className="mt-2 text-sm text-zinc-500 font-secondary">
             {formatMetaLine([
               memory.memory_type,
               memory.status,

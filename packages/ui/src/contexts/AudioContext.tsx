@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
@@ -13,29 +20,81 @@ import {
   FOLLOW_UP_SPEECH_RMS,
 } from '@dadei/ui/lib/voice/session/voiceConstants';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
+import type { AudioSettings } from '@dadei/ui/types/electron';
+import {
+  AUDIO_SETTINGS_CHANGED,
+  loadAudioSettings,
+} from '@dadei/ui/lib/audio/audioSettingsEvents';
 
 const COMMAND_START_RETRY_MS = 500;
-const MIC_ANALYSER_FFT_SIZE = 256;
-const MIC_ANALYSER_SMOOTHING = 0.7;
-// ScriptProcessorNode requires 0 or a power-of-two between 256 and 16384.
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
-const SAMPLE_RATE = 16000;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
-// Only forward microphone chunks while waiting for wake word or actively capturing user speech.
+const MIC_LEVEL_ANALYSER_FFT = 256;
+const MIC_LEVEL_ANALYSER_SMOOTHING = 0.7;
+const MIC_LEVEL_SCALE = 3.5;
+
+const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
+  inputDeviceId: null,
+  sampleRate: 16000,
+  noiseSuppression: true,
+  noiseSuppressionLevel: 50,
+};
+
 const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['transcribing', 'thinking', 'responding'];
+
+/** Normalized 0–1 level from a time-domain analyser (command aura + settings meter). */
+export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint8Array): number {
+  analyser.getByteTimeDomainData(buffer);
+  let sumSq = 0;
+  for (let i = 0; i < buffer.length; i++) {
+    const v = (buffer[i] - 128) / 128;
+    sumSq += v * v;
+  }
+  return Math.min(
+    Math.sqrt(sumSq / buffer.length) * COMMAND_MIC_LEVEL_GAIN * MIC_LEVEL_SCALE,
+    1,
+  );
+}
+
+export function clampMicLevel(level: number): number {
+  return Math.max(0, Math.min(1, level));
+}
+
+/** Motion targets for MicLevelAura from a normalized mic level. */
+export function micLevelAuraMotion(level: number, visible: boolean) {
+  const clamped = clampMicLevel(level);
+  return {
+    opacity: visible ? 0.44 + clamped * 0.56 : 0,
+    scale: visible ? 1.08 + clamped * 0.92 : 0.88,
+    y: visible ? -4 - clamped * 22 : 0,
+  };
+}
+
+export function micLevelMeterLabel(level: number): 'Quiet' | 'Low' | 'Good' | 'Hot' {
+  const clamped = clampMicLevel(level);
+  if (clamped < 0.02) return 'Quiet';
+  if (clamped < 0.35) return 'Low';
+  if (clamped < 0.7) return 'Good';
+  return 'Hot';
+}
 
 interface AudioContextType {
   isAudioPipelineReady: boolean;
   micLevel: number;
+  setMicLevelPreview: (active: boolean) => void;
 }
 
 export const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
-function downsampleTo16k(input: Float32Array, inputSampleRate: number): Float32Array {
-  if (inputSampleRate <= SAMPLE_RATE) return input;
-  const ratio = inputSampleRate / SAMPLE_RATE;
+function downsampleToTarget(
+  input: Float32Array,
+  inputSampleRate: number,
+  targetSampleRate: number,
+): Float32Array {
+  if (inputSampleRate <= targetSampleRate) return input;
+  const ratio = inputSampleRate / targetSampleRate;
   const outLength = Math.max(1, Math.floor(input.length / ratio));
   const output = new Float32Array(outLength);
   let offsetResult = 0;
@@ -64,6 +123,18 @@ function toPcm16(input: Float32Array): Int16Array {
   return pcm16;
 }
 
+function buildAudioConstraints(prefs: AudioSettings): MediaTrackConstraints {
+  const audio: MediaTrackConstraints = {
+    channelCount: 1,
+    echoCancellation: true,
+    noiseSuppression: prefs.noiseSuppression,
+  };
+  if (prefs.inputDeviceId) {
+    audio.deviceId = { ideal: prefs.inputDeviceId };
+  }
+  return audio;
+}
+
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
@@ -72,6 +143,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [streamAnalyserReady, setStreamAnalyserReady] = useState(false);
+  const [previewAnalyserReady, setPreviewAnalyserReady] = useState(false);
+  const [micPreviewWanted, setMicPreviewWanted] = useState(false);
+  const [previewSettingsEpoch, setPreviewSettingsEpoch] = useState(0);
 
   const stateRef = useRef(state);
   const forwardChunksRef = useRef(true);
@@ -85,11 +159,64 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const processorNodeRef = useRef<ScriptProcessorNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
+  const previewStreamRef = useRef<MediaStream | null>(null);
+  const previewCtxRef = useRef<globalThis.AudioContext | null>(null);
+  const previewAnalyserRef = useRef<AnalyserNode | null>(null);
+
   const wakeDetectorRef = useRef<WakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
   const commandSpeechSeenRef = useRef(false);
   const commandSilenceStartedMsRef = useRef<number | null>(null);
   const commandAudioEndSentRef = useRef(false);
+  const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
+  const micPreviewRequestsRef = useRef(0);
+
+  const setMicLevelPreview = useCallback((active: boolean) => {
+    micPreviewRequestsRef.current = Math.max(
+      0,
+      micPreviewRequestsRef.current + (active ? 1 : -1),
+    );
+    setMicPreviewWanted(micPreviewRequestsRef.current > 0);
+  }, []);
+
+  const stopMicPreviewStream = useCallback(() => {
+    if (previewAnalyserRef.current) {
+      previewAnalyserRef.current.disconnect();
+      previewAnalyserRef.current = null;
+    }
+    setPreviewAnalyserReady(false);
+    if (previewCtxRef.current) {
+      void previewCtxRef.current.close();
+      previewCtxRef.current = null;
+    }
+    if (previewStreamRef.current) {
+      previewStreamRef.current.getTracks().forEach(t => t.stop());
+      previewStreamRef.current = null;
+    }
+  }, []);
+
+  const startMicPreviewStream = useCallback(async () => {
+    if (previewAnalyserRef.current) return;
+    const prefs = audioSettingsRef.current;
+    try {
+      const media = await navigator.mediaDevices.getUserMedia({
+        audio: buildAudioConstraints(prefs),
+      });
+      previewStreamRef.current = media;
+      const ctx = new window.AudioContext();
+      previewCtxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(media);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = MIC_LEVEL_ANALYSER_FFT;
+      analyser.smoothingTimeConstant = MIC_LEVEL_ANALYSER_SMOOTHING;
+      source.connect(analyser);
+      previewAnalyserRef.current = analyser;
+      setPreviewAnalyserReady(true);
+    } catch (e) {
+      console.warn('[Audio] mic level preview unavailable', e);
+      stopMicPreviewStream();
+    }
+  }, [stopMicPreviewStream]);
 
   const commitCommandCapture = useCallback(() => {
     forwardChunksRef.current = false;
@@ -139,61 +266,69 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   useEffect(() => {
-    const active = state === 'listening' || state === 'follow_up';
-    if (!active) {
+    const commandAnalyser = streamAnalyserReady ? analyserRef.current : null;
+    const previewAnalyser = previewAnalyserReady ? previewAnalyserRef.current : null;
+    const analyser = commandAnalyser ?? previewAnalyser;
+
+    if (!analyser) {
       setMicLevel(0);
-      commandSpeechSeenRef.current = false;
-      commandSilenceStartedMsRef.current = null;
       return;
     }
-    if (!streamAnalyserReady || !analyserRef.current) return;
 
-    const analyser = analyserRef.current;
     const buf = new Uint8Array(analyser.fftSize);
+    const meterFromCommand = Boolean(commandAnalyser);
     let raf = 0;
     let speechActive = false;
-    const tick = () => {
-      analyser.getByteTimeDomainData(buf);
-      let sumSq = 0;
-      for (let i = 0; i < buf.length; i++) {
-        const v = (buf[i] - 128) / 128;
-        sumSq += v * v;
-      }
-      const inCommandCapture =
-        stateRef.current === 'listening' || stateRef.current === 'follow_up';
-      const level = Math.min(
-        Math.sqrt(sumSq / buf.length) * (inCommandCapture ? COMMAND_MIC_LEVEL_GAIN : 2.2),
-        1,
-      );
-      setMicLevel(level);
-      const speaking = level >= FOLLOW_UP_SPEECH_RMS;
-      if (speaking && !speechActive && stateRef.current === 'follow_up') notifyVoiceSpeechActivity();
-      speechActive = speaking;
 
-      if (stateRef.current === 'listening' || stateRef.current === 'follow_up') {
-        const commandSpeaking = level >= COMMAND_SPEECH_RMS;
-        if (commandSpeaking) {
-          commandSpeechSeenRef.current = true;
-          commandSilenceStartedMsRef.current = null;
-        } else if (commandSpeechSeenRef.current) {
-          const now = performance.now();
-          if (commandSilenceStartedMsRef.current === null) {
-            commandSilenceStartedMsRef.current = now;
-          } else if (now - commandSilenceStartedMsRef.current >= COMMAND_UTTERANCE_END_SILENCE_MS) {
-            commandSpeechSeenRef.current = false;
-            commandSilenceStartedMsRef.current = null;
-            notifyCommandUtteranceEnded();
+    const tick = () => {
+      const level = computeMicLevelFromAnalyser(analyser, buf);
+      setMicLevel(level);
+
+      if (meterFromCommand) {
+        const inCapture =
+          stateRef.current === 'listening' || stateRef.current === 'follow_up';
+        if (inCapture) {
+          const speaking = level >= FOLLOW_UP_SPEECH_RMS;
+          if (speaking && !speechActive && stateRef.current === 'follow_up') {
+            notifyVoiceSpeechActivity();
           }
+          speechActive = speaking;
+
+          const commandSpeaking = level >= COMMAND_SPEECH_RMS;
+          if (commandSpeaking) {
+            commandSpeechSeenRef.current = true;
+            commandSilenceStartedMsRef.current = null;
+          } else if (commandSpeechSeenRef.current) {
+            const now = performance.now();
+            if (commandSilenceStartedMsRef.current === null) {
+              commandSilenceStartedMsRef.current = now;
+            } else if (
+              now - commandSilenceStartedMsRef.current >= COMMAND_UTTERANCE_END_SILENCE_MS
+            ) {
+              commandSpeechSeenRef.current = false;
+              commandSilenceStartedMsRef.current = null;
+              notifyCommandUtteranceEnded();
+            }
+          }
+        } else {
+          speechActive = false;
+          commandSpeechSeenRef.current = false;
+          commandSilenceStartedMsRef.current = null;
         }
       }
 
       raf = requestAnimationFrame(tick);
     };
+
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [state, streamAnalyserReady, notifyCommandUtteranceEnded]);
+  }, [
+    streamAnalyserReady,
+    previewAnalyserReady,
+    state,
+    notifyCommandUtteranceEnded,
+  ]);
 
-  /** Local wake model only arms assistant mode; transcription is websocket-only. */
   const onWakeWordDetected = useCallback(
     (_timestampMs: number) => {
       if (
@@ -210,54 +345,66 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     [startListening],
   );
 
-  const stopCommandAudioStream = useCallback((cancel = false) => {
-    if (processorNodeRef.current) {
-      processorNodeRef.current.onaudioprocess = null;
-      processorNodeRef.current.disconnect();
-      processorNodeRef.current = null;
-    }
-    if (analyserRef.current) {
-      analyserRef.current.disconnect();
-      analyserRef.current = null;
-    }
-    setStreamAnalyserReady(false);
-    setMicLevel(0);
-    if (sourceNodeRef.current) {
-      sourceNodeRef.current.disconnect();
-      sourceNodeRef.current = null;
-    }
-    if (webAudioCtxRef.current) {
-      void webAudioCtxRef.current.close();
-      webAudioCtxRef.current = null;
-    }
-    if (wakeDetectorRef.current) {
-      void wakeDetectorRef.current.stop();
-      wakeDetectorRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
-      mediaStreamRef.current = null;
-    }
-    if (commandStreamActiveRef.current) {
-      sendRealtimeMessage({ type: cancel ? 'command_audio_cancel' : 'command_audio_end' });
-    }
-    commandStreamActiveRef.current = false;
-    commandStreamReadyRef.current = false;
-    lastCommandStartAttemptMsRef.current = 0;
-  }, []);
+  const stopCommandAudioStream = useCallback(
+    (cancel = false) => {
+      if (processorNodeRef.current) {
+        processorNodeRef.current.onaudioprocess = null;
+        processorNodeRef.current.disconnect();
+        processorNodeRef.current = null;
+      }
+      if (analyserRef.current) {
+        analyserRef.current.disconnect();
+        analyserRef.current = null;
+      }
+      setStreamAnalyserReady(false);
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
+      }
+      if (webAudioCtxRef.current) {
+        void webAudioCtxRef.current.close();
+        webAudioCtxRef.current = null;
+      }
+      if (wakeDetectorRef.current) {
+        void wakeDetectorRef.current.stop();
+        wakeDetectorRef.current = null;
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(t => t.stop());
+        mediaStreamRef.current = null;
+      }
+      if (commandStreamActiveRef.current) {
+        sendRealtimeMessage({ type: cancel ? 'command_audio_cancel' : 'command_audio_end' });
+      }
+      commandStreamActiveRef.current = false;
+      commandStreamReadyRef.current = false;
+      lastCommandStartAttemptMsRef.current = 0;
+
+      if (micPreviewRequestsRef.current > 0) {
+        setPreviewSettingsEpoch(e => e + 1);
+      }
+    },
+    [],
+  );
 
   const ensureCommandSessionStarted = useCallback((nowMs: number, force = false) => {
     if (!commandStreamActiveRef.current) return;
     if (commandStreamReadyRef.current) return;
     if (!force && nowMs - lastCommandStartAttemptMsRef.current < COMMAND_START_RETRY_MS) return;
     lastCommandStartAttemptMsRef.current = nowMs;
-    sendRealtimeMessage({ type: 'command_audio_start', sample_rate: SAMPLE_RATE });
+    sendRealtimeMessage({
+      type: 'command_audio_start',
+      sample_rate: audioSettingsRef.current.sampleRate,
+    });
   }, []);
 
   const startCommandAudioStream = useCallback(async () => {
     if (commandStreamActiveRef.current) return;
+    stopMicPreviewStream();
+
+    const prefs = audioSettingsRef.current;
     const media = await navigator.mediaDevices.getUserMedia({
-      audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: true, noiseSuppression: true },
+      audio: buildAudioConstraints(prefs),
     });
     mediaStreamRef.current = media;
 
@@ -278,14 +425,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    const ctx = new window.AudioContext({ sampleRate: SAMPLE_RATE });
+    const ctx = new window.AudioContext({ sampleRate: prefs.sampleRate });
     webAudioCtxRef.current = ctx;
     const source = ctx.createMediaStreamSource(media);
     sourceNodeRef.current = source;
 
     const analyserNode = ctx.createAnalyser();
-    analyserNode.fftSize = MIC_ANALYSER_FFT_SIZE;
-    analyserNode.smoothingTimeConstant = MIC_ANALYSER_SMOOTHING;
+    analyserNode.fftSize = MIC_LEVEL_ANALYSER_FFT;
+    analyserNode.smoothingTimeConstant = MIC_LEVEL_ANALYSER_SMOOTHING;
     source.connect(analyserNode);
     analyserRef.current = analyserNode;
     setStreamAnalyserReady(true);
@@ -299,10 +446,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     lastCommandStartAttemptMsRef.current = 0;
     ensureCommandSessionStarted(Date.now(), true);
 
-    processor.onaudioprocess = (event) => {
+    processor.onaudioprocess = event => {
       if (!commandStreamActiveRef.current || !forwardChunksRef.current) return;
       const input = event.inputBuffer.getChannelData(0);
-      const downsampled = downsampleTo16k(input, ctx.sampleRate);
+      const downsampled = downsampleToTarget(
+        input,
+        ctx.sampleRate,
+        audioSettingsRef.current.sampleRate,
+      );
       const pcm16 = toPcm16(downsampled);
 
       const nowMs = Date.now();
@@ -315,7 +466,26 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       sendRealtimeMessage({ type: 'command_audio_chunk', pcm16_b64: btoa(binary) });
     };
-  }, [ensureCommandSessionStarted, onWakeWordDetected]);
+  }, [ensureCommandSessionStarted, onWakeWordDetected, stopMicPreviewStream]);
+
+  useEffect(() => {
+    void loadAudioSettings().then(s => {
+      audioSettingsRef.current = s;
+    });
+    const onSettingsChanged = (event: Event) => {
+      const detail = (event as CustomEvent<AudioSettings>).detail;
+      if (detail) audioSettingsRef.current = detail;
+      setPreviewSettingsEpoch(e => e + 1);
+      if (!commandStreamActiveRef.current) return;
+      stopCommandAudioStream(true);
+      void startCommandAudioStream().catch(e => {
+        console.error('[Audio] failed to restart stream after settings change', e);
+        stopCommandAudioStream(true);
+      });
+    };
+    window.addEventListener(AUDIO_SETTINGS_CHANGED, onSettingsChanged);
+    return () => window.removeEventListener(AUDIO_SETTINGS_CHANGED, onSettingsChanged);
+  }, [startCommandAudioStream, stopCommandAudioStream]);
 
   useEffect(() => {
     const shouldListen =
@@ -326,7 +496,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [isServiceEnabled, isAssistantMode, isAssistantOwner, registrationConflict, isConnected]);
 
   useEffect(() => {
-    const off = subscribeRealtimeMessages((msg) => {
+    const off = subscribeRealtimeMessages(msg => {
       if (msg.event === 'command_transcript_ready') {
         commandStreamReadyRef.current = true;
       }
@@ -341,7 +511,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       isConnected;
     const shouldStream = shouldListen && state !== 'locked';
     if (shouldStream && !commandStreamActiveRef.current) {
-      void startCommandAudioStream().catch((e) => {
+      void startCommandAudioStream().catch(e => {
         console.error('[Audio] command stream start failed', e);
         stopCommandAudioStream(true);
       });
@@ -359,10 +529,30 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     stopCommandAudioStream,
   ]);
 
-  useEffect(() => () => stopCommandAudioStream(true), [stopCommandAudioStream]);
+  useEffect(() => {
+    if (!micPreviewWanted || streamAnalyserReady) {
+      stopMicPreviewStream();
+      return;
+    }
+    void startMicPreviewStream();
+    return () => stopMicPreviewStream();
+  }, [
+    micPreviewWanted,
+    streamAnalyserReady,
+    previewSettingsEpoch,
+    startMicPreviewStream,
+    stopMicPreviewStream,
+  ]);
+
+  useEffect(() => () => {
+    stopCommandAudioStream(true);
+    stopMicPreviewStream();
+  }, [stopCommandAudioStream, stopMicPreviewStream]);
 
   return (
-    <AudioContext.Provider value={{ isAudioPipelineReady, micLevel }}>
+    <AudioContext.Provider
+      value={{ isAudioPipelineReady, micLevel, setMicLevelPreview }}
+    >
       {children}
     </AudioContext.Provider>
   );
@@ -372,4 +562,18 @@ export function useAudio() {
   const context = useContext(AudioContext);
   if (!context) throw new Error('useAudio must be used within AudioProvider');
   return context;
+}
+
+/** Enable settings mic meter; shares the same level source as the command mic aura. */
+export function useMicLevelPreview(enabled = true): number {
+  const ctx = useContext(AudioContext);
+  const setPreview = ctx?.setMicLevelPreview;
+
+  useEffect(() => {
+    if (!enabled || !setPreview) return;
+    setPreview(true);
+    return () => setPreview(false);
+  }, [enabled, setPreview]);
+
+  return ctx?.micLevel ?? 0;
 }

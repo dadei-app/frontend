@@ -15,13 +15,13 @@ import {
 /** Below client tooltip (195); above main chrome. */
 const PEOPLE_DRAWER_Z = 170;
 
-interface PeoplePanelProps {
+interface PersonsPanelProps {
   isOpen: boolean;
   onClose: () => void;
   excludeElement?: HTMLElement | null;
 }
 
-export default function PeoplePanel({ isOpen, onClose, excludeElement }: PeoplePanelProps) {
+export default function PersonsPanel({ isOpen, onClose, excludeElement }: PersonsPanelProps) {
   const { showToast } = useNotifications();
   const panelRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);

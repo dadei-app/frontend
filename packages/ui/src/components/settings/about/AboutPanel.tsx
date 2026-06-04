@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Mic } from 'lucide-react';
 import type { UpdaterCheckResult } from '@dadei/ui/types/electron';
-import type { SettingsPanelProps } from '@dadei/ui/components/settings/panels/types';
+import {
+  SettingsBento,
+  settingsPrimaryButtonClass,
+  type SettingsPanelProps,
+} from '@dadei/ui/components/settings/shared';
 
 function openExternal(url: string) {
   if (window.electronAPI?.openExternal) {
@@ -13,11 +17,11 @@ function openExternal(url: string) {
 
 function UpdateCheckResultDisplay({ result }: { result: UpdaterCheckResult }) {
   if (result.status === 'up_to_date') {
-    return <p className="text-sm text-emerald-300/90">You&apos;re on the latest version.</p>;
+    return <p className="text-base text-emerald-300/90">You&apos;re on the latest version.</p>;
   }
   if (result.status === 'update_available') {
     return (
-      <p className="text-sm text-zinc-300">
+      <p className="text-base text-zinc-300">
         Version {result.version} is available
         {result.downloadUrl ? (
           <>
@@ -38,15 +42,15 @@ function UpdateCheckResultDisplay({ result }: { result: UpdaterCheckResult }) {
   }
   if (result.status === 'manual_required') {
     return (
-      <div className="space-y-2 text-center">
-        <p className="text-sm text-zinc-300">
+      <div className="space-y-3">
+        <p className="text-base text-zinc-300">
           Version {result.version ?? 'newer'} is available.
         </p>
         {result.downloadUrl ? (
           <button
             type="button"
             onClick={() => openExternal(result.downloadUrl!)}
-            className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20"
+            className={settingsPrimaryButtonClass}
           >
             Open download page
           </button>
@@ -55,7 +59,7 @@ function UpdateCheckResultDisplay({ result }: { result: UpdaterCheckResult }) {
     );
   }
   return (
-    <p className="text-sm text-rose-300/90">
+    <p className="text-base text-rose-300/90">
       Couldn&apos;t check for updates{result.error ? `: ${result.error}` : '.'}
     </p>
   );
@@ -94,13 +98,13 @@ export function AboutPanel({ pendingAction, onActionConsumed }: SettingsPanelPro
   }, [pendingAction, handleCheck, onActionConsumed]);
 
   return (
-    <div className="conic-border glass-panel mx-auto flex max-w-md flex-col items-center space-y-6 rounded-lg px-6 py-10 text-center">
-      <div className="flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
-        <Mic className="h-10 w-10 text-emerald-300/90" strokeWidth={1.5} />
+    <SettingsBento centered>
+      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
+        <Mic className="h-12 w-12 text-emerald-300/90" strokeWidth={1.5} />
       </div>
       <div>
-        <h1 className="font-brand text-3xl tracking-wider text-zinc-100">Dadei</h1>
-        <p className="mt-2 text-sm text-zinc-500 font-secondary">
+        <h1 className="font-brand text-4xl tracking-wider text-zinc-100">Dadei</h1>
+        <p className="mt-2 text-base text-zinc-500 font-secondary">
           Version {version || '—'}
           {buildHash ? ` · ${buildHash.slice(0, 7)}` : ''}
         </p>
@@ -110,39 +114,24 @@ export function AboutPanel({ pendingAction, onActionConsumed }: SettingsPanelPro
         type="button"
         onClick={() => void handleCheck()}
         disabled={checking}
-        className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50"
+        className={`${settingsPrimaryButtonClass} disabled:opacity-50`}
       >
         {checking ? 'Checking…' : 'Check for updates'}
       </button>
 
       {checkResult ? <UpdateCheckResultDisplay result={checkResult} /> : null}
 
-      <div className="flex w-full justify-center gap-6 border-t border-white/5 pt-6 text-xs text-zinc-500">
-        <a
-          href="https://dadei.app/privacy"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-zinc-300"
-        >
+      <div className="flex flex-wrap justify-center gap-8 border-t border-white/5 pt-8 text-sm text-zinc-500">
+        <a href="https://dadei.app/privacy" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-300">
           Privacy
         </a>
-        <a
-          href="https://dadei.app/terms"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-zinc-300"
-        >
+        <a href="https://dadei.app/terms" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-300">
           Terms
         </a>
-        <a
-          href="https://dadei.app/support"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="hover:text-zinc-300"
-        >
+        <a href="https://dadei.app/support" target="_blank" rel="noopener noreferrer" className="hover:text-zinc-300">
           Support
         </a>
       </div>
-    </div>
+    </SettingsBento>
   );
 }
