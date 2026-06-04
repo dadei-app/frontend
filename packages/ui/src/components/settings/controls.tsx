@@ -62,15 +62,21 @@ export function SegmentedControl<T extends string | number>({
   onChange,
   layout = 'row',
   disabled,
+  scrollable = false,
 }: {
   options: Array<{ value: T; label: string }>;
   value: T;
   onChange: (value: T) => void;
   layout?: 'row' | 'grid' | 'stack';
   disabled?: boolean;
+  /** Stack layout: scroll inside the option list, not an outer panel. */
+  scrollable?: boolean;
 }) {
   return (
-    <SegmentedShell layout={layout}>
+    <SegmentedShell
+      layout={layout}
+      className={scrollable ? 'min-h-0 flex-1 overflow-y-auto overscroll-none' : undefined}
+    >
       {options.map(opt => (
         <SegmentedOption
           key={String(opt.value)}
@@ -85,47 +91,6 @@ export function SegmentedControl<T extends string | number>({
   );
 }
 
-/** Many options in the same segmented visual language (scrollable grid). */
-export function ChipPicker<T extends string>({
-  options,
-  value,
-  onChange,
-  columns = 2,
-  maxHeightClass = 'max-h-40',
-  fill = false,
-  disabled,
-}: {
-  options: Array<{ value: T; label: string }>;
-  value: T;
-  onChange: (value: T) => void;
-  columns?: 2 | 3;
-  maxHeightClass?: string;
-  /** Expand to fill a grid tile with internal scroll. */
-  fill?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <SegmentedShell
-      layout="grid"
-      className={cn(
-        columns === 3 && 'sm:grid-cols-3',
-        fill ? 'h-full min-h-0 flex-1 overflow-y-auto overscroll-none' : maxHeightClass,
-        !fill && 'overflow-y-auto overscroll-none',
-      )}
-    >
-      {options.map((opt, i) => (
-        <SegmentedOption
-          key={opt.value ? `opt-${opt.value}` : `opt-default-${i}`}
-          selected={opt.value === value}
-          disabled={disabled}
-          onSelect={() => onChange(opt.value)}
-          label={opt.label}
-          className="truncate text-left"
-        />
-      ))}
-    </SegmentedShell>
-  );
-}
 
 export function Toggle({
   checked,
@@ -167,34 +132,6 @@ export function Toggle({
   );
 }
 
-export function Slider({
-  min,
-  max,
-  step,
-  value,
-  onChange,
-  disabled,
-}: {
-  min: number;
-  max: number;
-  step: number;
-  value: number;
-  onChange: (value: number) => void;
-  disabled?: boolean;
-}) {
-  return (
-    <input
-      type="range"
-      min={min}
-      max={max}
-      step={step}
-      value={value}
-      disabled={disabled}
-      onChange={e => onChange(Number(e.target.value))}
-      className="h-2 w-full cursor-pointer accent-emerald-500 emerald-glow disabled:cursor-not-allowed disabled:opacity-40"
-    />
-  );
-}
 
 /** Range slider with filled track and glow thumb. */
 export function GlowSlider({
@@ -244,11 +181,31 @@ export function NoiseSuppressionControl({
   enabled,
   level,
   onLevelChange,
+  compact = false,
 }: {
   enabled: boolean;
   level: number;
   onLevelChange: (value: number) => void;
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className="flex h-full min-h-0 flex-col justify-end gap-2">
+        <GlowSlider
+          min={0}
+          max={100}
+          step={5}
+          value={level}
+          disabled={!enabled}
+          onChange={onLevelChange}
+        />
+        <p className={cn('text-[10px] leading-tight', enabled ? 'text-zinc-500' : 'text-zinc-600')}>
+          Hiss reduction
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col justify-between gap-3">
       <p
@@ -295,70 +252,5 @@ export function PowerToggleButton({
     >
       <Power className="h-4 w-4" />
     </button>
-  );
-}
-
-export function HotkeyPicker({
-  displayLabel,
-  capturing,
-  onStartCapture,
-  onCancelCapture,
-  onReset,
-  showReset,
-  layout = 'row',
-}: {
-  displayLabel: string;
-  capturing: boolean;
-  onStartCapture: () => void;
-  onCancelCapture: () => void;
-  onReset: () => void;
-  showReset: boolean;
-  layout?: 'row' | 'stack';
-}) {
-  const keyDisplay = (
-    <div
-      className={cn(
-        'flex items-center justify-center rounded-md px-3 font-mono transition',
-        layout === 'stack' ? 'min-h-[3.5rem] flex-1 text-lg' : 'min-h-[2.75rem] min-w-0 flex-1 text-base',
-        capturing
-          ? 'animate-pulse bg-emerald-500/20 text-emerald-200'
-          : 'bg-emerald-500/10 text-emerald-100',
-      )}
-    >
-      {displayLabel}
-    </div>
-  );
-
-  if (layout === 'stack') {
-    return (
-      <div className="flex h-full min-h-0 flex-col gap-2">
-        {keyDisplay}
-        <SegmentedShell layout="row" className="w-full shrink-0">
-          <SegmentedOption
-            selected={capturing}
-            onSelect={() => (capturing ? onCancelCapture() : onStartCapture())}
-            label={capturing ? 'Cancel' : 'Rebind'}
-            className="flex-1"
-          />
-          {showReset ? (
-            <SegmentedOption selected={false} onSelect={onReset} label="Reset" className="flex-1" />
-          ) : null}
-        </SegmentedShell>
-      </div>
-    );
-  }
-
-  return (
-    <SegmentedShell layout="row" className="w-full">
-      {keyDisplay}
-      <SegmentedOption
-        selected={capturing}
-        onSelect={() => (capturing ? onCancelCapture() : onStartCapture())}
-        label={capturing ? 'Cancel' : 'Rebind'}
-      />
-      {showReset ? (
-        <SegmentedOption selected={false} onSelect={onReset} label="Space" />
-      ) : null}
-    </SegmentedShell>
   );
 }

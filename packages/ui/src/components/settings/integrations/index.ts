@@ -1,1 +1,0 @@
-export { IntegrationsPanel } from './IntegrationsPanel';

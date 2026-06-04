@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Mic } from 'lucide-react';
-import { useBootstrap } from '@dadei/ui/contexts/BootstrapContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { BootstrapPhase } from '@dadei/ui/types/electron';
+import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 const PHASE_LABELS: Record<BootstrapPhase, string> = {
@@ -39,8 +40,8 @@ function openDownloadUrl(url: string) {
 }
 
 export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string }) {
-  const { state, isReady } = useBootstrap();
-  const { phase, progress, message, downloadUrl } = state;
+  const { bootstrapState, isBootstrapReady } = useSystem();
+  const { phase, progress, message, downloadUrl } = bootstrapState;
 
   const subtitle = useMemo(
     () => statusText(phase, progress, message, subtitleOverride),
@@ -53,10 +54,13 @@ export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string 
 
   return (
     <motion.div
-      className="fixed inset-0 z-50 flex flex-col bg-black"
-      animate={{ opacity: isReady ? 0 : 1 }}
+      className={cn(
+        'z-50 flex flex-col bg-black',
+        isElectronDesktop() ? 'absolute inset-0' : 'fixed inset-0',
+      )}
+      animate={{ opacity: isBootstrapReady ? 0 : 1 }}
       transition={{ duration: 0.25 }}
-      aria-busy={!isReady}
+      aria-busy={!isBootstrapReady}
       aria-live="polite"
     >
       {/* Dot matrix with inverse radial mask */}

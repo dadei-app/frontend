@@ -2,19 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isAxiosError } from 'axios';
 import { useReducedMotion } from 'framer-motion';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
+import type { Conversation, Interaction } from '@dadei/ui/types/models.types';
 import { interactionsApi } from '@dadei/ui/lib/api/interactions';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
 import {
   conversationQueryOptions,
   INTERACTION_PANEL_RECENT_LIMIT,
   removeAllConversationQueries,
-  useInteractionsBootstrapQuery,
-  usePersonsQuery,
-  useRecentConversationsQuery,
 } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
@@ -68,59 +64,30 @@ function buildConversationGroups(
 }
 
 export function useInteractionPanel() {
-  const { isConnected } = useService();
+  const {
+    isConnected,
+    recentConversations,
+    bootstrapInteractions,
+    interactionsLoading,
+    interactionsError,
+    retryInteractions,
+    persons,
+    personsLoading,
+    refetchPersons,
+    pruneExtraBootstrapConversationId,
+    clearExtraBootstrapConversationIds,
+  } = useService();
   const containerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useNotifications();
   const prefersReducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
 
-  const recentConversationsQuery = useRecentConversationsQuery(
-    isConnected,
-    INTERACTION_PANEL_RECENT_LIMIT
-  );
-
   const recentIds = useMemo(
-    () => (recentConversationsQuery.data ?? []).map(c => c.id),
-    [recentConversationsQuery.data]
+    () => recentConversations.map(c => c.id),
+    [recentConversations],
   );
 
-  /**
-   * Conversation IDs returned by GET /conversations/recent are capped; realtime interactions
-   * can reference an older active conversation. Track those extras so bootstrap refetches include them.
-   */
-  const [extraBootstrapConversationIds, setExtraBootstrapConversationIds] = useState<string[]>([]);
-
-  useEffect(() => {
-    if (!isConnected) {
-      setExtraBootstrapConversationIds([]);
-    }
-  }, [isConnected]);
-
-  const idsForBootstrapFetch = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of recentIds) {
-      const t = id?.trim();
-      if (t) ids.add(t);
-    }
-    for (const id of extraBootstrapConversationIds) {
-      const t = id?.trim();
-      if (t) ids.add(t);
-    }
-    return Array.from(ids).sort();
-  }, [extraBootstrapConversationIds, recentIds]);
-
-  const interactionsBootstrapKey = useMemo(
-    () => idsForBootstrapFetch.join('\u001f'),
-    [idsForBootstrapFetch]
-  );
-
-  const interactionsBootstrapQuery = useInteractionsBootstrapQuery(
-    idsForBootstrapFetch,
-    isConnected && (recentConversationsQuery.isSuccess || recentConversationsQuery.isError)
-  );
-
-  const personsQuery = usePersonsQuery(isConnected);
-  const interactions = interactionsBootstrapQuery.data ?? EMPTY_INTERACTIONS;
+  const interactions = bootstrapInteractions.length > 0 ? bootstrapInteractions : EMPTY_INTERACTIONS;
 
   const conversationIds = useMemo(() => {
     const ids = new Set<string>();
@@ -139,7 +106,6 @@ export function useInteractionPanel() {
     })),
   });
 
-  /** `useQueries` returns a new array each render; do not put it in useMemo deps or `conversationById` churns forever. */
   const conversationIdsKey = conversationIds.join('\u001f');
   const conversationDataKey = conversationIds
     .map((id, i) => {
@@ -156,43 +122,27 @@ export function useInteractionPanel() {
       if (data) map.set(id, data);
     });
     return map;
-    // conversationQueries omitted on purpose — see conversationDataKey above.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable keys derived from query *data*, not the queries array identity
   }, [conversationDataKey, conversationIdsKey]);
 
   const [conversationGroups, setConversationGroups] = useState<ConversationGroupState[]>([]);
-  const loading =
-    recentConversationsQuery.isLoading ||
-    (isConnected &&
-      (recentConversationsQuery.isSuccess || recentConversationsQuery.isError) &&
-      interactionsBootstrapQuery.isLoading);
+  const loading = interactionsLoading;
 
   const personsById = useMemo(
-    () => new Map((personsQuery.data ?? []).map(person => [person.id, person])),
-    [personsQuery.data]
+    () => new Map(persons.map(person => [person.id, person])),
+    [persons],
   );
 
-  /**
-   * Interactions (bootstrap + realtime) can reference a person created after the last
-   * GET /persons. Without a refetch, getPersonDisplay falls through to "Loading..." forever.
-   */
   useEffect(() => {
-    if (!isConnected || !personsQuery.isSuccess) return;
-    const known = new Set((personsQuery.data ?? []).map(p => p.id));
+    if (!isConnected || personsLoading) return;
+    const known = new Set(persons.map(p => p.id));
     const hasUnknownPerson = interactions.some(
-      i => Boolean(i.person_id?.trim()) && !known.has(i.person_id.trim())
+      i => Boolean(i.person_id?.trim()) && !known.has(i.person_id.trim()),
     );
-    if (hasUnknownPerson && !personsQuery.isFetching) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
+    if (hasUnknownPerson) {
+      refetchPersons();
     }
-  }, [
-    isConnected,
-    interactions,
-    personsQuery.data,
-    personsQuery.isFetching,
-    personsQuery.isSuccess,
-    queryClient,
-  ]);
+  }, [isConnected, interactions, persons, personsLoading, refetchPersons]);
 
   const displayGroups: ConversationGroupView[] = useMemo(() => {
     const activeKey = activeConversationKey(conversationGroups);
@@ -204,14 +154,13 @@ export function useInteractionPanel() {
     });
   }, [conversationGroups]);
 
-  /** Only changes when interactions are added/removed/reordered — not on expand/collapse. */
   const interactionsScrollSignature = useMemo(
     () =>
       conversationGroups
         .flatMap(g => g.interactions)
         .map(i => i.id)
         .join('\u001f'),
-    [conversationGroups]
+    [conversationGroups],
   );
 
   const [armedInteractionDeleteId, setArmedInteractionDeleteId] = useState<string | null>(null);
@@ -241,71 +190,22 @@ export function useInteractionPanel() {
 
   const panelLoadError = useMemo(() => {
     if (!isConnected) return null;
-    if (recentConversationsQuery.isError) {
+    if (interactionsError) {
       return getUserErrorMessage(
-        recentConversationsQuery.error,
+        interactionsError,
         'Could not load conversations.',
       );
     }
-    if (interactionsBootstrapQuery.isError) {
-      return getUserErrorMessage(
-        interactionsBootstrapQuery.error,
-        'Could not load interactions.',
-      );
-    }
     return null;
-  }, [
-    isConnected,
-    recentConversationsQuery.isError,
-    recentConversationsQuery.error,
-    interactionsBootstrapQuery.isError,
-    interactionsBootstrapQuery.error,
-  ]);
+  }, [isConnected, interactionsError]);
 
   const retryPanelLoad = useCallback(() => {
-    void recentConversationsQuery.refetch();
-    void interactionsBootstrapQuery.refetch();
-    void personsQuery.refetch();
-  }, [interactionsBootstrapQuery, personsQuery, recentConversationsQuery]);
+    retryInteractions();
+  }, [retryInteractions]);
 
   useEffect(() => {
     setConversationGroups(previous => buildConversationGroups(interactions, conversationById, previous));
   }, [interactions, conversationById]);
-
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const trackInteractionConversation = (interaction: Interaction) => {
-      const convId = interaction.conversation_id?.trim();
-      if (!convId) return;
-      void queryClient.prefetchQuery(conversationQueryOptions(convId));
-      setExtraBootstrapConversationIds(prev => {
-        if (prev.some(x => x.trim() === convId)) return prev;
-        if (recentIds.some(x => x.trim() === convId)) return prev;
-        return [...prev, convId];
-      });
-    };
-
-    const offWs = subscribeRealtimeMessages(msg => {
-      if (msg.event !== 'interaction') return;
-      const data = msg.data;
-      if (!data || typeof data !== 'object') return;
-      trackInteractionConversation(data as Interaction);
-    });
-
-    let offElectron: (() => void) | undefined;
-    if (window.electronAPI?.onNewInteraction) {
-      offElectron = window.electronAPI.onNewInteraction(payload => {
-        const interaction = payload.data;
-        if (interaction) trackInteractionConversation(interaction);
-      });
-    }
-
-    return () => {
-      offWs();
-      if (offElectron) offElectron();
-    };
-  }, [isConnected, queryClient, recentIds]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -336,7 +236,6 @@ export function useInteractionPanel() {
     queryClient.setQueryData<Interaction[]>(queryKeys.interactions, updater);
   };
 
-  /** Drop cached interactions tied to a conversation row the API no longer has (stale client state). */
   useEffect(() => {
     if (!isConnected) return;
     for (let i = 0; i < conversationQueries.length; i++) {
@@ -346,7 +245,7 @@ export function useInteractionPanel() {
       const err = q.error;
       if (!isAxiosError(err) || err.response?.status !== 404) continue;
       const cid = id.trim();
-      setExtraBootstrapConversationIds(prev => prev.filter(x => x.trim() !== cid));
+      pruneExtraBootstrapConversationId(cid);
       queryClient.setQueriesData<Interaction[]>(
         { queryKey: [...queryKeys.interactions, 'bootstrap'] },
         prev => (prev ?? []).filter(i => (i.conversation_id?.trim() ?? '') !== cid)
@@ -360,7 +259,13 @@ export function useInteractionPanel() {
       );
       queryClient.removeQueries({ queryKey: queryKeys.conversationById(cid) });
     }
-  }, [isConnected, conversationQueries, conversationIds, queryClient]);
+  }, [
+    isConnected,
+    conversationQueries,
+    conversationIds,
+    queryClient,
+    pruneExtraBootstrapConversationId,
+  ]);
 
   const handleDeleteInteraction = async (interactionId: string) => {
     try {
@@ -389,7 +294,7 @@ export function useInteractionPanel() {
 
       await conversationsApi.delete(conversationId);
       const cid = conversationId.trim();
-      setExtraBootstrapConversationIds(prev => prev.filter(x => x.trim() !== cid));
+      pruneExtraBootstrapConversationId(cid);
       patchInteractionCaches(previous =>
         (previous ?? []).filter(i => (i.conversation_id?.trim() ?? '') !== cid)
       );
@@ -398,7 +303,7 @@ export function useInteractionPanel() {
         queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
         prev => (prev ?? []).filter(c => c.id !== conversationId)
       );
-      void queryClient.invalidateQueries({ queryKey: queryKeys.interactions });
+      retryInteractions();
 
       showToast('Conversation deleted', 'success');
       setArmedConversationDeleteId(null);
@@ -423,14 +328,14 @@ export function useInteractionPanel() {
           }
         })
       );
-      setExtraBootstrapConversationIds([]);
+      clearExtraBootstrapConversationIds();
       patchInteractionCaches(() => []);
       removeAllConversationQueries(queryClient);
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.interactions });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
+      queryClient.setQueryData<Conversation[]>(
+        queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
+        [],
+      );
+      retryInteractions();
       showToast('All interactions cleared', 'success');
     } catch (error) {
       console.error('Failed to clear:', error);

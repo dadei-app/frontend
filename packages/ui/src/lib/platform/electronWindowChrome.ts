@@ -17,3 +17,11 @@ export function needsCustomWindowControls(): boolean {
 
 /** Pixel height of `DesktopTitleBarStrip` as CSS length; keep in sync with that component. */
 export const DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS = '2rem';
+
+/**
+ * Full-page layout height: Electron pages live inside the title-bar shell — use `h-full`, not `100vh`.
+ * Web pages use `min-h-screen` against the document.
+ */
+export function viewportFillClass(): string {
+  return isElectronDesktop() ? 'h-full min-h-0' : 'min-h-screen';
+}

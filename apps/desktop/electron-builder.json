@@ -16,6 +16,9 @@
     "output": "release"
   },
   "asar": true,
+  "asarUnpack": [
+    "**/node_modules/easy-volume/**/volume.exe"
+  ],
   "publish": {
     "provider": "github",
     "owner": "dadei-app",

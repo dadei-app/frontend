@@ -5,7 +5,7 @@ import {
   SettingsBento,
   settingsPrimaryButtonClass,
   type SettingsPanelProps,
-} from '@dadei/ui/components/settings/shared';
+} from '@dadei/ui/components/settings/layout';
 
 function openExternal(url: string) {
   if (window.electronAPI?.openExternal) {

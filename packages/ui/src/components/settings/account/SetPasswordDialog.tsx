@@ -6,7 +6,7 @@ import { useSetPasswordMutation } from '@dadei/ui/lib/query/queryHooks';
 import {
   settingsInputClass,
   settingsPrimaryButtonClass,
-} from '@dadei/ui/components/settings/shared/SettingsPanelLayout';
+} from '@dadei/ui/components/settings/layout';
 
 const nestedDialogContentClass =
   'fixed inset-0 z-310 flex items-center justify-center border-0 bg-transparent p-4 shadow-none outline-none';

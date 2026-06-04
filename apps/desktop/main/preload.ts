@@ -75,9 +75,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mediaNext: () => ipcRenderer.invoke('device:media-next'),
   mediaPrevious: () => ipcRenderer.invoke('device:media-previous'),
   mediaStop: () => ipcRenderer.invoke('device:media-stop'),
-  setBrightness: (level: number) => ipcRenderer.invoke('device:set-brightness', level),
-  brightnessUp: () => ipcRenderer.invoke('device:brightness-up'),
-  brightnessDown: () => ipcRenderer.invoke('device:brightness-down'),
   toggleDarkMode: () => ipcRenderer.invoke('device:toggle-dark-mode'),
   lockDevice: () => ipcRenderer.invoke('device:lock'),
   sleepDevice: () => ipcRenderer.invoke('device:sleep'),
@@ -86,6 +83,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimizeFocusedWindow: () => ipcRenderer.invoke('device:minimize-focused-window'),
   toggleFullscreen: () => ipcRenderer.invoke('device:toggle-fullscreen'),
   dismissNotifications: () => ipcRenderer.invoke('device:dismiss-notifications'),
+  toggleDoNotDisturb: () => ipcRenderer.invoke('device:toggle-dnd'),
+  getDeviceInfo: (keys: string[]) => ipcRenderer.invoke('device:get-info', keys),
 
   appGetVersion: () => ipcRenderer.invoke('app:get-version') as Promise<string>,
   appGetBuildHash: () => ipcRenderer.invoke('app:get-build-hash') as Promise<string | null>,
@@ -98,6 +97,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('app:open-settings-section', listener);
     };
   },
+
+  getBootstrapState: () =>
+    ipcRenderer.invoke('bootstrap:get-state') as Promise<Record<string, unknown>>,
 
   onBootstrapState: (callback: (payload: Record<string, unknown>) => void) => {
     const listener = (_e: unknown, payload: Record<string, unknown>) => callback(payload);

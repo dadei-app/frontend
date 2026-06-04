@@ -23,14 +23,5 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
-  },
-  "overrides": {
-    "trim-newlines": "^3.0.1",
-    "meow": {
-      "trim-newlines": "^3.0.1"
-    },
-    "meow@3.7.0": {
-      "trim-newlines": "^3.0.1"
-    }
   }
 }

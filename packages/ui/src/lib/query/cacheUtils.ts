@@ -10,7 +10,6 @@ export function removeAllConversationQueries(queryClient: QueryClient) {
  * Call on logout or when auth is cleared so a new session never reads stale rows.
  */
 export function clearAssistantSessionCaches(queryClient: QueryClient) {
-  queryClient.removeQueries({ queryKey: queryKeys.serviceClients });
   queryClient.removeQueries({ queryKey: queryKeys.memories });
   queryClient.removeQueries({ queryKey: queryKeys.actions });
   removeAllConversationQueries(queryClient);

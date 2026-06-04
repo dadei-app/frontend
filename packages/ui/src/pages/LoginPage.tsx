@@ -5,9 +5,9 @@ import { Loader2 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
-import { DesktopTitleBarStrip } from '@dadei/ui/components/TitleBar';
-import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
+import { viewportFillClass } from '@dadei/ui/lib/platform/electronWindowChrome';
+import { cn } from '@dadei/ui/lib/shared/cn';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 
 const veilEase = [0.22, 1, 0.36, 1] as const;
@@ -121,8 +121,7 @@ export default function LoginPage() {
 
   if (isLoading || isAuthenticated) {
     return (
-      <div className="flex h-screen flex-col bg-zinc-950">
-        {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
+      <div className={cn('flex flex-col bg-zinc-950', viewportFillClass())}>
         <div className="flex flex-1 items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <i className="fas fa-microphone-alt text-6xl text-emerald-400/80 animate-pulse" />
@@ -134,8 +133,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col overflow-x-hidden">
-      {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
+    <div className={cn('relative flex flex-col overflow-x-hidden', viewportFillClass())}>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-6">
         <div className="absolute inset-0 bg-zinc-950" aria-hidden />
         <div

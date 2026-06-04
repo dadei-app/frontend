@@ -89,9 +89,6 @@ const TOOL_LABELS: Record<string, string> = {
   media_next_track: 'Skipping to the next track',
   media_previous_track: 'Going back a track',
   media_stop: 'Stopping playback',
-  set_device_brightness: 'Adjusting the brightness',
-  device_brightness_up: 'Brightening the screen',
-  device_brightness_down: 'Dimming the screen',
   toggle_dark_mode: 'Toggling dark mode',
   lock_device: 'Locking the device',
   sleep_device: 'Putting the device to sleep',
@@ -100,6 +97,10 @@ const TOOL_LABELS: Record<string, string> = {
   minimize_focused_window: 'Minimizing the window',
   toggle_fullscreen: 'Toggling fullscreen',
   dismiss_notifications: 'Clearing notifications',
+  get_now_playing: 'Checking what is playing',
+  get_device_battery: 'Checking the battery',
+  take_device_screenshot: 'Taking a screenshot',
+  toggle_do_not_disturb: 'Toggling do not disturb',
 };
 
 /** Prefix + action suffix fallbacks when a tool is not in TOOL_LABELS. */
@@ -167,8 +168,6 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
     volume_up: 'Turning it up',
     volume_down: 'Turning it down',
     volume_mute: 'Muting the volume',
-    brightness_up: 'Brightening the screen',
-    brightness_down: 'Dimming the screen',
   },
   media_: {
     play_pause: 'Toggling playback',

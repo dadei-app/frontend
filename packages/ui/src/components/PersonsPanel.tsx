@@ -6,11 +6,7 @@ import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
-import {
-  useDeletePersonMutation,
-  usePersonsQuery,
-  useRenamePersonMutation,
-} from '@dadei/ui/lib/query/queryHooks';
+import { useService } from '@dadei/ui/contexts/ServiceContext';
 
 /** Below client tooltip (195); above main chrome. */
 const PEOPLE_DRAWER_Z = 170;
@@ -27,23 +23,14 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [armedPersonDeleteId, setArmedPersonDeleteId] = useState<string | null>(null);
-  const personsQuery = usePersonsQuery(isOpen);
-  const renamePersonMutation = useRenamePersonMutation();
-  const deletePersonMutation = useDeletePersonMutation();
-  const persons: Person[] = personsQuery.data ?? [];
-  const loading = personsQuery.isLoading;
-
-  useEffect(() => {
-    if (personsQuery.isError) {
-      showToast(getUserErrorMessage(personsQuery.error, 'Could not load people.'), 'error');
-    }
-  }, [personsQuery.isError, showToast]);
+  const { persons, personsLoading, renamePerson, deletePerson } = useService();
+  const loading = isOpen && personsLoading;
 
   const handleRename = async (personId: string) => {
     if (!editName.trim()) return;
 
     try {
-      await renamePersonMutation.mutateAsync({ personId, name: editName.trim() });
+      await renamePerson(personId, editName.trim());
       setEditingId(null);
       setEditName('');
       showToast('Person renamed successfully', 'success');
@@ -55,7 +42,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
 
   const handleDeletePerson = async (personId: string) => {
     try {
-      await deletePersonMutation.mutateAsync(personId);
+      await deletePerson(personId);
       showToast('Person deleted successfully', 'success');
       setArmedPersonDeleteId(null);
     } catch (error) {

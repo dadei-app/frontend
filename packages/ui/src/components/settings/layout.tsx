@@ -1,6 +1,24 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
+export type SettingsPanelProps = {
+  pendingAction?: string;
+  onActionConsumed?: () => void;
+};
+
+export const settingsInputClass =
+  'w-full rounded-lg border border-white/10 bg-zinc-900/60 px-4 py-3 text-base text-zinc-100 emerald-glow';
+
+/** Read-only fields (e.g. account email). */
+export const settingsReadonlyFieldClass =
+  'w-full cursor-default rounded-lg border border-white/8 bg-zinc-900/30 px-4 py-3 text-center text-sm text-zinc-500';
+
+export const settingsButtonClass =
+  'rounded-lg border border-white/10 bg-zinc-900/60 px-4 py-2.5 text-base text-zinc-200 transition hover:bg-zinc-800';
+
+export const settingsPrimaryButtonClass =
+  'rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2.5 text-base text-emerald-200 transition hover:bg-emerald-500/20';
+
 /** Responsive bento grid for subscription / centered panels. */
 export function SettingsBento({
   children,
@@ -106,60 +124,6 @@ export function GridTile({
         </div>
       )}
       <div className={cn('flex min-h-0 flex-1 flex-col', bodyClassName)}>{children}</div>
-    </div>
-  );
-}
-
-type Span = 1 | 2 | 3 | 'full';
-
-const colSpanClass: Record<Span, string> = {
-  1: '',
-  2: 'sm:col-span-2',
-  3: 'sm:col-span-2 lg:col-span-3',
-  full: 'col-span-full',
-};
-
-const rowSpanClass = {
-  1: '',
-  2: 'sm:row-span-2',
-} as const;
-
-export function BentoTile({
-  children,
-  title,
-  hint,
-  colSpan = 1,
-  rowSpan = 1,
-  portrait = false,
-  className,
-}: {
-  children: ReactNode;
-  title?: string;
-  hint?: string;
-  colSpan?: Span;
-  rowSpan?: 1 | 2;
-  portrait?: boolean;
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        tileShell,
-        colSpanClass[colSpan],
-        rowSpanClass[rowSpan],
-        portrait && 'justify-between',
-        className,
-      )}
-    >
-      {(title || hint) && (
-        <div className="mb-3 shrink-0">
-          {title ? <h3 className="text-sm font-medium text-zinc-100">{title}</h3> : null}
-          {hint ? (
-            <p className={cn('text-xs text-zinc-500 font-secondary', title && 'mt-0.5')}>{hint}</p>
-          ) : null}
-        </div>
-      )}
-      <div className={cn('min-h-0 flex-1', portrait && 'flex flex-col gap-3')}>{children}</div>
     </div>
   );
 }

@@ -2,19 +2,17 @@ import { useLayoutEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useBootstrap } from '@dadei/ui/contexts/BootstrapContext';
 import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import AssistantSettingsModal from '@dadei/ui/components/settings';
-import { DesktopTitleBarStrip } from '@dadei/ui/components/TitleBar';
-import { useMemoriesQuery } from '@dadei/ui/lib/query/queryHooks';
-import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS, isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
+import { viewportFillClass } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { Mic } from 'lucide-react';
 
@@ -56,23 +54,16 @@ function SpokenWakeWord({
  */
 export default function AssistantLayout() {
   const { isAuthenticated, isLoading } = useAuth();
-  const { isReady: bootstrapReady } = useBootstrap();
-  const { isConnected, isServiceEnabled, formatHotkey } = useService();
+  const { isBootstrapReady, formatHotkey } = useSystem();
+  const { isConnected, isServiceEnabled } = useService();
   const { state } = useCommand();
   const showWakeHint = state === 'idle' && isServiceEnabled;
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
 
-  const sessionDataEnabled = isAuthenticated && !isLoading;
-  useMemoriesQuery(sessionDataEnabled);
-
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty(
-      '--assistant-titlebar-offset',
-      isElectronDesktop() ? DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS : '0px',
-    );
     root.style.setProperty('--assistant-header-h', '4.75rem');
     root.style.setProperty('--assistant-mic-h', '10rem');
     root.style.setProperty('--assistant-mic-half', '5rem');
@@ -80,7 +71,6 @@ export default function AssistantLayout() {
     /** Reserved strip at panel bottom for hint overlays (does not affect mic centering). */
     root.style.setProperty('--assistant-hints-reserve', '4.75rem');
     return () => {
-      root.style.removeProperty('--assistant-titlebar-offset');
       root.style.removeProperty('--assistant-header-h');
       root.style.removeProperty('--assistant-mic-h');
       root.style.removeProperty('--assistant-mic-half');
@@ -89,10 +79,10 @@ export default function AssistantLayout() {
     };
   }, []);
 
-  if (!bootstrapReady || isLoading) {
+  if (!isBootstrapReady || isLoading) {
     return (
       <LoadingScreen
-        subtitleOverride={bootstrapReady && isLoading ? 'Signing in…' : undefined}
+        subtitleOverride={isBootstrapReady && isLoading ? 'Signing in…' : undefined}
       />
     );
   }
@@ -105,7 +95,10 @@ export default function AssistantLayout() {
 
   return (
     <div
-      className="assistant-shell relative flex h-screen flex-col overflow-hidden overscroll-none bg-zinc-950 text-zinc-100"
+      className={cn(
+        'assistant-shell relative flex flex-col overflow-hidden overscroll-none bg-zinc-950 text-zinc-100',
+        viewportFillClass(),
+      )}
       style={
         {
           ['--assistant-accent' as string]: 'rgb(52 211 153)',
@@ -125,7 +118,6 @@ export default function AssistantLayout() {
       />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
         <Header
           isPeoplePanelOpen={isPeoplePanelOpen}
           setIsPeoplePanelOpen={setIsPeoplePanelOpen}

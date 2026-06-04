@@ -4,6 +4,7 @@ import path from 'path';
 import {
   emitBootstrapState,
   getBackendVersionGate,
+  getLastBootstrapState,
   isUpdateInstallInProgress,
   replayBootstrapState,
   runPackagedStartupFlow,
@@ -19,7 +20,7 @@ const isDev = process.env.NODE_ENV === 'development';
 
 /** Dev: local Vite dev server for the desktop renderer (port must match renderer/vite.config.ts). */
 const RENDERER_DEV_PORT = process.env.RENDERER_DEV_PORT || '59247';
-const RENDERER_DEV_URL = `http://localhost:${RENDERER_DEV_PORT}`;
+const RENDERER_DEV_URL = `http://127.0.0.1:${RENDERER_DEV_PORT}`;
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -184,6 +185,8 @@ ipcMain.handle('window:is-maximized', (event) => {
 
 registerDeviceControlIpcHandlers();
 
+ipcMain.handle('bootstrap:get-state', () => getLastBootstrapState());
+
 app.whenReady().then(async () => {
   const menu = buildApplicationMenu();
   Menu.setApplicationMenu(menu ?? null);
@@ -199,16 +202,17 @@ app.whenReady().then(async () => {
   });
 
   if (!app.isPackaged) {
-    const gate = await getBackendVersionGate();
-    if (gate.mandatoryMismatch) {
-      dialog.showErrorBox(
-        'Update required',
-        `This build (v${app.getVersion()}) is not compatible with the server (${gate.serverVersion ?? 'unknown'}). Align the desktop version with the server major version.`,
-      );
-      app.quit();
-      return;
-    }
     emitBootstrapState({ phase: 'ready', appVersion: app.getVersion() });
+    void (async () => {
+      const gate = await getBackendVersionGate();
+      if (gate.mandatoryMismatch) {
+        dialog.showErrorBox(
+          'Update required',
+          `This build (v${app.getVersion()}) is not compatible with the server (${gate.serverVersion ?? 'unknown'}). Align the desktop version with the server major version.`,
+        );
+        app.quit();
+      }
+    })();
     return;
   }
 

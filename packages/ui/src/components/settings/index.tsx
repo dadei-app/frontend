@@ -13,14 +13,14 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { AmbientShader } from '@dadei/ui/components/theme/AmbientShader';
-import { AboutPanel } from './about';
-import { AccountPanel } from './account';
-import { AudioPanel } from './audio';
-import { IntegrationsPanel } from './integrations';
-import { MemoriesPanel } from './memories';
-import { StartupPanel } from './startup';
-import { SubscriptionPanel } from './subscription';
-import type { SettingsPanelProps } from './shared/types';
+import { AboutPanel } from './about/AboutPanel';
+import { AccountPanel } from './account/AccountPanel';
+import { AudioPanel } from './audio/AudioPanel';
+import { IntegrationsPanel } from './integrations/IntegrationsPanel';
+import { MemoriesPanel } from './memories/MemoriesPanel';
+import { StartupPanel } from './startup/StartupPanel';
+import { SubscriptionPanel } from './subscription/SubscriptionPanel';
+import type { SettingsPanelProps } from './layout';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { veilEase } from '@dadei/ui/lib/shared/motion';
@@ -68,8 +68,14 @@ const PANELS: Record<SidebarView, ComponentType<SettingsPanelProps>> = {
   about: AboutPanel,
 };
 
-const dialogContentReset =
-  'fixed inset-0 z-250 flex max-h-none w-full max-w-none translate-x-0 translate-y-0 items-center justify-center border-0 bg-transparent p-3 shadow-none outline-none sm:p-4';
+function dialogOverlayClass() {
+  return isElectronDesktop()
+    ? 'fixed inset-x-0 bottom-0 top-[var(--assistant-titlebar-offset,2rem)] z-[240] bg-zinc-950/65 backdrop-blur-md'
+    : 'fixed inset-0 z-[240] bg-zinc-950/65 backdrop-blur-md';
+}
+
+const dialogPanelClass =
+  'fixed left-1/2 top-1/2 z-[250] flex w-[min(calc(100%-1.5rem),80rem)] max-w-[80rem] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 shadow-none outline-none focus:outline-none';
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
   const [view, setView] = useState<SidebarView>('integrations');
@@ -137,13 +143,10 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={overlayTransition}
-                className="fixed inset-0 z-240 bg-zinc-950/65 backdrop-blur-md"
+                className={dialogOverlayClass()}
               />
             </Dialog.Overlay>
-            <Dialog.Content
-              className={dialogContentReset}
-              style={{ top: 0, left: 0, transform: 'none' }}
-            >
+            <Dialog.Content className={dialogPanelClass}>
               <motion.div
                 initial={contentInitial}
                 animate={contentAnimate}
@@ -196,7 +199,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
                     <main
                       className={cn(
-                        'flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-none p-4 sm:p-5',
+                        'flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none p-4 sm:p-5',
                         isCenteredPanel && 'items-center justify-center',
                       )}
                     >

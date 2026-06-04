@@ -16,7 +16,6 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { actionsApi } from '@dadei/ui/lib/api/actions';
 import { playNotificationPing } from '@dadei/ui/lib/notifications/notificationSound';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
-import { useNotificationActionsQuery } from '@dadei/ui/lib/query/queryHooks';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
 import {
   networkActionsToBannerItems,
@@ -81,13 +80,37 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Push-only mirror of `queryKeys.actions` (filled by ServiceContext realtime handlers). */
+function useNotificationActionsFromCache() {
+  const queryClient = useQueryClient();
+  const [actions, setActions] = useState<NetworkAction[]>(
+    () => queryClient.getQueryData<NetworkAction[]>(queryKeys.actions) ?? [],
+  );
+
+  useEffect(() => {
+    const key = queryKeys.actions;
+    const sync = () => {
+      setActions(queryClient.getQueryData<NetworkAction[]>(key) ?? []);
+    };
+    sync();
+    return queryClient.getQueryCache().subscribe(event => {
+      if (event?.query?.queryKey?.[0] !== key[0]) return;
+      if (event.type === 'updated' || event.type === 'added') {
+        sync();
+      }
+    });
+  }, [queryClient]);
+
+  return { data: actions };
+}
+
 /** Replaces action banners from the actions query (single source of truth, no duplicates). */
 function useActionBannerSync(
   enabled: boolean,
   setActionBanners: (items: BannerItem[]) => void,
 ) {
   const queryClient = useQueryClient();
-  const { data: actions } = useNotificationActionsQuery();
+  const { data: actions } = useNotificationActionsFromCache();
 
   const notificationActions = useMemo(
     () => normalizeNotificationActions(actions ?? []),

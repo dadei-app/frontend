@@ -65,15 +65,6 @@ export async function dispatchClientAction(message: ClientActionMessage): Promis
     case 'media_stop':
       await window.electronAPI.mediaStop();
       return;
-    case 'set_brightness':
-      await window.electronAPI.setBrightness(numberParam(params, 'level') ?? 50);
-      return;
-    case 'brightness_up':
-      await window.electronAPI.brightnessUp();
-      return;
-    case 'brightness_down':
-      await window.electronAPI.brightnessDown();
-      return;
     case 'toggle_dark_mode':
       await window.electronAPI.toggleDarkMode();
       return;
@@ -103,6 +94,9 @@ export async function dispatchClientAction(message: ClientActionMessage): Promis
       return;
     case 'dismiss_notifications':
       await window.electronAPI.dismissNotifications();
+      return;
+    case 'toggle_dnd':
+      await window.electronAPI.toggleDoNotDisturb();
       return;
     default:
       console.warn('[client_action] Unknown action, ignoring', message);

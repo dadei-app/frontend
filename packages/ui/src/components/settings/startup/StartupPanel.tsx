@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { GridTile, SettingsGrid4, Toggle } from '@dadei/ui/components/settings/shared';
+import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
+import { Toggle } from '@dadei/ui/components/settings/controls';
 
 
 

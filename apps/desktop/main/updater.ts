@@ -45,6 +45,10 @@ export function compareSemver(a: string, b: string): number {
 
 let lastBootstrapState: BootstrapStatePayload = { phase: 'booting' };
 
+export function getLastBootstrapState(): BootstrapStatePayload {
+  return lastBootstrapState;
+}
+
 export function emitBootstrapState(payload: BootstrapStatePayload): void {
   lastBootstrapState = payload;
   const win = BrowserWindow.getAllWindows()[0];

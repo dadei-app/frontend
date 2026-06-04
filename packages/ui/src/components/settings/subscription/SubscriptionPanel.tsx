@@ -1,5 +1,5 @@
 import { Sparkles } from 'lucide-react';
-import { SettingsBento } from '@dadei/ui/components/settings/shared';
+import { SettingsBento } from '@dadei/ui/components/settings/layout';
 
 export function SubscriptionPanel() {
   return (

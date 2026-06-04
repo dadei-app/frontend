@@ -1,6 +1,13 @@
 import { BrowserWindow, ipcMain, nativeTheme } from 'electron';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { getMute, getVolume, setMute, setVolume, toggleMute } from 'easy-volume';
+import { openApp } from './app-launcher';
+import {
+  collectDeviceInfo,
+  toggleDoNotDisturb,
+  type DeviceInfoKey,
+} from './device-info';
 
 const execFileAsync = promisify(execFile);
 
@@ -15,6 +22,18 @@ function okResult(ok: boolean): DeviceResult {
   return { ok };
 }
 
+function normalizeDeviceInfoKeys(raw: unknown): DeviceInfoKey[] {
+  if (!Array.isArray(raw)) return [];
+  const keys = new Set<DeviceInfoKey>();
+  for (const entry of raw) {
+    const key = String(entry).trim().toLowerCase();
+    if (key === 'now_playing' || key === 'battery' || key === 'screenshot') {
+      keys.add(key);
+    }
+  }
+  return [...keys];
+}
+
 async function runCommand(command: string, args: string[] = []): Promise<boolean> {
   try {
     await execFileAsync(command, args, { windowsHide: true });
@@ -25,71 +44,41 @@ async function runCommand(command: string, args: string[] = []): Promise<boolean
   }
 }
 
-async function withLoudness<T>(fn: (loudness: any) => Promise<T>): Promise<T | null> {
+async function setSystemVolume(level: number): Promise<boolean> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const loudness = require('loudness');
-    return await fn(loudness);
+    await setVolume(clampPercent(level));
+    return true;
   } catch (error) {
-    console.warn('[device-control] loudness unavailable', error);
-    return null;
+    console.warn('[device-control] setVolume unavailable', error);
+    return false;
   }
 }
 
-async function withBrightness<T>(fn: (brightness: any) => Promise<T>): Promise<T | null> {
+async function stepSystemVolume(delta: number): Promise<boolean> {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const brightness = require('brightness');
-    return await fn(brightness);
+    const current = Number(await getVolume());
+    await setVolume(clampPercent(current + delta));
+    return true;
   } catch (error) {
-    console.warn('[device-control] brightness unavailable', error);
-    return null;
+    console.warn('[device-control] stepVolume unavailable', error);
+    return false;
   }
 }
 
-async function setVolume(level: number): Promise<boolean> {
-  const clamped = clampPercent(level);
-  const result = await withLoudness(async (loudness) => {
-    await loudness.setVolume(clamped);
+async function toggleSystemMute(): Promise<boolean> {
+  try {
+    await toggleMute();
     return true;
-  });
-  return result === true;
-}
-
-async function stepVolume(delta: number): Promise<boolean> {
-  const result = await withLoudness(async (loudness) => {
-    const current = Number(await loudness.getVolume());
-    await loudness.setVolume(clampPercent(current + delta));
-    return true;
-  });
-  return result === true;
-}
-
-async function toggleMute(): Promise<boolean> {
-  const result = await withLoudness(async (loudness) => {
-    const current = Boolean(await loudness.getMuted());
-    await loudness.setMuted(!current);
-    return true;
-  });
-  return result === true;
-}
-
-async function setBrightness(level: number): Promise<boolean> {
-  const clamped = clampPercent(level) / 100;
-  const result = await withBrightness(async (brightness) => {
-    await brightness.set(clamped);
-    return true;
-  });
-  return result === true;
-}
-
-async function stepBrightness(delta: number): Promise<boolean> {
-  const result = await withBrightness(async (brightness) => {
-    const current = Number(await brightness.get()) * 100;
-    await brightness.set(clampPercent(current + delta) / 100);
-    return true;
-  });
-  return result === true;
+  } catch (error) {
+    try {
+      const current = Boolean(await getMute());
+      await setMute(!current);
+      return true;
+    } catch (fallbackError) {
+      console.warn('[device-control] toggleMute unavailable', fallbackError);
+      return false;
+    }
+  }
 }
 
 async function sendMediaKey(action: 'play_pause' | 'next' | 'previous' | 'stop'): Promise<boolean> {
@@ -136,18 +125,6 @@ async function sleepDevice(): Promise<boolean> {
     return runCommand('pmset', ['sleepnow']);
   }
   return runCommand('systemctl', ['suspend']);
-}
-
-async function openApp(name: string): Promise<boolean> {
-  const target = name.trim();
-  if (!target) return false;
-  if (process.platform === 'win32') {
-    return runCommand('powershell', ['-NoProfile', '-Command', `Start-Process "${target.replace(/"/g, '\\"')}"`]);
-  }
-  if (process.platform === 'darwin') {
-    return runCommand('open', ['-a', target]);
-  }
-  return runCommand('xdg-open', [target]);
 }
 
 async function closeFocusedApp(): Promise<boolean> {
@@ -208,17 +185,14 @@ function safeHandler(fn: (...args: any[]) => Promise<boolean>) {
 }
 
 export function registerDeviceControlIpcHandlers(): void {
-  ipcMain.handle('device:set-volume', safeHandler((level: number) => setVolume(level)));
-  ipcMain.handle('device:volume-up', safeHandler(() => stepVolume(10)));
-  ipcMain.handle('device:volume-down', safeHandler(() => stepVolume(-10)));
-  ipcMain.handle('device:volume-mute', safeHandler(() => toggleMute()));
+  ipcMain.handle('device:set-volume', safeHandler((level: number) => setSystemVolume(level)));
+  ipcMain.handle('device:volume-up', safeHandler(() => stepSystemVolume(10)));
+  ipcMain.handle('device:volume-down', safeHandler(() => stepSystemVolume(-10)));
+  ipcMain.handle('device:volume-mute', safeHandler(() => toggleSystemMute()));
   ipcMain.handle('device:media-play-pause', safeHandler(() => sendMediaKey('play_pause')));
   ipcMain.handle('device:media-next', safeHandler(() => sendMediaKey('next')));
   ipcMain.handle('device:media-previous', safeHandler(() => sendMediaKey('previous')));
   ipcMain.handle('device:media-stop', safeHandler(() => sendMediaKey('stop')));
-  ipcMain.handle('device:set-brightness', safeHandler((level: number) => setBrightness(level)));
-  ipcMain.handle('device:brightness-up', safeHandler(() => stepBrightness(10)));
-  ipcMain.handle('device:brightness-down', safeHandler(() => stepBrightness(-10)));
   ipcMain.handle(
     'device:toggle-dark-mode',
     safeHandler(async () => {
@@ -233,4 +207,10 @@ export function registerDeviceControlIpcHandlers(): void {
   ipcMain.handle('device:minimize-focused-window', safeHandler(() => minimizeFocusedWindow()));
   ipcMain.handle('device:toggle-fullscreen', safeHandler(() => toggleFullscreen()));
   ipcMain.handle('device:dismiss-notifications', safeHandler(() => dismissNotifications()));
+  ipcMain.handle('device:toggle-dnd', safeHandler(() => toggleDoNotDisturb()));
+  ipcMain.handle('device:get-info', async (_event, keys: unknown) => {
+    const normalized = normalizeDeviceInfoKeys(keys);
+    if (normalized.length === 0) return {};
+    return collectDeviceInfo(normalized);
+  });
 }

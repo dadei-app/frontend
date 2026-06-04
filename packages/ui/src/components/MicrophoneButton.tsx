@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
@@ -86,13 +87,13 @@ function MicSpinner({ className }: { className: string }) {
 export default function MicrophoneButton({ disableSpaceToggle = false }: MicrophoneButtonProps) {
   const audioContext = useContext(AudioContext);
   const micLevel = audioContext?.micLevel ?? 0;
+  const { matchesHotkey } = useSystem();
   const {
     isServiceEnabled,
     toggleService,
     isTogglingService,
     registrationConflict,
     isAssistantMode,
-    matchesHotkey,
   } = useService();
   const { state, cancel, micShowsProcessingRing } = useCommand();
 

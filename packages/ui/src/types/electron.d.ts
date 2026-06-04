@@ -81,9 +81,6 @@ export interface ElectronAPI {
   mediaNext: () => Promise<{ ok: boolean }>;
   mediaPrevious: () => Promise<{ ok: boolean }>;
   mediaStop: () => Promise<{ ok: boolean }>;
-  setBrightness: (level: number) => Promise<{ ok: boolean }>;
-  brightnessUp: () => Promise<{ ok: boolean }>;
-  brightnessDown: () => Promise<{ ok: boolean }>;
   toggleDarkMode: () => Promise<{ ok: boolean }>;
   lockDevice: () => Promise<{ ok: boolean }>;
   sleepDevice: () => Promise<{ ok: boolean }>;
@@ -92,6 +89,8 @@ export interface ElectronAPI {
   minimizeFocusedWindow: () => Promise<{ ok: boolean }>;
   toggleFullscreen: () => Promise<{ ok: boolean }>;
   dismissNotifications: () => Promise<{ ok: boolean }>;
+  toggleDoNotDisturb: () => Promise<{ ok: boolean }>;
+  getDeviceInfo: (keys: string[]) => Promise<Record<string, unknown>>;
 
   appGetVersion?: () => Promise<string>;
   appGetBuildHash?: () => Promise<string | null>;
@@ -99,6 +98,7 @@ export interface ElectronAPI {
   onOpenSettingsSection?: (
     callback: (payload: { section: string; action?: string }) => void,
   ) => () => void;
+  getBootstrapState?: () => Promise<BootstrapStatePayload>;
   onBootstrapState?: (callback: (payload: BootstrapStatePayload) => void) => () => void;
   updaterManualCheck?: () => Promise<UpdaterCheckResult>;
   audio?: {
