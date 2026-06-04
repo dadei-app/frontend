@@ -15,6 +15,15 @@ import {
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { ORPHAN_KEY } from './constants';
+
+const PERSON_COLOR_SHADES = [
+  'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25',
+  'bg-sky-950/60 text-sky-300 ring-sky-500/25',
+  'bg-violet-950/60 text-violet-300 ring-violet-500/25',
+  'bg-amber-950/60 text-amber-300 ring-amber-500/25',
+  'bg-rose-950/60 text-rose-300 ring-rose-500/25',
+  'bg-cyan-950/60 text-cyan-300 ring-cyan-500/25',
+] as const;
 import { activeConversationKey, groupKey, parseInteractionDate } from './conversationUtils';
 import type { ConversationGroupState, ConversationGroupView } from './types';
 
@@ -343,11 +352,36 @@ export function useInteractionPanel() {
     }
   };
 
-  const getPersonDisplay = (personId: string): { label: string; index: number } => {
+  const personsSortedByCreated = useMemo(
+    () =>
+      Array.from(personsById.values()).sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      ),
+    [personsById]
+  );
+
+  const positionByPersonId = useMemo(() => {
+    const m = new Map<string, number>();
+    personsSortedByCreated.forEach((p, i) => m.set(p.id, i + 1));
+    return m;
+  }, [personsSortedByCreated]);
+
+  const getPersonDisplay = (
+    personId: string
+  ): { label: string; position: number } => {
     const person = personsById.get(personId);
-    if (person?.name) return { label: person.name, index: person.index };
-    if (person?.index !== undefined) return { label: `Person ${person.index}`, index: person.index };
-    return { label: 'Loading...', index: 1 };
+    const position = positionByPersonId.get(personId) ?? 0;
+    if (person?.name) return { label: person.name, position };
+    if (person) return { label: `Person ${position}`, position };
+    return { label: 'Loading...', position: 0 };
+  };
+
+  const getPersonColor = (personId: string) => {
+    let hash = 0;
+    for (let i = 0; i < personId.length; i++) {
+      hash = (hash * 31 + personId.charCodeAt(i)) | 0;
+    }
+    return PERSON_COLOR_SHADES[Math.abs(hash) % PERSON_COLOR_SHADES.length];
   };
 
   return {
@@ -367,5 +401,6 @@ export function useInteractionPanel() {
     handleDeleteConversation,
     handleClearAll,
     getPersonDisplay,
+    getPersonColor,
   };
 }

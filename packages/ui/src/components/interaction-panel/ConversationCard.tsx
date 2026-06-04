@@ -87,7 +87,7 @@ export default function ConversationCard({
   toggleConversation: (index: number) => void;
   handleDeleteConversation: (conversationId: string) => void;
   handleDeleteInteraction: (interactionId: string) => void;
-  getPersonDisplay: (personId: string) => { label: string; index: number };
+  getPersonDisplay: (personId: string) => { label: string; position: number };
 }) {
   const conversationIdForActions =
     group.conversation?.id?.trim() ||

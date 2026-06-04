@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Person } from '@dadei/ui/types/models.types';
@@ -32,6 +32,13 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
     isDeletingPerson,
   } = useService();
   const loading = isOpen && personsLoading;
+
+  const personIdToPosition = useMemo(() => {
+    const sorted = [...persons].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const m = new Map<string, number>();
+    sorted.forEach((p, i) => m.set(p.id, i + 1));
+    return m;
+  }, [persons]);
 
   const handleRename = async (personId: string) => {
     if (!editName.trim()) return;
@@ -170,7 +177,8 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                 <div className="space-y-2">
                   {persons.map((person) => {
                     const isEditing = editingId === person.id;
-                    const isOwner = person.index === 1;
+                    const position = personIdToPosition.get(person.id) ?? 0;
+                    const isPersonOne = position === 1;
 
                     return (
                       <div
@@ -179,9 +187,9 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                       >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ${isOwner ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25' : 'bg-zinc-800 text-zinc-300 ring-white/5'}`}
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ${isPersonOne ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25' : 'bg-zinc-800 text-zinc-300 ring-white/5'}`}
                           >
-                            {person.name ? person.name[0].toUpperCase() : person.index}
+                            {person.name ? person.name[0].toUpperCase() : position}
                           </div>
 
                           <div className="flex-1 min-w-0">
@@ -199,9 +207,8 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                             ) : (
                               <div>
                                 <h3 className="truncate text-sm font-medium text-zinc-100 font-secondary">
-                                  {person.name || `Person ${person.index}`}
+                                  {person.name || `Person ${position}`}
                                 </h3>
-                                <p className="text-xs text-zinc-500 font-secondary">ID: {person.index}</p>
                               </div>
                             )}
                           </div>

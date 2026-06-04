@@ -48,7 +48,7 @@ export interface EpisodicMemoryProvenance {
 export interface Person {
   id: string;
   name: string | null;
-  index: number;
+  is_user: boolean;
   network_id: string;
   created_at: string;
   updated_at: string;
