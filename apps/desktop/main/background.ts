@@ -26,6 +26,9 @@ let mainWindow: BrowserWindow | null = null;
 
 const isDarwin = process.platform === 'darwin';
 
+/** Match renderer title strip + Electron titleBarOverlay.height (win32/linux). */
+const TITLE_BAR_HEIGHT = 32;
+
 function windowFromContents(contents: WebContents): BrowserWindow | null {
   return BrowserWindow.fromWebContents(contents) ?? null;
 }
@@ -35,14 +38,21 @@ function createWindow() {
     width: 1500,
     height: 800,
     autoHideMenuBar: true,
-    backgroundColor: '#000000',
+    backgroundColor: '#09090b',
     ...(isDarwin
       ? {
           titleBarStyle: 'hiddenInset' as const,
-          // Align with our slim title strip (see DesktopTitleBarStrip mac height).
           trafficLightPosition: { x: 16, y: 8.5 },
         }
-      : { frame: false }),
+      : {
+          // Window Controls Overlay: native min/max/close; renderer draws drag strip only.
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            color: '#09090b',
+            symbolColor: '#a1a1aa',
+            height: TITLE_BAR_HEIGHT,
+          },
+        }),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

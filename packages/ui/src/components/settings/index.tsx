@@ -22,6 +22,7 @@ import { StartupPanel } from './startup/StartupPanel';
 import { SubscriptionPanel } from './subscription/SubscriptionPanel';
 import type { SettingsPanelProps } from './layout';
 import { cn } from '@dadei/ui/lib/shared/cn';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { veilEase } from '@dadei/ui/lib/shared/motion';
 
@@ -68,19 +69,24 @@ const PANELS: Record<SidebarView, ComponentType<SettingsPanelProps>> = {
   about: AboutPanel,
 };
 
-function dialogOverlayClass() {
-  return isElectronDesktop()
-    ? 'fixed inset-x-0 bottom-0 top-[var(--assistant-titlebar-offset,2rem)] z-[240] bg-zinc-950/65 backdrop-blur-md'
-    : 'fixed inset-0 z-[240] bg-zinc-950/65 backdrop-blur-md';
+function dialogOverlayClass(isElectron: boolean) {
+  return cn(
+    'fixed inset-0 z-[240] bg-zinc-950/65 backdrop-blur-md',
+    isElectron && 'top-[var(--assistant-titlebar-offset,2rem)]',
+  );
 }
 
-const dialogPanelClass =
+const dialogContentClass =
+  'fixed left-1/2 z-[250] flex w-[min(calc(100%-1.5rem),80rem)] max-w-[80rem] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 shadow-none outline-none focus:outline-none top-[calc(50%+var(--assistant-titlebar-offset,2rem)/2)]';
+
+const dialogContentClassWeb =
   'fixed left-1/2 top-1/2 z-[250] flex w-[min(calc(100%-1.5rem),80rem)] max-w-[80rem] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 shadow-none outline-none focus:outline-none';
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
   const [view, setView] = useState<SidebarView>('integrations');
   const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
   const prefersReducedMotion = useReducedMotion();
+  const { isElectron, preventDialogDismissOnTitleBar } = useSystem();
 
   const views = visibleViews();
   const isCenteredPanel = view === 'about' || view === 'subscription';
@@ -143,16 +149,25 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={overlayTransition}
-                className={dialogOverlayClass()}
+                className={dialogOverlayClass(isElectron)}
               />
             </Dialog.Overlay>
-            <Dialog.Content className={dialogPanelClass}>
+            <Dialog.Content
+              className={isElectron ? dialogContentClass : dialogContentClassWeb}
+              onPointerDownOutside={preventDialogDismissOnTitleBar}
+              onInteractOutside={preventDialogDismissOnTitleBar}
+            >
               <motion.div
                 initial={contentInitial}
                 animate={contentAnimate}
                 exit={contentExit}
                 transition={contentTransition}
-                className="glass-panel conic-border relative grid h-[min(800px,88dvh)] w-full max-w-7xl overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]"
+                className={cn(
+                  'glass-panel conic-border relative grid w-full overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]',
+                  isElectron
+                    ? 'h-[min(800px,calc(100vh-var(--assistant-titlebar-offset,2rem)-2rem))]'
+                    : 'h-[min(800px,88dvh)]',
+                )}
               >
                 <div className="relative col-start-1 row-start-1 min-h-0 overflow-hidden rounded-2xl">
                   <AmbientShader className="h-full w-full" intensity={0.25} />

@@ -1,54 +1,58 @@
 import type { ComponentType } from 'react';
 import {
   SiGmail,
+  SiGoogle,
   SiGooglecalendar,
   SiGoogledocs,
   SiGoogledrive,
   SiGooglesheets,
   SiGoogletasks,
 } from 'react-icons/si';
-import { FcContacts } from 'react-icons/fc';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 export type IntegrationLogoProps = { className?: string; 'aria-hidden'?: boolean };
 
 export type LogoDef = {
   Logo: ComponentType<IntegrationLogoProps>;
-  /** Tailwind text-* class for Simple Icons (currentColor). Fc icons ignore this. */
-  colorClass?: string;
 };
 
+export function integrationIconTileClass(active: boolean): string {
+  return cn(
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+    active
+      ? 'border-emerald-500/25 bg-emerald-500/10 shadow-[inset_0_0_18px_rgba(16,185,129,0.08)]'
+      : 'border-white/10 bg-zinc-950/80',
+  );
+}
+
 export const GOOGLE_LOGOS: Record<string, LogoDef> = {
-  gmail: { Logo: SiGmail, colorClass: 'text-[#EA4335]' },
-  calendar: { Logo: SiGooglecalendar, colorClass: 'text-[#4285F4]' },
-  contacts: { Logo: FcContacts },
-  tasks: { Logo: SiGoogletasks, colorClass: 'text-[#4285F4]' },
-  docs: { Logo: SiGoogledocs, colorClass: 'text-[#4285F4]' },
-  drive: { Logo: SiGoogledrive, colorClass: 'text-[#4285F4]' },
-  sheets: { Logo: SiGooglesheets, colorClass: 'text-[#34A853]' },
+  gmail: { Logo: SiGmail },
+  calendar: { Logo: SiGooglecalendar },
+  contacts: { Logo: SiGoogle },
+  tasks: { Logo: SiGoogletasks },
+  docs: { Logo: SiGoogledocs },
+  drive: { Logo: SiGoogledrive },
+  sheets: { Logo: SiGooglesheets },
 };
 
 export function IntegrationLogo({
   def,
   active,
+  iconClassName,
 }: {
   def: LogoDef;
   active: boolean;
+  /** Override icon color (Simple Icons use currentColor). */
+  iconClassName?: string;
 }) {
-  const { Logo, colorClass } = def;
+  const { Logo } = def;
 
   return (
-    <div
-      className={
-        active
-          ? 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.06]'
-          : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-zinc-950/80'
-      }
-    >
+    <div className={integrationIconTileClass(active)}>
       <Logo
         className={
-          active
-            ? `h-5 w-5 ${colorClass ?? 'text-zinc-200'}`
-            : `h-5 w-5 ${colorClass ? `${colorClass} opacity-45` : 'text-zinc-500'}`
+          iconClassName ??
+          cn('h-3.5 w-3.5', active ? 'text-emerald-300/90' : 'text-zinc-500')
         }
         aria-hidden
       />

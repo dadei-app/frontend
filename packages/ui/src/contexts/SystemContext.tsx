@@ -25,6 +25,11 @@ import {
   enumerateMicInputs,
   micDevicesHaveLabels,
 } from '@dadei/ui/lib/audio/micDevices';
+import {
+  DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
+  isDesktopTitleBarTarget,
+  isElectronDesktop,
+} from '@dadei/ui/lib/platform/electronWindowChrome';
 
 const DEFAULT_HOTKEY: Hotkey = { key: 'Space', modifiers: [] };
 
@@ -46,6 +51,9 @@ const KEY_LABELS: Record<string, string> = {
   ArrowRight: '→',
 };
 
+/** Window-chrome strip in the renderer (not app content); used for outside-click guards. */
+export const DESKTOP_TITLEBAR_ATTR = 'data-desktop-titlebar';
+
 function keyLabel(code: string): string {
   if (KEY_LABELS[code]) return KEY_LABELS[code];
   if (code.startsWith('Key')) return code.slice(3);
@@ -58,11 +66,37 @@ type Platform = 'darwin' | 'win32' | 'linux' | 'web';
 
 function detectPlatform(): Platform {
   if (typeof window === 'undefined') return 'web';
+  const apiPlatform = window.electronAPI?.platform;
+  if (apiPlatform === 'darwin' || apiPlatform === 'win32' || apiPlatform === 'linux') {
+    return apiPlatform;
+  }
   const ua = navigator.userAgent;
   if (/Mac|iPhone|iPad|iPod/i.test(navigator.platform)) return 'darwin';
   if (/Win/i.test(ua)) return 'win32';
   if (/Linux/i.test(ua)) return 'linux';
   return 'web';
+}
+
+function readTitleBarOffsetCss(): string {
+  const wco = navigator.windowControlsOverlay;
+  if (wco?.visible && wco.height > 0) {
+    return `${wco.height}px`;
+  }
+  return DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS;
+}
+
+function syncTitleBarCssVars(): void {
+  const offset = readTitleBarOffsetCss();
+  document.documentElement.style.setProperty('--assistant-titlebar-offset', offset);
+  const wco = navigator.windowControlsOverlay;
+  if (wco?.visible) {
+    document.documentElement.style.setProperty(
+      '--desktop-titlebar-controls-width',
+      `${wco.width}px`,
+    );
+  } else {
+    document.documentElement.style.removeProperty('--desktop-titlebar-controls-width');
+  }
 }
 
 interface SystemContextValue {
@@ -71,6 +105,8 @@ interface SystemContextValue {
   appVersion: string | null;
   bootstrapState: BootstrapStatePayload;
   isBootstrapReady: boolean;
+  /** CSS length for layout/modals below the OS title-bar region. */
+  desktopTitleBarOffset: string;
   hotkey: Hotkey;
   setHotkey: (h: Hotkey) => Promise<void>;
   formatHotkey: (h?: Hotkey) => string;
@@ -79,6 +115,12 @@ interface SystemContextValue {
   updateAudioSettings: (patch: Partial<AudioSettings>) => Promise<AudioSettings>;
   micDevices: MediaDeviceInfo[];
   refreshMicDevices: () => Promise<void>;
+  /** Radix Dialog: ignore clicks on window chrome (title bar / WCO drag region). */
+  preventDialogDismissOnTitleBar: (event: {
+    preventDefault: () => void;
+    target: EventTarget | null;
+    detail?: { originalEvent: PointerEvent };
+  }) => void;
 }
 
 const SystemContext = createContext<SystemContextValue | undefined>(undefined);
@@ -95,8 +137,49 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   const [hotkey, setHotkeyState] = useState<Hotkey>(DEFAULT_HOTKEY);
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const [desktopTitleBarOffset, setDesktopTitleBarOffset] = useState(
+    DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
+  );
+  const titleBarOffsetPxRef = useRef(32);
   const micDevicesRef = useRef(micDevices);
   micDevicesRef.current = micDevices;
+
+  useEffect(() => {
+    if (!isElectronDesktop()) return;
+    const apply = () => {
+      syncTitleBarCssVars();
+      const next = readTitleBarOffsetCss();
+      setDesktopTitleBarOffset(next);
+      const px = Number.parseFloat(next);
+      if (!Number.isNaN(px)) titleBarOffsetPxRef.current = px;
+    };
+    apply();
+    navigator.windowControlsOverlay?.addEventListener('geometrychange', apply);
+    return () => {
+      navigator.windowControlsOverlay?.removeEventListener('geometrychange', apply);
+      document.documentElement.style.removeProperty('--assistant-titlebar-offset');
+      document.documentElement.style.removeProperty('--desktop-titlebar-controls-width');
+    };
+  }, []);
+
+  const preventDialogDismissOnTitleBar = useCallback(
+    (event: {
+      preventDefault: () => void;
+      target: EventTarget | null;
+      detail?: { originalEvent: PointerEvent };
+    }) => {
+      if (!isElectronDesktop()) return;
+      if (isDesktopTitleBarTarget(event.target)) {
+        event.preventDefault();
+        return;
+      }
+      const y = event.detail?.originalEvent?.clientY;
+      if (y != null && y < titleBarOffsetPxRef.current) {
+        event.preventDefault();
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!window.electronAPI?.appGetVersion) return;
@@ -197,6 +280,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       appVersion,
       bootstrapState,
       isBootstrapReady: bootstrapState.phase === 'ready',
+      desktopTitleBarOffset,
       hotkey,
       setHotkey,
       formatHotkey,
@@ -205,12 +289,14 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       updateAudioSettings,
       micDevices,
       refreshMicDevices,
+      preventDialogDismissOnTitleBar,
     }),
     [
       isElectron,
       platform,
       appVersion,
       bootstrapState,
+      desktopTitleBarOffset,
       hotkey,
       setHotkey,
       formatHotkey,
@@ -219,6 +305,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       updateAudioSettings,
       micDevices,
       refreshMicDevices,
+      preventDialogDismissOnTitleBar,
     ],
   );
 

@@ -1,26 +1,12 @@
-import { useLayoutEffect, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { DesktopTitleBarStrip } from '@dadei/ui/components/TitleBar';
-import {
-  DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
-  isElectronDesktop,
-} from '@dadei/ui/lib/platform/electronWindowChrome';
+import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 
 /**
- * Frameless Electron chrome: one title bar for the whole renderer (all routes, modals, loading).
- * Web builds render children only.
+ * Electron: slim drag strip (OS window controls via titleBarOverlay) + product client area.
+ * Web: children only.
  */
 export function DesktopAppShell({ children }: { children: ReactNode }) {
-  useLayoutEffect(() => {
-    if (!isElectronDesktop()) return;
-    document.documentElement.style.setProperty(
-      '--assistant-titlebar-offset',
-      DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
-    );
-    return () => {
-      document.documentElement.style.removeProperty('--assistant-titlebar-offset');
-    };
-  }, []);
-
   if (!isElectronDesktop()) {
     return <>{children}</>;
   }

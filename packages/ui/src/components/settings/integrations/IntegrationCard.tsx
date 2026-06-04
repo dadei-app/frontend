@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@dadei/ui/lib/shared/cn';
-import { IntegrationLogo, type LogoDef } from './integrationIcons';
+import { integrationIconTileClass, IntegrationLogo, type LogoDef } from './integrationIcons';
 
 export type IntegrationStatusKind = 'live' | 'on' | 'off' | 'reauth';
 
@@ -26,12 +26,7 @@ function accessBadgeClass(granted: boolean, muted: boolean): string {
 
 function IconTile({ Icon, active }: { Icon: LucideIcon; active: boolean }) {
   return (
-    <div
-      className={cn(
-        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
-        active ? 'border-emerald-500/25 bg-emerald-500/10' : 'border-white/10 bg-zinc-950/80',
-      )}
-    >
+    <div className={integrationIconTileClass(active)}>
       <Icon
         className={cn('h-4 w-4', active ? 'text-emerald-300/90' : 'text-zinc-500')}
         aria-hidden
