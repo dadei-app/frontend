@@ -1,5 +1,6 @@
 import type { LucideIcon } from 'lucide-react';
 import { cn } from '@dadei/ui/lib/shared/cn';
+import { IntegrationLogo, type LogoDef } from './integrationIcons';
 
 export type IntegrationStatusKind = 'live' | 'on' | 'off' | 'reauth';
 
@@ -23,24 +24,44 @@ function accessBadgeClass(granted: boolean, muted: boolean): string {
   return 'border-amber-500/25 bg-amber-500/10 text-amber-200';
 }
 
+function IconTile({ Icon, active }: { Icon: LucideIcon; active: boolean }) {
+  return (
+    <div
+      className={cn(
+        'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border',
+        active ? 'border-emerald-500/25 bg-emerald-500/10' : 'border-white/10 bg-zinc-950/80',
+      )}
+    >
+      <Icon
+        className={cn('h-4 w-4', active ? 'text-emerald-300/90' : 'text-zinc-500')}
+        aria-hidden
+      />
+    </div>
+  );
+}
+
 export function IntegrationCard({
   name,
   description,
+  logo,
   Icon,
   status,
   access,
   onReauth,
   reauthLoading,
   variant = 'workspace',
+  className,
 }: {
   name: string;
   description: string;
-  Icon: LucideIcon;
+  logo?: LogoDef;
+  Icon?: LucideIcon;
   status: IntegrationStatusKind;
   access?: { read: boolean; write: boolean; muted?: boolean };
   onReauth?: () => void;
   reauthLoading?: boolean;
   variant?: 'workspace' | 'realtime';
+  className?: string;
 }) {
   const showAccess = access != null;
   const active = status === 'live' || status === 'on';
@@ -49,49 +70,41 @@ export function IntegrationCard({
   return (
     <article
       className={cn(
-        'relative flex min-h-0 flex-col overflow-hidden rounded-lg border border-white/8 bg-zinc-900/55',
-        isWorkspace ? 'h-full p-2.5' : 'h-auto p-2',
+        'relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/8 bg-zinc-900/55 p-3',
+        className,
       )}
     >
       <span
         className={cn(
-          'absolute right-2 top-2 z-10 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide font-secondary',
+          'absolute right-2.5 top-2.5 z-10 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide font-secondary',
           STATUS_BADGE[status],
         )}
       >
         {STATUS_LABEL[status]}
       </span>
 
-      <div className="flex shrink-0 items-center gap-2 pr-14">
-        <div
-          className={cn(
-            'flex shrink-0 items-center justify-center rounded-lg border',
-            isWorkspace ? 'h-8 w-8' : 'h-7 w-7',
-            active ? 'border-emerald-500/25 bg-emerald-500/10' : 'border-white/10 bg-zinc-950/80',
-          )}
-        >
-          <Icon
-            className={cn(
-              isWorkspace ? 'h-4 w-4' : 'h-3.5 w-3.5',
-              active ? 'text-emerald-300/90' : 'text-zinc-500',
-            )}
-            aria-hidden
-          />
-        </div>
-        <p className="min-w-0 truncate text-sm font-medium leading-tight text-zinc-100">{name}</p>
+      <div className="flex shrink-0 items-center gap-2 pr-12">
+        {logo ? (
+          <IntegrationLogo def={logo} active={active} />
+        ) : Icon ? (
+          <IconTile Icon={Icon} active={active} />
+        ) : null}
+        <p className="min-w-0 truncate text-sm font-medium text-zinc-100">{name}</p>
       </div>
 
       <p
         className={cn(
-          'mt-1.5 text-[11px] leading-[1.4] text-zinc-500 font-secondary',
-          isWorkspace ? 'line-clamp-3 min-h-0 flex-1' : 'line-clamp-2 shrink-0',
+          'mt-2 shrink-0 font-secondary text-zinc-400',
+          isWorkspace
+            ? 'line-clamp-2 text-xs leading-snug'
+            : 'line-clamp-4 flex-1 text-xs leading-relaxed text-zinc-500',
         )}
       >
         {description}
       </p>
 
       {showAccess ? (
-        <div className="mt-1.5 flex shrink-0 flex-wrap gap-1">
+        <div className="mt-2 flex shrink-0 flex-wrap gap-1.5">
           <span
             className={cn(
               'rounded border px-1.5 py-0.5 text-[10px] font-medium font-secondary',
@@ -116,7 +129,7 @@ export function IntegrationCard({
           type="button"
           onClick={onReauth}
           disabled={reauthLoading}
-          className="mt-1.5 w-full shrink-0 rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+          className="mt-2 w-full shrink-0 rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
         >
           {reauthLoading ? 'Re-authorizing…' : 'Re-authorize'}
         </button>

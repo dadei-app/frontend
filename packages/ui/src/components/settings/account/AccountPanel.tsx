@@ -84,7 +84,7 @@ export function AccountPanel() {
           col={1}
           row={1}
           colSpan={2}
-          rowSpan={3}
+          rowSpan={4}
           bodyClassName="min-h-0"
         >
           <SegmentedControl
@@ -186,12 +186,10 @@ export function AccountPanel() {
           </CenteredField>
         </GridTile>
 
-        <GridTile col={1} row={4} colSpan={4} rowSpan={1}>
-          <AccountSessionActions
-            onLogout={() => void handleLogout()}
-            onDeleteAccount={() => setAlertOpen(true)}
-          />
-        </GridTile>
+        <AccountSessionActions
+          onLogout={() => void handleLogout()}
+          onDeleteAccount={() => setAlertOpen(true)}
+        />
       </SettingsGrid4>
 
       <SetPasswordDialog open={showSetPassword} onOpenChange={setShowSetPassword} />

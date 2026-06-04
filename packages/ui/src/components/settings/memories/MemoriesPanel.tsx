@@ -3,7 +3,7 @@ import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import type { EpisodicMemory } from '@dadei/ui/types/models.types';
-import { MemorySettingsRow } from './MemorySettingsRow';
+import { MemorySettingsRow } from './MemoryRow';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
 
 function MemorySection({
@@ -114,7 +114,7 @@ export function MemoriesPanel() {
 
   return (
     <SettingsGrid4 className="min-h-0 flex-1">
-      <GridTile col={1} row={1} colSpan={4} rowSpan={2} className="p-3">
+      <GridTile col={1} row={1} colSpan={2} rowSpan={4} className="p-3" bodyClassName="min-h-0">
         <MemorySection
           title="Memories"
           hint="Observations and facts the assistant has retained."
@@ -129,7 +129,7 @@ export function MemoriesPanel() {
         />
       </GridTile>
 
-      <GridTile col={1} row={3} colSpan={4} rowSpan={2} className="p-3">
+      <GridTile col={3} row={1} colSpan={2} rowSpan={4} className="p-3" bodyClassName="min-h-0">
         <MemorySection
           title="Proposed"
           hint="Unfinished thoughts and intents still being shaped."

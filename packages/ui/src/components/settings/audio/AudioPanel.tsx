@@ -47,7 +47,7 @@ async function enumerateMicInputs(): Promise<MediaDeviceInfo[]> {
 }
 
 export function AudioPanel() {
-  const { hotkey, setHotkey, formatHotkey } = useSystem();
+  const { setHotkey, formatHotkey } = useSystem();
   const [settings, setSettings] = useState<AudioSettings | null>(null);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [capturing, setCapturing] = useState(false);
@@ -83,6 +83,12 @@ export function AudioPanel() {
   useEffect(() => {
     if (!capturing) return;
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        setCapturing(false);
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       if (MODIFIER_ONLY.has(e.code)) return;
@@ -184,10 +190,7 @@ export function AudioPanel() {
             compact
             displayLabel={capturing ? 'Press any key…' : formatHotkey()}
             capturing={capturing}
-            onStartCapture={() => setCapturing(true)}
-            onCancelCapture={() => setCapturing(false)}
-            onReset={() => void setHotkey({ key: 'Space', modifiers: [] })}
-            showReset={hotkey.key !== 'Space' || hotkey.modifiers.length > 0}
+            onPressDisplay={() => setCapturing(prev => !prev)}
           />
         </GridTile>
 

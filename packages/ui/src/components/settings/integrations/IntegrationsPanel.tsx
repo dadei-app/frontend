@@ -1,19 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import {
-  CalendarDays,
-  CheckSquare,
-  Clock3,
-  CloudSun,
-  FileText,
-  Globe,
-  HardDrive,
-  Mail,
-  Map as MapIcon,
-  Plug,
-  Table,
-  Users,
-} from 'lucide-react';
+import { Clock3, CloudSun, Globe, Map as MapIcon } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
@@ -22,50 +9,17 @@ import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
 import { SegmentedOption, SegmentedShell } from '@dadei/ui/components/settings/controls';
+import { GOOGLE_LOGOS } from './integrationIcons';
 import { IntegrationCard, type IntegrationStatusKind } from './IntegrationCard';
 
-const INTEGRATION_ICONS: Record<string, typeof CalendarDays> = {
-  gmail: Mail,
-  calendar: CalendarDays,
-  contacts: Users,
-  tasks: CheckSquare,
-  docs: FileText,
-  drive: HardDrive,
-  sheets: Table,
-};
-
-const GOOGLE_META: Record<
-  string,
-  { name: string; description: string }
-> = {
-  gmail: {
-    name: 'Gmail',
-    description: 'Read threads and send mail on your behalf.',
-  },
-  calendar: {
-    name: 'Calendar',
-    description: 'View events and schedule meetings.',
-  },
-  contacts: {
-    name: 'Contacts',
-    description: 'Look up people and keep context accurate.',
-  },
-  tasks: {
-    name: 'Tasks',
-    description: 'Track to-dos and mark items complete.',
-  },
-  docs: {
-    name: 'Docs',
-    description: 'Create and update Google documents.',
-  },
-  drive: {
-    name: 'Drive',
-    description: 'Files created or opened through Dadei.',
-  },
-  sheets: {
-    name: 'Sheets',
-    description: 'Read and update spreadsheets.',
-  },
+const GOOGLE_META: Record<string, { name: string; description: string }> = {
+  gmail: { name: 'Gmail', description: 'Inbox & send' },
+  calendar: { name: 'Calendar', description: 'Events & meetings' },
+  contacts: { name: 'Contacts', description: 'People lookup' },
+  tasks: { name: 'Tasks', description: 'To-do lists' },
+  docs: { name: 'Docs', description: 'Docs read/write' },
+  drive: { name: 'Drive', description: 'App files only' },
+  sheets: { name: 'Sheets', description: 'Sheets & cells' },
 };
 
 /** Seven Workspace APIs we request OAuth scopes for. */
@@ -82,25 +36,32 @@ const GOOGLE_INTEGRATION_ORDER = [
 const REALTIME_SOURCES = [
   {
     name: 'Weather',
-    description: 'Live conditions and short-term forecast lookups.',
+    description:
+      'Used when you ask about conditions, rain, temperature, or what to wear. Loads current conditions and short forecasts from Google Weather at coordinates—often paired with your location or a place from Maps.',
     Icon: CloudSun,
   },
   {
     name: 'Maps',
-    description: 'Place and routing lookups for local context.',
+    description:
+      'Used for place search, addresses, directions, travel time, and “near me” questions. Also resolves “where am I” and supplies coordinates when Weather needs a location.',
     Icon: MapIcon,
   },
   {
     name: 'Web Search',
-    description: 'Fresh web answers and source retrieval.',
+    description:
+      'Used when the answer needs fresh public information—news, facts, or topics not in Gmail, Drive, or memory. Queries DuckDuckGo for instant answers and related links (no Google account).',
     Icon: Globe,
   },
   {
     name: 'Current Time',
-    description: 'Timezone-aware clock checks without extra auth.',
+    description:
+      'Used for “what time is it”, scheduling in your timezone, and sanity-checking meeting times. Reads your account timezone and IANA zones via Google’s timezone API—always on, no Workspace sign-in.',
     Icon: Clock3,
   },
 ] as const;
+
+const integrationGridClass =
+  'grid h-full min-h-0 w-full grid-cols-4 grid-rows-2 gap-3 [grid-auto-rows:1fr]';
 
 function googleStatus(
   status: string,
@@ -141,7 +102,7 @@ export function IntegrationsPanel() {
         status: row?.status ?? 'disconnected',
         read: accessList.find(a => a.kind === 'read')?.granted ?? false,
         write: accessList.find(a => a.kind === 'write')?.granted ?? false,
-        Icon: INTEGRATION_ICONS[id] ?? Plug,
+        logo: GOOGLE_LOGOS[id],
       };
     });
   }, [integrationsStatus?.integrations]);
@@ -176,10 +137,10 @@ export function IntegrationsPanel() {
         row={1}
         colSpan={4}
         rowSpan={2}
-        bodyClassName="min-h-0 overflow-hidden"
+        bodyClassName="min-h-0 gap-3"
       >
         {!googleConnected ? (
-          <SegmentedShell layout="row" className="mb-3 w-full sm:w-auto">
+          <SegmentedShell layout="row" className="w-full shrink-0 sm:w-auto">
             <SegmentedOption
               selected={false}
               disabled={connectingGoogle}
@@ -189,7 +150,7 @@ export function IntegrationsPanel() {
           </SegmentedShell>
         ) : null}
         {googleConnectError ? (
-          <p className="mb-3 text-sm text-rose-300/90 font-secondary">{googleConnectError}</p>
+          <p className="shrink-0 text-sm text-rose-300/90 font-secondary">{googleConnectError}</p>
         ) : null}
         {integrationsStatusQuery.isLoading ? (
           <p className="text-sm text-zinc-500 font-secondary">Loading integrations…</p>
@@ -198,13 +159,13 @@ export function IntegrationsPanel() {
             {fetchErr(integrationsStatusQuery.error)}
           </p>
         ) : (
-          <div className="grid min-h-0 flex-1 grid-cols-4 grid-rows-2 gap-2.5 overflow-hidden">
+          <div className={integrationGridClass}>
             {integrationCards.map(integration => (
               <IntegrationCard
                 key={integration.id}
                 name={integration.name}
                 description={integration.description}
-                Icon={integration.Icon}
+                logo={integration.logo}
                 status={googleStatus(integration.status, googleConnected)}
                 access={{
                   read: integration.read,
@@ -229,13 +190,14 @@ export function IntegrationsPanel() {
         col={1}
         row={3}
         colSpan={4}
-        rowSpan={1}
-        bodyClassName="min-h-0 justify-start"
+        rowSpan={2}
+        bodyClassName="min-h-0"
       >
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className={integrationGridClass}>
           {REALTIME_SOURCES.map(source => (
             <IntegrationCard
               key={source.name}
+              className="row-span-2"
               name={source.name}
               description={source.description}
               Icon={source.Icon}
