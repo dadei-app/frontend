@@ -23,7 +23,14 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [armedPersonDeleteId, setArmedPersonDeleteId] = useState<string | null>(null);
-  const { persons, personsLoading, renamePerson, deletePerson } = useService();
+  const {
+    persons,
+    personsLoading,
+    renamePerson,
+    isRenamingPerson,
+    deletePerson,
+    isDeletingPerson,
+  } = useService();
   const loading = isOpen && personsLoading;
 
   const handleRename = async (personId: string) => {
@@ -184,7 +191,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                 value={editName}
                                 onChange={(e) => setEditName(e.target.value)}
                                 onKeyDown={(e) => handleNameKeyDown(e, person.id)}
-                                disabled={renamePersonMutation.isPending}
+                                disabled={isRenamingPerson}
                                 className="w-full rounded-md border border-emerald-500/35 bg-zinc-950/80 px-2 py-1 font-primary text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/25"
                                 autoFocus
                                 placeholder="Enter name"
@@ -211,7 +218,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                               <>
                                 <button
                                   onClick={() => handleRename(person.id)}
-                                  disabled={renamePersonMutation.isPending}
+                                  disabled={isRenamingPerson}
                                   className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-950/50 text-emerald-300 transition-colors hover:bg-emerald-950/80"
                                   title="Save"
                                 >
@@ -236,7 +243,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                 </button>
                                 <SplitDeleteToolbar
                                   armed={armedPersonDeleteId === person.id}
-                                  disabled={deletePersonMutation.isPending}
+                                  disabled={isDeletingPerson}
                                   onArm={() => setArmedPersonDeleteId(person.id)}
                                   onDisarm={() => setArmedPersonDeleteId(null)}
                                   onConfirm={() => {

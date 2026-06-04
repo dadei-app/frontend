@@ -107,7 +107,9 @@ interface ServiceContextType {
   personsLoading: boolean;
   refetchPersons: () => void;
   renamePerson: (personId: string, name: string) => Promise<Person>;
+  isRenamingPerson: boolean;
   deletePerson: (personId: string) => Promise<void>;
+  isDeletingPerson: boolean;
 
   recentConversations: Conversation[];
   bootstrapInteractions: Interaction[];
@@ -665,9 +667,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         personsLoading: personsQuery.isLoading,
         refetchPersons,
         renamePerson: (personId, name) => renamePersonMutation.mutateAsync({ personId, name }),
+        isRenamingPerson: renamePersonMutation.isPending,
         deletePerson: async personId => {
           await deletePersonMutation.mutateAsync(personId);
         },
+        isDeletingPerson: deletePersonMutation.isPending,
 
         recentConversations: recentConversationsQuery.data ?? [],
         bootstrapInteractions: bootstrapInteractionsQuery.data ?? [],

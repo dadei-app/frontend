@@ -1,14 +1,19 @@
 import type { ComponentType } from 'react';
+import { Calendar } from 'lucide-react';
 import {
   SiGmail,
   SiGoogle,
-  SiGooglecalendar,
   SiGoogledocs,
   SiGoogledrive,
   SiGooglesheets,
   SiGoogletasks,
 } from 'react-icons/si';
 import { cn } from '@dadei/ui/lib/shared/cn';
+
+/** Google Calendar product mark is too busy at 14px; Lucide reads clearly and tints via currentColor. */
+function CalendarLogo({ className, 'aria-hidden': ariaHidden }: IntegrationLogoProps) {
+  return <Calendar className={className} strokeWidth={2} aria-hidden={ariaHidden} />;
+}
 
 export type IntegrationLogoProps = { className?: string; 'aria-hidden'?: boolean };
 
@@ -27,7 +32,7 @@ export function integrationIconTileClass(active: boolean): string {
 
 export const GOOGLE_LOGOS: Record<string, LogoDef> = {
   gmail: { Logo: SiGmail },
-  calendar: { Logo: SiGooglecalendar },
+  calendar: { Logo: CalendarLogo },
   contacts: { Logo: SiGoogle },
   tasks: { Logo: SiGoogletasks },
   docs: { Logo: SiGoogledocs },
