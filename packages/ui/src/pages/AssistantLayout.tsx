@@ -135,7 +135,6 @@ export default function AssistantLayout() {
             <div className="pointer-events-none absolute top-4 left-10 z-30 w-[calc(100%-5rem)]">
               <BannerStackHost />
             </div>
-            <ToastStackHost className="fixed right-5 bottom-5 z-180" />
             <div className="relative min-h-0 flex-1 overflow-hidden">
               {/* Mic: geometric center of the left panel; hints are out of flow. */}
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
@@ -187,6 +186,8 @@ export default function AssistantLayout() {
       </div>
 
       <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
+      <ToastStackHost className="fixed right-5 bottom-5 z-[260]" />
     </div>
   );
 }
