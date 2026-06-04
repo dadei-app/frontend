@@ -26,6 +26,7 @@ import { DesktopAppShell } from '@dadei/ui/components/DesktopAppShell';
 import AssistantLayout from '@dadei/ui/pages/AssistantLayout';
 
 import LoginPage from '@dadei/ui/pages/LoginPage';
+import SubscribePage from '@dadei/ui/pages/SubscribePage';
 
 
 
@@ -85,6 +86,8 @@ export function App() {
                       }
 
                     />
+
+                    <Route path="/subscribe" element={<SubscribePage />} />
 
                     <Route path="/app" element={<Navigate to="/assistant" replace />} />
 

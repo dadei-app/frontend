@@ -2,7 +2,10 @@ import { useLayoutEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
 import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
+import { TutorialOverlayContent, TutorialProvider } from '@dadei/ui/components/tutorial';
+import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
@@ -52,12 +55,30 @@ function SpokenWakeWord({
 /**
  * Authenticated assistant shell: layout, theme tokens, overlays (settings), and realtime hooks.
  */
-export default function AssistantLayout() {
+function TutorialSettingsBridge({
+  settingsOpen,
+  setSettingsOpen,
+}: {
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
+}) {
+  const tutorial = useTutorialContext();
+  useLayoutEffect(() => {
+    if (tutorial?.openSettingsForTutorial) {
+      setSettingsOpen(true);
+    }
+  }, [tutorial?.openSettingsForTutorial, setSettingsOpen]);
+  return null;
+}
+
+function AssistantLayoutShell() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isBootstrapReady, formatHotkey } = useSystem();
   const { isConnected, isServiceEnabled } = useService();
   const { state } = useCommand();
-  const showWakeHint = state === 'idle' && isServiceEnabled;
+  const tutorial = useTutorialContext();
+  const showWakeHint =
+    state === 'idle' && isServiceEnabled && (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
@@ -95,6 +116,7 @@ export default function AssistantLayout() {
 
   return (
     <div
+      data-tutorial-target="assistant-layout-shell"
       className={cn(
         'assistant-shell relative flex flex-col overflow-hidden overscroll-none bg-zinc-950 text-zinc-100',
         viewportFillClass(),
@@ -185,9 +207,36 @@ export default function AssistantLayout() {
         </main>
       </div>
 
+      <TutorialSettingsBridge settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
       <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
       <ToastStackHost className="fixed right-5 bottom-5 z-[260]" />
     </div>
   );
+}
+
+export default function AssistantLayout() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { isBootstrapReady } = useSystem();
+  const meQuery = useAuthMeQuery(isAuthenticated && isBootstrapReady && !isLoading);
+  const needsTutorial = Boolean(meQuery.data && !meQuery.data.tutorial_completed);
+
+  if (!isBootstrapReady || isLoading || (isAuthenticated && meQuery.isLoading)) {
+    return (
+      <LoadingScreen
+        subtitleOverride={isBootstrapReady && isLoading ? 'Signing in…' : undefined}
+      />
+    );
+  }
+
+  if (needsTutorial) {
+    return (
+      <TutorialProvider>
+        <AssistantLayoutShell />
+        <TutorialOverlayContent />
+      </TutorialProvider>
+    );
+  }
+
+  return <AssistantLayoutShell />;
 }

@@ -110,6 +110,8 @@ interface ServiceContextType {
   isRenamingPerson: boolean;
   deletePerson: (personId: string) => Promise<void>;
   isDeletingPerson: boolean;
+  retrainUserVoice: (wavBuffer: ArrayBuffer) => Promise<Person>;
+  isRetrainingUserVoice: boolean;
 
   recentConversations: Conversation[];
   bootstrapInteractions: Interaction[];
@@ -203,6 +205,16 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         (prev ?? []).filter(p => p.id !== personId),
       );
       queryClient.removeQueries({ queryKey: queryKeys.personById(personId) });
+    },
+  });
+
+  const retrainUserVoiceMutation = useMutation({
+    mutationFn: (wavBuffer: ArrayBuffer) => personsApi.retrainUserVoice(wavBuffer),
+    onSuccess: updated => {
+      queryClient.setQueryData<Person[]>(queryKeys.persons, prev =>
+        (prev ?? []).map(p => (p.id === updated.id ? updated : p)),
+      );
+      queryClient.setQueryData(queryKeys.personById(updated.id), updated);
     },
   });
 
@@ -672,6 +684,8 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           await deletePersonMutation.mutateAsync(personId);
         },
         isDeletingPerson: deletePersonMutation.isPending,
+        retrainUserVoice: wavBuffer => retrainUserVoiceMutation.mutateAsync(wavBuffer),
+        isRetrainingUserVoice: retrainUserVoiceMutation.isPending,
 
         recentConversations: recentConversationsQuery.data ?? [],
         bootstrapInteractions: bootstrapInteractionsQuery.data ?? [],

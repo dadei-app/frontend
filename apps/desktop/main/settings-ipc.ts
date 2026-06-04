@@ -16,6 +16,11 @@ import {
 import { isGeolocationApiKeyConfigured } from './geolocation-config';
 import { syncTrayFromSettings } from './tray';
 import { manualUpdaterCheck } from './updater';
+import {
+  checkTutorialMacPermission,
+  openTutorialMacSettings,
+  type TutorialMacPermissionKind,
+} from './tutorial-permissions';
 
 export function registerSettingsIpc(): void {
   ipcMain.handle('app:get-version', () => app.getVersion());
@@ -54,6 +59,13 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('permissions:check-all', () => checkAllPermissions());
   ipcMain.handle('permissions:check', (_e, kind: PermissionKind) => checkPermission(kind));
   ipcMain.handle('permissions:request', (_e, kind: PermissionKind) => requestPermission(kind));
+
+  ipcMain.handle('permissions:check-tutorial', (_e, kind: TutorialMacPermissionKind) =>
+    checkTutorialMacPermission(kind),
+  );
+  ipcMain.handle('permissions:open-tutorial-settings', (_e, kind: TutorialMacPermissionKind) =>
+    openTutorialMacSettings(kind),
+  );
 
   ipcMain.handle('hotkey:get', () => getHotkey());
   ipcMain.handle('hotkey:set', (_e, h) => setHotkey(h));

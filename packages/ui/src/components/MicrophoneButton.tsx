@@ -6,6 +6,7 @@ import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
+import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;
@@ -96,8 +97,11 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     isAssistantMode,
   } = useService();
   const { state, cancel, micShowsProcessingRing } = useCommand();
+  const tutorial = useTutorialContext();
+  const tutorialMicLocked = Boolean(tutorial && !tutorial.micInteractive);
 
-  const micBlocked = isTogglingService || registrationConflict || state === 'locked';
+  const micBlocked =
+    isTogglingService || registrationConflict || state === 'locked' || tutorialMicLocked;
   const isIdle = state === 'idle';
   const isFollowUp = state === 'follow_up';
   const isListening = state === 'listening';
@@ -115,6 +119,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const emitRipples = showBlueRipples || showRedRipples;
   const nextRingTone: keyof typeof RIPPLE_COLORS = showBlueRipples ? 'blue' : 'red';
   const showBlueSpinner = !micBlocked && micShowsProcessingRing;
+  const showBlockedSpinner = micBlocked && !tutorialMicLocked;
   const [rings, setRings] = useState<RingParticle[]>([]);
   const [showLiveAura, setShowLiveAura] = useState(false);
   const ringIdRef = useRef(0);
@@ -142,7 +147,11 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
       stopSessionOnly();
       return;
     }
+    const wasOff = !isServiceEnabled;
     await toggleService();
+    if (tutorial?.step.id === 'enable_service' && wasOff) {
+      tutorial.markActionFired('service-enabled');
+    }
   };
 
   const emitRing = useCallback((tone: keyof typeof RIPPLE_COLORS) => {
@@ -193,8 +202,10 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   return (
     <div className="flex flex-col items-center gap-10">
       <motion.button
+        data-tutorial-target="mic-button"
         onClick={handleClick}
         disabled={micBlocked}
+        aria-disabled={tutorialMicLocked || micBlocked}
         whileHover={
           !micBlocked && usePassiveGreen
             ? { scale: 1.05, transition: { duration: 0.15 } }
@@ -211,7 +222,12 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           !micBlocked && usePassiveGreen && 'focus:ring-emerald-500/25',
         )}
       >
-        {micBlocked ? (
+        {tutorialMicLocked ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-full border-[3px] border-white/10 bg-zinc-800/90"
+          />
+        ) : micBlocked ? (
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0 rounded-full border-[3px] border-white/15 bg-zinc-700 opacity-60"
@@ -265,7 +281,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
           </svg>
         </div>
 
-        {micBlocked ? <MicSpinner className="border-t-zinc-300" /> : null}
+        {showBlockedSpinner ? <MicSpinner className="border-t-zinc-300" /> : null}
         {showBlueSpinner ? <MicSpinner className="border-t-sky-200" /> : null}
       </motion.button>
     </div>

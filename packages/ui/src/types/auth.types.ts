@@ -39,6 +39,7 @@ export interface UserMe {
     google_connected: boolean;
     google_granted_scopes: string[];
     google_scopes_stale: boolean;
+    tutorial_completed: boolean;
 }
 
 export interface TokenResponse {

@@ -87,15 +87,22 @@ export default function ConversationCard({
   toggleConversation: (index: number) => void;
   handleDeleteConversation: (conversationId: string) => void;
   handleDeleteInteraction: (interactionId: string) => void;
-  getPersonDisplay: (personId: string) => { label: string; position: number };
+  getPersonDisplay: (personId: string) => { label: string; position: number; isUser: boolean };
 }) {
   const conversationIdForActions =
     group.conversation?.id?.trim() ||
     group.interactions.find(i => i.conversation_id?.trim())?.conversation_id?.trim() ||
     '';
 
+  const tutorialConversationTarget =
+    group.conversation?.id === 'tutorial-test-conversation' ||
+    group.interactions.some(i => i.conversation_id === 'tutorial-test-conversation')
+      ? 'tutorial-test-conversation'
+      : undefined;
+
   return (
     <div
+      data-tutorial-target={tutorialConversationTarget}
       role="button"
       tabIndex={0}
       aria-expanded={group.isExpanded}

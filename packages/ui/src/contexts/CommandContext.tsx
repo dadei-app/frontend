@@ -46,6 +46,7 @@ import {
   formatAssistantStatusLine,
 } from '@dadei/ui/lib/voice/labels/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/session/sessionEndDetection';
+import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 import {
   notifyCommandCaptureCommit,
   subscribeVoiceSpeechActivity,
@@ -281,6 +282,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     isAssistantOwner,
     assistantModeExpiresAt,
   } = useService();
+  const tutorial = useTutorialContext();
+  const tutorialCommandModeRef = useRef(false);
+
+  useEffect(() => {
+    tutorialCommandModeRef.current = Boolean(tutorial?.tutorialCommandMode);
+  }, [tutorial?.tutorialCommandMode]);
 
   const [state, setState] = useState<CommandState>('idle');
   const [userBubbleText, setUserBubbleText] = useState('');
@@ -720,6 +727,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
         case 'session_end':
           setAssistantBubbleStatus('done');
+          if (tutorialCommandModeRef.current) {
+            window.dispatchEvent(new CustomEvent('tutorial-wake-session-ended'));
+          }
           endSession();
           break;
         case 'done':
@@ -833,6 +843,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           let sawDone = false;
           for await (const ev of streamCommandFromText(submitText, accessToken, {
             signal: abortController.signal,
+            tutorialMode: tutorialCommandModeRef.current,
           })) {
             if (ev.type === 'error' && abortController.signal.aborted) continue;
             if (ev.type === 'done') sawDone = true;

@@ -23,3 +23,5 @@ export { default as InteractionPanel } from './components/interaction-panel';
 export { default as Banner } from './components/notifications/Banner';
 export { default as Toast } from './components/notifications/Toast';
 export { default as PeoplePanel } from './components/PersonsPanel';
+export { TutorialOverlay, TutorialProvider } from './components/tutorial';
+export { default as SubscribePage } from './pages/SubscribePage';

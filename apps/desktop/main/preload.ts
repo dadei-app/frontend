@@ -133,6 +133,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkAll: () => ipcRenderer.invoke('permissions:check-all'),
     check: (kind: string) => ipcRenderer.invoke('permissions:check', kind),
     request: (kind: string) => ipcRenderer.invoke('permissions:request', kind),
+    checkTutorial: (kind: string) => ipcRenderer.invoke('permissions:check-tutorial', kind),
+    openTutorialSettings: (kind: string) =>
+      ipcRenderer.invoke('permissions:open-tutorial-settings', kind),
   },
 
   hotkey: {

@@ -12,6 +12,7 @@ import { NotificationProvider } from '@dadei/ui/contexts/NotificationContext';
 import AssistantLayout from '@dadei/ui/pages/AssistantLayout';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@dadei/ui/pages/LoginPage';
+import SubscribePage from '@dadei/ui/pages/SubscribePage';
 import AuthOAuthCallbackPage from '@/pages/AuthOAuthCallbackPage';
 
 export function App() {
@@ -43,6 +44,7 @@ export function App() {
                   </ServiceProvider>
                 }
               />
+              <Route path="/subscribe" element={<SubscribePage />} />
 
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

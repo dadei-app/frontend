@@ -153,6 +153,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
               />
             </Dialog.Overlay>
             <Dialog.Content
+              data-tutorial-target="settings-panel-root"
               className={isElectron ? dialogContentClass : dialogContentClassWeb}
               onPointerDownOutside={preventDialogDismissOnTitleBar}
               onInteractOutside={preventDialogDismissOnTitleBar}
@@ -194,6 +195,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                           <button
                             key={id}
                             type="button"
+                            data-tutorial-target={`settings-section-${id}`}
                             onClick={() => {
                               setView(id);
                               setPendingAction(undefined);

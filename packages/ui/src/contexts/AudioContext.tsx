@@ -23,6 +23,7 @@ import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
 import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/audio/audioSettingsEvents';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
+import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 
 const COMMAND_START_RETRY_MS = 500;
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
@@ -138,6 +139,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
   const { state, startListening, notifyCommandUtteranceEnded } = useCommand();
+  const tutorial = useTutorialContext();
 
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
@@ -330,6 +332,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number) => {
+      if (tutorial && !tutorial.wakeWordEnabled) {
+        return;
+      }
       if (
         stateRef.current === 'transcribing' ||
         stateRef.current === 'thinking' ||
@@ -341,7 +346,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       console.debug('[Voice][Wake] detected — entering listening (server will transcribe)');
       startListening();
     },
-    [startListening],
+    [startListening, tutorial],
   );
 
   const stopCommandAudioStream = useCallback(

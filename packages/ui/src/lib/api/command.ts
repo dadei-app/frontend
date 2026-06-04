@@ -143,11 +143,14 @@ export async function* streamCommand(
 export async function* streamCommandFromText(
   text: string,
   accessToken: string,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; tutorialMode?: boolean },
 ): AsyncGenerator<CommandSSEEvent> {
   const url = `${API_BASE_URL}${ENDPOINTS.COMMAND_TEXT}`;
   const form = new FormData();
   form.append('text', text);
+  if (options?.tutorialMode) {
+    form.append('tutorial_mode', 'true');
+  }
   const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   if (clientTimeZone && clientTimeZone.trim()) {
     form.append('client_timezone', clientTimeZone.trim());

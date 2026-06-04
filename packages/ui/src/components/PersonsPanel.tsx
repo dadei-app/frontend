@@ -6,7 +6,10 @@ import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
+import { VoiceRetrainDialog } from '@dadei/ui/components/persons/VoiceRetrainDialog';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
+import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import { isTutorialTestId } from '@dadei/ui/components/tutorial/testData';
 
 /** Below client tooltip (195); above main chrome. */
 const PEOPLE_DRAWER_Z = 170;
@@ -23,6 +26,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [armedPersonDeleteId, setArmedPersonDeleteId] = useState<string | null>(null);
+  const [retrainOpen, setRetrainOpen] = useState(false);
   const {
     persons,
     personsLoading,
@@ -30,17 +34,31 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
     isRenamingPerson,
     deletePerson,
     isDeletingPerson,
+    retrainUserVoice,
+    isRetrainingUserVoice,
   } = useService();
+  const tutorial = useTutorialContext();
+  const displayPersons = useMemo(() => {
+    const merged = [...(tutorial?.tutorialPersons ?? []), ...persons];
+    const seen = new Set<string>();
+    return merged.filter(p => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+  }, [persons, tutorial?.tutorialPersons]);
+
   const loading = isOpen && personsLoading;
 
   const personIdToPosition = useMemo(() => {
-    const sorted = [...persons].sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const sorted = [...displayPersons].sort((a, b) => a.created_at.localeCompare(b.created_at));
     const m = new Map<string, number>();
     sorted.forEach((p, i) => m.set(p.id, i + 1));
     return m;
-  }, [persons]);
+  }, [displayPersons]);
 
   const handleRename = async (personId: string) => {
+    if (isTutorialTestId(personId)) return;
     if (!editName.trim()) return;
 
     try {
@@ -55,6 +73,12 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
   };
 
   const handleDeletePerson = async (personId: string) => {
+    if (isTutorialTestId(personId)) {
+      tutorial?.removeTutorialPerson();
+      showToast('Person deleted successfully', 'success');
+      setArmedPersonDeleteId(null);
+      return;
+    }
     try {
       await deletePerson(personId);
       showToast('Person deleted successfully', 'success');
@@ -144,6 +168,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.34, ease: [0.32, 0.72, 0, 1] }}
+            data-tutorial-target="people-panel-root"
             className="fixed bottom-0 right-0 top-[calc(var(--assistant-titlebar-offset,0px)+var(--assistant-header-h,4.75rem))] flex min-h-0 w-full max-w-md flex-col border-l border-white/10 bg-zinc-950/95 shadow-[-10px_0_40px_rgba(0,0,0,0.4)] backdrop-blur-xl will-change-transform sm:w-1/3"
             style={{ zIndex: PEOPLE_DRAWER_Z }}
           >
@@ -167,7 +192,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                 <div className="flex h-full items-center justify-center">
                   <i className="fas fa-spinner fa-spin text-2xl text-emerald-400/80" />
                 </div>
-              ) : persons.length === 0 ? (
+              ) : displayPersons.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center text-center">
                   <i className="fas fa-user-friends mb-3 text-4xl text-zinc-600 opacity-40" />
                   <p className="text-sm font-medium text-zinc-400">No people yet</p>
@@ -175,19 +200,22 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {persons.map((person) => {
+                  {displayPersons.map((person) => {
                     const isEditing = editingId === person.id;
                     const position = personIdToPosition.get(person.id) ?? 0;
-                    const isPersonOne = position === 1;
+                    const isYou = person.is_user;
 
                     return (
                       <div
                         key={person.id}
+                        data-tutorial-target={
+                          person.id === 'tutorial-test-person' ? 'tutorial-test-person' : undefined
+                        }
                         className="group/person rounded-lg border border-white/10 bg-zinc-900/70 p-3 transition-[border-color,box-shadow] duration-200 hover:border-emerald-500/25 hover:shadow-sm"
                       >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ${isPersonOne ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25' : 'bg-zinc-800 text-zinc-300 ring-white/5'}`}
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ${isYou ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25' : 'bg-zinc-800 text-zinc-300 ring-white/5'}`}
                           >
                             {person.name ? person.name[0].toUpperCase() : position}
                           </div>
@@ -207,7 +235,12 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                             ) : (
                               <div>
                                 <h3 className="truncate text-sm font-medium text-zinc-100 font-secondary">
-                                  {person.name || `Person ${position}`}
+                                  {person.name || (isYou ? 'You' : `Person ${position}`)}
+                                  {isYou ? (
+                                    <span className="ml-1.5 text-xs font-normal text-emerald-400/80">
+                                      (you)
+                                    </span>
+                                  ) : null}
                                 </h3>
                               </div>
                             )}
@@ -248,24 +281,36 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                 >
                                   <i className="fas fa-pencil-alt text-xs" />
                                 </button>
-                                <SplitDeleteToolbar
-                                  armed={armedPersonDeleteId === person.id}
-                                  disabled={isDeletingPerson}
-                                  onArm={() => setArmedPersonDeleteId(person.id)}
-                                  onDisarm={() => setArmedPersonDeleteId(null)}
-                                  onConfirm={() => {
-                                    void handleDeletePerson(person.id);
-                                  }}
-                                  idleTitle="Delete person"
-                                  idleAriaLabel="Delete person"
-                                  containerClassName="h-7 self-auto"
-                                  armedContainerClassName="gap-0.5"
-                                  idleButtonClassName="opacity-100 rounded-md hover:bg-rose-950/35"
-                                  confirmButtonClassName="h-7 w-7 rounded-md"
-                                  cancelButtonClassName="h-7 w-7 rounded-md"
-                                  idleWidthPx={28}
-                                  armedWidthPx={58}
-                                />
+                                {isYou ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setRetrainOpen(true)}
+                                    className="flex h-7 w-7 items-center justify-center rounded-md text-emerald-400/80 transition-colors hover:bg-emerald-950/40 hover:text-emerald-300"
+                                    title="Retrain your voice"
+                                    aria-label="Retrain your voice"
+                                  >
+                                    <i className="fas fa-microphone-alt text-xs" />
+                                  </button>
+                                ) : (
+                                  <SplitDeleteToolbar
+                                    armed={armedPersonDeleteId === person.id}
+                                    disabled={isDeletingPerson}
+                                    onArm={() => setArmedPersonDeleteId(person.id)}
+                                    onDisarm={() => setArmedPersonDeleteId(null)}
+                                    onConfirm={() => {
+                                      void handleDeletePerson(person.id);
+                                    }}
+                                    idleTitle="Delete person"
+                                    idleAriaLabel="Delete person"
+                                    containerClassName="h-7 self-auto"
+                                    armedContainerClassName="gap-0.5"
+                                    idleButtonClassName="opacity-100 rounded-md hover:bg-rose-950/35"
+                                    confirmButtonClassName="h-7 w-7 rounded-md"
+                                    cancelButtonClassName="h-7 w-7 rounded-md"
+                                    idleWidthPx={28}
+                                    armedWidthPx={58}
+                                  />
+                                )}
                               </>
                             )}
                           </div>
@@ -280,6 +325,12 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
         )}
       </AnimatePresence>
 
+      <VoiceRetrainDialog
+        open={retrainOpen}
+        onOpenChange={setRetrainOpen}
+        onSubmit={retrainUserVoice}
+        isSubmitting={isRetrainingUserVoice}
+      />
     </>
   );
 

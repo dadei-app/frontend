@@ -14,6 +14,8 @@ import {
 } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import { isTutorialTestId } from '@dadei/ui/components/tutorial/testData';
 import { ORPHAN_KEY } from './constants';
 
 const PERSON_COLOR_SHADES = [
@@ -96,7 +98,16 @@ export function useInteractionPanel() {
     [recentConversations],
   );
 
-  const interactions = bootstrapInteractions.length > 0 ? bootstrapInteractions : EMPTY_INTERACTIONS;
+  const tutorial = useTutorialContext();
+  const baseInteractions =
+    bootstrapInteractions.length > 0 ? bootstrapInteractions : EMPTY_INTERACTIONS;
+
+  const interactions = useMemo(() => {
+    if (!tutorial?.tutorialInteractions.length) return baseInteractions;
+    const seen = new Set(baseInteractions.map(i => i.id));
+    const injected = tutorial.tutorialInteractions.filter(i => !seen.has(i.id));
+    return [...injected, ...baseInteractions];
+  }, [baseInteractions, tutorial?.tutorialInteractions]);
 
   const conversationIds = useMemo(() => {
     const ids = new Set<string>();
@@ -108,15 +119,22 @@ export function useInteractionPanel() {
     return Array.from(ids).sort();
   }, [interactions, recentIds]);
 
+  /** Tutorial fixtures use non-UUID ids; never fetch them from the API. */
+  const apiConversationIds = useMemo(
+    () => conversationIds.filter(id => !isTutorialTestId(id)),
+    [conversationIds],
+  );
+
   const conversationQueries = useQueries({
-    queries: conversationIds.map(id => ({
+    queries: apiConversationIds.map(id => ({
       ...conversationQueryOptions(id),
       enabled: isConnected && Boolean(id),
     })),
   });
 
   const conversationIdsKey = conversationIds.join('\u001f');
-  const conversationDataKey = conversationIds
+  const apiConversationIdsKey = apiConversationIds.join('\u001f');
+  const conversationDataKey = apiConversationIds
     .map((id, i) => {
       const d = conversationQueries[i]?.data;
       if (!d) return `${id}:`;
@@ -126,13 +144,24 @@ export function useInteractionPanel() {
 
   const conversationById = useMemo(() => {
     const map = new Map<string, Conversation>();
-    conversationIds.forEach((id, index) => {
+    for (const conv of tutorial?.tutorialConversations ?? []) {
+      map.set(conv.id, conv);
+    }
+    apiConversationIds.forEach((id, index) => {
       const data = conversationQueries[index]?.data;
       if (data) map.set(id, data);
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable keys derived from query *data*, not the queries array identity
-  }, [conversationDataKey, conversationIdsKey]);
+  }, [conversationDataKey, apiConversationIdsKey, tutorial?.tutorialConversations]);
+
+  useEffect(() => {
+    if (tutorial?.step.id !== 'passive_demo') return;
+    const realCount = interactions.filter(i => !isTutorialTestId(i.id)).length;
+    if (realCount >= (tutorial.step.requiredInteractions ?? 2)) {
+      tutorial.markActionFired('interactions-logged');
+    }
+  }, [interactions, tutorial]);
 
   const [conversationGroups, setConversationGroups] = useState<ConversationGroupState[]>([]);
   const loading = interactionsLoading;
@@ -145,9 +174,10 @@ export function useInteractionPanel() {
   useEffect(() => {
     if (!isConnected || personsLoading) return;
     const known = new Set(persons.map(p => p.id));
-    const hasUnknownPerson = interactions.some(
-      i => Boolean(i.person_id?.trim()) && !known.has(i.person_id.trim()),
-    );
+    const hasUnknownPerson = interactions.some(i => {
+      const pid = i.person_id?.trim();
+      return Boolean(pid) && !isTutorialTestId(pid) && !known.has(pid);
+    });
     if (hasUnknownPerson) {
       refetchPersons();
     }
@@ -249,7 +279,7 @@ export function useInteractionPanel() {
     if (!isConnected) return;
     for (let i = 0; i < conversationQueries.length; i++) {
       const q = conversationQueries[i];
-      const id = conversationIds[i];
+      const id = apiConversationIds[i];
       if (!id?.trim() || !q?.isError) continue;
       const err = q.error;
       if (!isAxiosError(err) || err.response?.status !== 404) continue;
@@ -271,12 +301,18 @@ export function useInteractionPanel() {
   }, [
     isConnected,
     conversationQueries,
-    conversationIds,
+    apiConversationIds,
     queryClient,
     pruneExtraBootstrapConversationId,
   ]);
 
   const handleDeleteInteraction = async (interactionId: string) => {
+    if (isTutorialTestId(interactionId)) {
+      tutorial?.removeTutorialInteraction(interactionId);
+      showToast('Interaction deleted', 'success');
+      setArmedInteractionDeleteId(null);
+      return;
+    }
     try {
       await interactionsApi.delete(interactionId);
       patchInteractionCaches(previous => (previous ?? []).filter(i => i.id !== interactionId));
@@ -291,6 +327,12 @@ export function useInteractionPanel() {
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
+    if (isTutorialTestId(conversationId)) {
+      tutorial?.removeTutorialConversation();
+      showToast('Conversation deleted', 'success');
+      setArmedConversationDeleteId(null);
+      return;
+    }
     try {
       const group = conversationGroups.find(
         g => g.conversation?.id === conversationId || groupKey(g) === conversationId
@@ -368,12 +410,13 @@ export function useInteractionPanel() {
 
   const getPersonDisplay = (
     personId: string
-  ): { label: string; position: number } => {
+  ): { label: string; position: number; isUser: boolean } => {
     const person = personsById.get(personId);
     const position = positionByPersonId.get(personId) ?? 0;
-    if (person?.name) return { label: person.name, position };
-    if (person) return { label: `Person ${position}`, position };
-    return { label: 'Loading...', position: 0 };
+    const isUser = person?.is_user ?? false;
+    if (person?.name) return { label: person.name, position, isUser };
+    if (person) return { label: isUser ? 'You' : `Person ${position}`, position, isUser };
+    return { label: 'Loading...', position: 0, isUser: false };
   };
 
   const getPersonColor = (personId: string) => {

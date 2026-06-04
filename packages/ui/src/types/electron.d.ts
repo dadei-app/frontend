@@ -138,6 +138,8 @@ export interface ElectronAPI {
     checkAll: () => Promise<DesktopPermissionsMap>;
     check: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;
     request: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;
+    checkTutorial?: (kind: string) => Promise<DesktopPermissionStatus>;
+    openTutorialSettings?: (kind: string) => Promise<void>;
   };
   hotkey?: {
     get: () => Promise<Hotkey>;
