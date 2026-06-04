@@ -103,7 +103,7 @@ export function AboutPanel({ pendingAction, onActionConsumed }: SettingsPanelPro
         <Mic className="h-12 w-12 text-emerald-300/90" strokeWidth={1.5} />
       </div>
       <div>
-        <h1 className="font-brand text-4xl tracking-wider text-zinc-100">Dadei</h1>
+        <h1 className="font-brand text-4xl tracking-wider text-zinc-100">dadei</h1>
         <p className="mt-2 text-base text-zinc-500 font-secondary">
           Version {version || '—'}
           {buildHash ? ` · ${buildHash.slice(0, 7)}` : ''}
