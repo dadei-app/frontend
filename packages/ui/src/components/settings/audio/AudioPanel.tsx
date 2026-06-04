@@ -1,12 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import type { AudioSettings, Modifier } from '@dadei/ui/types/electron';
+import type { Modifier } from '@dadei/ui/types/electron';
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
-import {
-  dispatchAudioSettingsChanged,
-  loadAudioSettings,
-  persistAudioSettings,
-} from '@dadei/ui/lib/audio/audioSettingsEvents';
 import { useMicLevelPreview } from '@dadei/ui/contexts/AudioContext';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
 import {
@@ -28,57 +23,35 @@ const MODIFIER_ONLY = new Set([
   'MetaRight',
 ]);
 
-const DEFAULT_AUDIO: AudioSettings = {
-  inputDeviceId: null,
-  sampleRate: 16000,
-  noiseSuppression: true,
-  noiseSuppressionLevel: 50,
-};
-
-async function enumerateMicInputs(): Promise<MediaDeviceInfo[]> {
-  try {
-    const probe = await navigator.mediaDevices.getUserMedia({ audio: true });
-    probe.getTracks().forEach(t => t.stop());
-  } catch {
-    // Permission denied — enumerateDevices may still return ids without labels.
-  }
-  const all = await navigator.mediaDevices.enumerateDevices();
-  return all.filter(d => d.kind === 'audioinput' && d.deviceId.length > 0);
-}
-
 export function AudioPanel() {
-  const { setHotkey, formatHotkey } = useSystem();
-  const [settings, setSettings] = useState<AudioSettings | null>(null);
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
+  const {
+    audioSettings: settings,
+    updateAudioSettings,
+    setHotkey,
+    formatHotkey,
+    micDevices: devices,
+    refreshMicDevices,
+  } = useSystem();
   const [capturing, setCapturing] = useState(false);
   const [deviceError, setDeviceError] = useState<string | null>(null);
-  const settingsRef = useRef<AudioSettings | null>(null);
-  const micLevel = useMicLevelPreview(Boolean(settings));
+  const micLevel = useMicLevelPreview(true);
 
   useEffect(() => {
-    settingsRef.current = settings;
-  }, [settings]);
-
-  const refreshDevices = useCallback(async () => {
-    try {
-      const inputs = await enumerateMicInputs();
-      setDevices(inputs);
-      setDeviceError(inputs.length === 0 ? 'No microphone devices found.' : null);
-    } catch {
-      setDeviceError('Could not list microphones.');
-    }
-  }, []);
+    void refreshMicDevices();
+  }, [refreshMicDevices]);
 
   useEffect(() => {
-    void loadAudioSettings()
-      .then(setSettings)
-      .catch(() => setSettings(DEFAULT_AUDIO));
-    void refreshDevices();
+    if (devices.length === 0) return;
+    setDeviceError(null);
+  }, [devices.length]);
 
-    const onDeviceChange = () => void refreshDevices();
-    navigator.mediaDevices?.addEventListener('devicechange', onDeviceChange);
-    return () => navigator.mediaDevices?.removeEventListener('devicechange', onDeviceChange);
-  }, [refreshDevices]);
+  useEffect(() => {
+    if (devices.length > 0) return;
+    const t = window.setTimeout(() => {
+      setDeviceError('No microphone devices found.');
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [devices.length]);
 
   useEffect(() => {
     if (!capturing) return;
@@ -104,12 +77,12 @@ export function AudioPanel() {
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [capturing, setHotkey]);
 
-  const applySettings = useCallback(async (patch: Partial<AudioSettings>) => {
-    const next = await persistAudioSettings(patch);
-    setSettings(next);
-    settingsRef.current = next;
-    dispatchAudioSettingsChanged(next);
-  }, []);
+  const applySettings = useCallback(
+    (patch: Parameters<typeof updateAudioSettings>[0]) => {
+      void updateAudioSettings(patch);
+    },
+    [updateAudioSettings],
+  );
 
   const micOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -124,13 +97,9 @@ export function AudioPanel() {
   }, [devices]);
 
   const selectedMic =
-    settings?.inputDeviceId && micOptions.some(o => o.value === settings.inputDeviceId)
+    settings.inputDeviceId && micOptions.some(o => o.value === settings.inputDeviceId)
       ? settings.inputDeviceId
       : '';
-
-  if (!settings) {
-    return <p className="text-base text-zinc-500">Loading audio settings…</p>;
-  }
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
@@ -155,7 +124,7 @@ export function AudioPanel() {
           <MicDeviceList
             options={micOptions}
             value={selectedMic}
-            onChange={id => void applySettings({ inputDeviceId: id || null })}
+            onChange={id => applySettings({ inputDeviceId: id || null })}
           />
         </GridTile>
 
@@ -173,14 +142,14 @@ export function AudioPanel() {
                   ? 'Turn off noise suppression'
                   : 'Turn on noise suppression'
               }
-              onClick={() => void applySettings({ noiseSuppression: !settings.noiseSuppression })}
+              onClick={() => applySettings({ noiseSuppression: !settings.noiseSuppression })}
             />
           }
         >
           <NoiseSuppressionControl
             enabled={settings.noiseSuppression}
             level={settings.noiseSuppressionLevel}
-            onLevelChange={noiseSuppressionLevel => void applySettings({ noiseSuppressionLevel })}
+            onLevelChange={noiseSuppressionLevel => applySettings({ noiseSuppressionLevel })}
             compact
           />
         </GridTile>

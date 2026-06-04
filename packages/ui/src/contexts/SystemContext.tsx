@@ -4,10 +4,27 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import type { BootstrapStatePayload, Hotkey, Modifier } from '@dadei/ui/types/electron';
+import type {
+  AudioSettings,
+  BootstrapStatePayload,
+  Hotkey,
+  Modifier,
+} from '@dadei/ui/types/electron';
+import {
+  AUDIO_SETTINGS_CHANGED,
+  DEFAULT_AUDIO_SETTINGS,
+  dispatchAudioSettingsChanged,
+  loadAudioSettings,
+  persistAudioSettings,
+} from '@dadei/ui/lib/audio/audioSettingsEvents';
+import {
+  enumerateMicInputs,
+  micDevicesHaveLabels,
+} from '@dadei/ui/lib/audio/micDevices';
 
 const DEFAULT_HOTKEY: Hotkey = { key: 'Space', modifiers: [] };
 
@@ -58,6 +75,10 @@ interface SystemContextValue {
   setHotkey: (h: Hotkey) => Promise<void>;
   formatHotkey: (h?: Hotkey) => string;
   matchesHotkey: (event: KeyboardEvent, h?: Hotkey) => boolean;
+  audioSettings: AudioSettings;
+  updateAudioSettings: (patch: Partial<AudioSettings>) => Promise<AudioSettings>;
+  micDevices: MediaDeviceInfo[];
+  refreshMicDevices: () => Promise<void>;
 }
 
 const SystemContext = createContext<SystemContextValue | undefined>(undefined);
@@ -72,6 +93,10 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     phase: isElectron ? 'booting' : 'ready',
   });
   const [hotkey, setHotkeyState] = useState<Hotkey>(DEFAULT_HOTKEY);
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
+  const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
+  const micDevicesRef = useRef(micDevices);
+  micDevicesRef.current = micDevices;
 
   useEffect(() => {
     if (!window.electronAPI?.appGetVersion) return;
@@ -91,6 +116,43 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     if (!window.electronAPI?.hotkey?.get) return;
     void window.electronAPI.hotkey.get().then(setHotkeyState).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    void loadAudioSettings().then(setAudioSettings).catch(() => {});
+    const onSettingsChanged = (event: Event) => {
+      const detail = (event as CustomEvent<AudioSettings>).detail;
+      if (detail) setAudioSettings(detail);
+    };
+    window.addEventListener(AUDIO_SETTINGS_CHANGED, onSettingsChanged);
+    return () => window.removeEventListener(AUDIO_SETTINGS_CHANGED, onSettingsChanged);
+  }, []);
+
+  const updateAudioSettings = useCallback(async (patch: Partial<AudioSettings>) => {
+    const next = await persistAudioSettings(patch);
+    setAudioSettings(next);
+    dispatchAudioSettingsChanged(next);
+    return next;
+  }, []);
+
+  const refreshMicDevices = useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+      return;
+    }
+    try {
+      const skipProbe = micDevicesHaveLabels(micDevicesRef.current);
+      const inputs = await enumerateMicInputs(skipProbe);
+      setMicDevices(inputs);
+    } catch {
+      // Leave prior list when re-enumeration fails.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.mediaDevices) return;
+    const onDeviceChange = () => void refreshMicDevices();
+    navigator.mediaDevices.addEventListener('devicechange', onDeviceChange);
+    return () => navigator.mediaDevices.removeEventListener('devicechange', onDeviceChange);
+  }, [refreshMicDevices]);
 
   const setHotkey = useCallback(async (h: Hotkey) => {
     if (window.electronAPI?.hotkey?.set) {
@@ -139,6 +201,10 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       setHotkey,
       formatHotkey,
       matchesHotkey,
+      audioSettings,
+      updateAudioSettings,
+      micDevices,
+      refreshMicDevices,
     }),
     [
       isElectron,
@@ -149,6 +215,10 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       setHotkey,
       formatHotkey,
       matchesHotkey,
+      audioSettings,
+      updateAudioSettings,
+      micDevices,
+      refreshMicDevices,
     ],
   );
 

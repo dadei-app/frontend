@@ -21,10 +21,8 @@ import {
 } from '@dadei/ui/lib/voice/session/voiceConstants';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
-import {
-  AUDIO_SETTINGS_CHANGED,
-  loadAudioSettings,
-} from '@dadei/ui/lib/audio/audioSettingsEvents';
+import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/audio/audioSettingsEvents';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 
 const COMMAND_START_RETRY_MS = 500;
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
@@ -136,6 +134,7 @@ function buildAudioConstraints(prefs: AudioSettings): MediaTrackConstraints {
 }
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
+  const { audioSettings } = useSystem();
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
   const { state, startListening, notifyCommandUtteranceEnded } = useCommand();
@@ -469,9 +468,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [ensureCommandSessionStarted, onWakeWordDetected, stopMicPreviewStream]);
 
   useEffect(() => {
-    void loadAudioSettings().then(s => {
-      audioSettingsRef.current = s;
-    });
+    audioSettingsRef.current = audioSettings;
+  }, [audioSettings]);
+
+  useEffect(() => {
     const onSettingsChanged = (event: Event) => {
       const detail = (event as CustomEvent<AudioSettings>).detail;
       if (detail) audioSettingsRef.current = detail;
