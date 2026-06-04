@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { authApi } from '@dadei/ui/lib/api/auth';
+import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
+import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import {
   GridTile,
@@ -16,9 +20,8 @@ import {
 import { SegmentedControl } from '@dadei/ui/components/settings/controls';
 import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
 import { buildPopularTimezoneOptions } from './timezonePicker';
-import { ChangePasswordDialog } from './ChangePasswordDialog';
 import { AccountSessionActions } from './AccountSessionActions';
-import { SetPasswordDialog } from './SetPasswordDialog';
+import { PasswordDialog } from './PasswordDialog';
 
 function CenteredField({ children }: { children: React.ReactNode }) {
   return (
@@ -27,11 +30,14 @@ function CenteredField({ children }: { children: React.ReactNode }) {
 }
 
 export function AccountPanel() {
-  const { user: me, updateNetwork, logout } = useAuth();
+  const queryClient = useQueryClient();
+  const { user: me, updateNetwork, logout, saveTokens, refreshUser } = useAuth();
   const authMeQuery = useAuthMeQuery(true);
   const profile = authMeQuery.data ?? me;
   const hasPassword = profile?.has_password === true;
+  const googleConnected = profile?.google_connected === true;
   const { showToast } = useNotifications();
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [name, setName] = useState(me?.name ?? '');
   const [showSetPassword, setShowSetPassword] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -57,6 +63,24 @@ export function AccountPanel() {
 
   const handleLogout = async () => {
     await logout();
+  };
+
+  const handleLinkGoogle = async () => {
+    setLinkingGoogle(true);
+    try {
+      await triggerGoogleOAuth({
+        saveTokens,
+        onSuccess: () => {
+          void refreshUser();
+          void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
+          showToast('Google account linked', 'success');
+        },
+        onError: msg => showToast(msg, 'error'),
+        webNextPath: ASSISTANT_PATH,
+      });
+    } finally {
+      setLinkingGoogle(false);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -179,8 +203,15 @@ export function AccountPanel() {
                   Set a password
                 </button>
               )}
-              {profile?.google_connected && hasPassword ? (
-                <p className="mt-2 text-center text-xs text-zinc-500">Also linked to Google.</p>
+              {!googleConnected ? (
+                <button
+                  type="button"
+                  disabled={linkingGoogle}
+                  onClick={() => void handleLinkGoogle()}
+                  className={cn(settingsButtonClass, 'mt-2 w-full disabled:opacity-50')}
+                >
+                  {linkingGoogle ? 'Connecting…' : 'Link Google account'}
+                </button>
               ) : null}
             </div>
           </CenteredField>
@@ -192,8 +223,8 @@ export function AccountPanel() {
         />
       </SettingsGrid4>
 
-      <SetPasswordDialog open={showSetPassword} onOpenChange={setShowSetPassword} />
-      <ChangePasswordDialog open={showChangePassword} onOpenChange={setShowChangePassword} />
+      <PasswordDialog mode="set" open={showSetPassword} onOpenChange={setShowSetPassword} />
+      <PasswordDialog mode="change" open={showChangePassword} onOpenChange={setShowChangePassword} />
 
       <AlertDialog.Root open={alertOpen} onOpenChange={setAlertOpen}>
         <AlertDialog.Portal>

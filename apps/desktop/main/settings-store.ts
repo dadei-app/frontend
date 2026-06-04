@@ -9,6 +9,7 @@ const DEFAULTS = {
   },
   startup: {
     launchAtLogin: false,
+    startMinimized: false,
     minimizeToTray: false,
   },
   hotkey: {

@@ -46,29 +46,39 @@ export function useAuthMeQuery(enabled = true) {
   });
 }
 
+async function applyPasswordSessionTokens(
+  queryClient: ReturnType<typeof useQueryClient>,
+  saveTokens: (tokens: { accessToken: string; refreshToken: string }) => Promise<void>,
+  refreshUser: () => Promise<void>,
+  data: { access_token: string; refresh_token: string },
+) {
+  await saveTokens({
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+  });
+  await queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+  await refreshUser();
+}
+
 export function useSetPasswordMutation() {
   const queryClient = useQueryClient();
-  const { refreshUser } = useAuth();
+  const { saveTokens, refreshUser } = useAuth();
   return useMutation({
     mutationFn: (newPassword: string) => authApi.setPassword(newPassword),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
-      await refreshUser();
+    onSuccess: async data => {
+      await applyPasswordSessionTokens(queryClient, saveTokens, refreshUser, data);
     },
   });
 }
 
 export function useChangePasswordMutation() {
+  const queryClient = useQueryClient();
   const { saveTokens, refreshUser } = useAuth();
   return useMutation({
     mutationFn: ({ current, next }: { current: string; next: string }) =>
       authApi.changePassword(current, next),
     onSuccess: async data => {
-      await saveTokens({
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-      });
-      void refreshUser();
+      await applyPasswordSessionTokens(queryClient, saveTokens, refreshUser, data);
     },
   });
 }

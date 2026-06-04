@@ -120,9 +120,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getLaunchAtLogin: () => ipcRenderer.invoke('startup:get-launch-at-login') as Promise<boolean>,
     setLaunchAtLogin: (enabled: boolean) =>
       ipcRenderer.invoke('startup:set-launch-at-login', enabled) as Promise<boolean>,
+    getStartMinimized: () => ipcRenderer.invoke('startup:get-start-minimized') as Promise<boolean>,
+    setStartMinimized: (enabled: boolean) =>
+      ipcRenderer.invoke('startup:set-start-minimized', enabled) as Promise<boolean>,
     getMinimizeToTray: () => ipcRenderer.invoke('startup:get-minimize-to-tray') as Promise<boolean>,
     setMinimizeToTray: (enabled: boolean) =>
       ipcRenderer.invoke('startup:set-minimize-to-tray', enabled) as Promise<boolean>,
+  },
+
+  permissions: {
+    checkAll: () => ipcRenderer.invoke('permissions:check-all'),
+    check: (kind: string) => ipcRenderer.invoke('permissions:check', kind),
+    request: (kind: string) => ipcRenderer.invoke('permissions:request', kind),
   },
 
   hotkey: {

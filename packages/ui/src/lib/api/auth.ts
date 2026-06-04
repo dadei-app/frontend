@@ -76,8 +76,11 @@ export const authApi = {
     await api.delete(ENDPOINTS.AUTH_ME);
   },
 
-  setPassword: async (newPassword: string): Promise<void> => {
-    await api.post('/auth/set-password', { new_password: newPassword });
+  setPassword: async (newPassword: string): Promise<TokenResponse> => {
+    const { data } = await api.post<TokenResponse>('/auth/set-password', {
+      new_password: newPassword,
+    });
+    return data;
   },
 
   changePassword: async (

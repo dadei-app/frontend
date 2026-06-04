@@ -92,6 +92,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     mutationFn: (payload: NetworkUpdate) => networkApi.update(payload),
     onSuccess: data => {
       setUser(prev => (prev ? { ...prev, name: data.name, timezone: data.timezone } : prev));
+      queryClient.setQueryData<UserMe | undefined>(queryKeys.authMe, prev =>
+        prev ? { ...prev, name: data.name, timezone: data.timezone } : prev,
+      );
     },
   });
 
@@ -290,9 +293,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applyTokens, queryClient]);
 
   const saveTokens = useCallback(async (newTokens: AuthTokens) => {
-    await persistTokens(newTokens.accessToken, newTokens.refreshToken);
     applyTokens(newTokens);
     setIsAuthenticated(true);
+    await persistTokens(newTokens.accessToken, newTokens.refreshToken);
     await refreshUser();
   }, [applyTokens, refreshUser]);
 

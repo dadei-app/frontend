@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Mic } from 'lucide-react';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { UpdaterCheckResult } from '@dadei/ui/types/electron';
 import {
   SettingsBento,
@@ -66,15 +67,11 @@ function UpdateCheckResultDisplay({ result }: { result: UpdaterCheckResult }) {
 }
 
 export function AboutPanel({ pendingAction, onActionConsumed }: SettingsPanelProps) {
-  const [version, setVersion] = useState('');
-  const [buildHash, setBuildHash] = useState<string | null>(null);
+  const { appVersion, appBuildHash, bootstrapState } = useSystem();
+  const version = appVersion ?? bootstrapState.appVersion ?? '—';
+  const buildHash = appBuildHash;
   const [checkResult, setCheckResult] = useState<UpdaterCheckResult | null>(null);
   const [checking, setChecking] = useState(false);
-
-  useEffect(() => {
-    void window.electronAPI?.appGetVersion?.().then(v => setVersion(v || '—'));
-    void window.electronAPI?.appGetBuildHash?.().then(setBuildHash);
-  }, []);
 
   const handleCheck = useCallback(async () => {
     if (!window.electronAPI?.updaterManualCheck) {

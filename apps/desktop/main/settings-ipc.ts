@@ -1,5 +1,11 @@
 import { app, ipcMain, shell } from 'electron';
 import {
+  checkAllPermissions,
+  checkPermission,
+  requestPermission,
+  type PermissionKind,
+} from './permissions';
+import {
   getAudio,
   getHotkey,
   getStartup,
@@ -7,6 +13,7 @@ import {
   setHotkey,
   setStartupField,
 } from './settings-store';
+import { syncTrayFromSettings } from './tray';
 import { manualUpdaterCheck } from './updater';
 
 export function registerSettingsIpc(): void {
@@ -28,11 +35,21 @@ export function registerSettingsIpc(): void {
     setStartupField('launchAtLogin', enabled);
     return enabled;
   });
+  ipcMain.handle('startup:get-start-minimized', () => getStartup().startMinimized);
+  ipcMain.handle('startup:set-start-minimized', (_e, enabled: boolean) => {
+    setStartupField('startMinimized', enabled);
+    return enabled;
+  });
   ipcMain.handle('startup:get-minimize-to-tray', () => getStartup().minimizeToTray);
   ipcMain.handle('startup:set-minimize-to-tray', (_e, enabled: boolean) => {
     setStartupField('minimizeToTray', enabled);
+    syncTrayFromSettings();
     return enabled;
   });
+
+  ipcMain.handle('permissions:check-all', () => checkAllPermissions());
+  ipcMain.handle('permissions:check', (_e, kind: PermissionKind) => checkPermission(kind));
+  ipcMain.handle('permissions:request', (_e, kind: PermissionKind) => requestPermission(kind));
 
   ipcMain.handle('hotkey:get', () => getHotkey());
   ipcMain.handle('hotkey:set', (_e, h) => setHotkey(h));

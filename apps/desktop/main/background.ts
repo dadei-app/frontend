@@ -13,8 +13,12 @@ import { TokenStorage } from './auth/token-storage';
 import { handleGoogleOAuth } from './auth/oauth-handler';
 import { registerDeviceControlIpcHandlers } from './device-control';
 import { buildApplicationMenu } from './menu';
+import { isAppQuitting, setAppQuitting } from './app-quit';
+import { bindPermissionsMainWindow } from './permissions';
 import { registerSettingsIpc } from './settings-ipc';
+import { configureSessionPermissions } from './session-permissions';
 import { getStartup } from './settings-store';
+import { setTrayMainWindow, syncTrayFromSettings } from './tray';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -77,9 +81,12 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
   }
 
+  bindPermissionsMainWindow(() => mainWindow);
+  setTrayMainWindow(mainWindow);
+
   mainWindow.on('close', event => {
     if (
-      process.platform !== 'darwin' &&
+      !isAppQuitting() &&
       getStartup().minimizeToTray &&
       mainWindow &&
       !mainWindow.isDestroyed()
@@ -90,8 +97,15 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    setTrayMainWindow(null);
     mainWindow = null;
   });
+
+  if (getStartup().startMinimized && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.minimize();
+  }
+
+  syncTrayFromSettings();
 
   const isMacOrLinux = process.platform === 'darwin' || process.platform === 'linux';
   if (!isMacOrLinux) {
@@ -198,6 +212,8 @@ registerDeviceControlIpcHandlers();
 ipcMain.handle('bootstrap:get-state', () => getLastBootstrapState());
 
 app.whenReady().then(async () => {
+  configureSessionPermissions();
+
   const menu = buildApplicationMenu();
   Menu.setApplicationMenu(menu ?? null);
 
@@ -242,6 +258,7 @@ app.on('before-quit', async (event) => {
     return;
   }
 
+  setAppQuitting();
   event.preventDefault();
 
   const forceQuitTimeout = setTimeout(() => {

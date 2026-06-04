@@ -11,6 +11,10 @@ import {
 import type {
   AudioSettings,
   BootstrapStatePayload,
+  DesktopPermissionKind,
+  DesktopPermissionStatus,
+  DesktopPermissionsMap,
+  DesktopStartupSettings,
   Hotkey,
   Modifier,
 } from '@dadei/ui/types/electron';
@@ -32,6 +36,18 @@ import {
 } from '@dadei/ui/lib/platform/electronWindowChrome';
 
 const DEFAULT_HOTKEY: Hotkey = { key: 'Space', modifiers: [] };
+
+const DEFAULT_STARTUP: DesktopStartupSettings = {
+  launchAtLogin: false,
+  startMinimized: false,
+  minimizeToTray: false,
+};
+
+const DEFAULT_PERMISSIONS: DesktopPermissionsMap = {
+  location: 'not-determined',
+  microphone: 'not-determined',
+  screen: 'not-determined',
+};
 
 const MAC_SYMBOLS: Record<Modifier, string> = {
   Meta: '⌘',
@@ -102,11 +118,25 @@ function syncTitleBarCssVars(): void {
 interface SystemContextValue {
   isElectron: boolean;
   platform: Platform;
+  /** Installed app version (desktop IPC); also mirrored on bootstrapState when booting. */
   appVersion: string | null;
+  appBuildHash: string | null;
   bootstrapState: BootstrapStatePayload;
   isBootstrapReady: boolean;
   /** CSS length for layout/modals below the OS title-bar region. */
   desktopTitleBarOffset: string;
+  /** Desktop startup / window behavior (Electron settings store). */
+  startup: DesktopStartupSettings;
+  startupLoaded: boolean;
+  /** System tray for restore-after-hide is Windows/Linux only; macOS uses the Dock. */
+  supportsMinimizeToTray: boolean;
+  setLaunchAtLogin: (enabled: boolean) => Promise<boolean>;
+  setStartMinimized: (enabled: boolean) => Promise<boolean>;
+  setMinimizeToTray: (enabled: boolean) => Promise<boolean>;
+  permissions: DesktopPermissionsMap;
+  permissionsLoaded: boolean;
+  refreshPermissions: () => Promise<void>;
+  requestAppPermission: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;
   hotkey: Hotkey;
   setHotkey: (h: Hotkey) => Promise<void>;
   formatHotkey: (h?: Hotkey) => string;
@@ -131,10 +161,16 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   const isMac = platform === 'darwin';
 
   const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [appBuildHash, setAppBuildHash] = useState<string | null>(null);
   const [bootstrapState, setBootstrapState] = useState<BootstrapStatePayload>({
     phase: isElectron ? 'booting' : 'ready',
   });
+  const [startup, setStartup] = useState<DesktopStartupSettings>(DEFAULT_STARTUP);
+  const [startupLoaded, setStartupLoaded] = useState(!isElectron);
+  const [permissions, setPermissions] = useState<DesktopPermissionsMap>(DEFAULT_PERMISSIONS);
+  const [permissionsLoaded, setPermissionsLoaded] = useState(!isElectron);
   const [hotkey, setHotkeyState] = useState<Hotkey>(DEFAULT_HOTKEY);
+  const supportsMinimizeToTray = isElectron && platform !== 'darwin';
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const [micDevices, setMicDevices] = useState<MediaDeviceInfo[]>([]);
   const [desktopTitleBarOffset, setDesktopTitleBarOffset] = useState(
@@ -184,7 +220,86 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!window.electronAPI?.appGetVersion) return;
     void window.electronAPI.appGetVersion().then(setAppVersion).catch(() => {});
+    void window.electronAPI.appGetBuildHash?.().then(setAppBuildHash).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const api = window.electronAPI?.startup;
+    if (!api) return;
+    let cancelled = false;
+    void Promise.all([
+      api.getLaunchAtLogin(),
+      api.getStartMinimized(),
+      api.getMinimizeToTray(),
+    ])
+      .then(([launchAtLogin, startMinimized, minimizeToTray]) => {
+        if (cancelled) return;
+        setStartup({ launchAtLogin, startMinimized, minimizeToTray });
+        setStartupLoaded(true);
+      })
+      .catch(() => {
+        if (!cancelled) setStartupLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setLaunchAtLogin = useCallback(async (enabled: boolean) => {
+    const api = window.electronAPI?.startup;
+    if (!api) return false;
+    const value = await api.setLaunchAtLogin(enabled);
+    setStartup(prev => ({ ...prev, launchAtLogin: value }));
+    return value;
+  }, []);
+
+  const setStartMinimized = useCallback(async (enabled: boolean) => {
+    const api = window.electronAPI?.startup;
+    if (!api) return false;
+    const value = await api.setStartMinimized(enabled);
+    setStartup(prev => ({ ...prev, startMinimized: value }));
+    return value;
+  }, []);
+
+  const setMinimizeToTray = useCallback(async (enabled: boolean) => {
+    const api = window.electronAPI?.startup;
+    if (!api) return false;
+    const value = await api.setMinimizeToTray(enabled);
+    setStartup(prev => ({ ...prev, minimizeToTray: value }));
+    return value;
+  }, []);
+
+  const refreshPermissions = useCallback(async () => {
+    const api = window.electronAPI?.permissions;
+    if (!api) return;
+    try {
+      const map = await api.checkAll();
+      setPermissions(map);
+      setPermissionsLoaded(true);
+    } catch {
+      setPermissionsLoaded(true);
+    }
+  }, []);
+
+  const requestAppPermission = useCallback(
+    async (kind: DesktopPermissionKind): Promise<DesktopPermissionStatus> => {
+      const api = window.electronAPI?.permissions;
+      if (!api) return 'unsupported';
+      try {
+        const status = await api.request(kind);
+        setPermissions(prev => ({ ...prev, [kind]: status }));
+        return status;
+      } catch {
+        return 'denied';
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!window.electronAPI?.permissions) return;
+    void refreshPermissions();
+  }, [refreshPermissions]);
 
   useEffect(() => {
     if (!isElectron || !window.electronAPI?.onBootstrapState) return;
@@ -278,9 +393,20 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       isElectron,
       platform,
       appVersion,
+      appBuildHash,
       bootstrapState,
       isBootstrapReady: bootstrapState.phase === 'ready',
       desktopTitleBarOffset,
+      startup,
+      startupLoaded,
+      supportsMinimizeToTray,
+      setLaunchAtLogin,
+      setStartMinimized,
+      setMinimizeToTray,
+      permissions,
+      permissionsLoaded,
+      refreshPermissions,
+      requestAppPermission,
       hotkey,
       setHotkey,
       formatHotkey,
@@ -295,8 +421,19 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       isElectron,
       platform,
       appVersion,
+      appBuildHash,
       bootstrapState,
       desktopTitleBarOffset,
+      startup,
+      startupLoaded,
+      supportsMinimizeToTray,
+      setLaunchAtLogin,
+      setStartMinimized,
+      setMinimizeToTray,
+      permissions,
+      permissionsLoaded,
+      refreshPermissions,
+      requestAppPermission,
       hotkey,
       setHotkey,
       formatHotkey,

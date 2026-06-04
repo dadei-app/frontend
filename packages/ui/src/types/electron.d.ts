@@ -21,6 +21,22 @@ export interface Hotkey {
   modifiers: Modifier[];
 }
 
+/** Desktop-only preferences persisted in the Electron main process. */
+export interface DesktopStartupSettings {
+  launchAtLogin: boolean;
+  startMinimized: boolean;
+  minimizeToTray: boolean;
+}
+
+export type DesktopPermissionKind = 'location' | 'microphone' | 'screen';
+export type DesktopPermissionStatus =
+  | 'granted'
+  | 'denied'
+  | 'not-determined'
+  | 'unsupported';
+
+export type DesktopPermissionsMap = Record<DesktopPermissionKind, DesktopPermissionStatus>;
+
 export interface AudioSettings {
   inputDeviceId: string | null;
   sampleRate: 16000 | 44100 | 48000;
@@ -108,8 +124,15 @@ export interface ElectronAPI {
   startup?: {
     getLaunchAtLogin: () => Promise<boolean>;
     setLaunchAtLogin: (enabled: boolean) => Promise<boolean>;
+    getStartMinimized: () => Promise<boolean>;
+    setStartMinimized: (enabled: boolean) => Promise<boolean>;
     getMinimizeToTray: () => Promise<boolean>;
     setMinimizeToTray: (enabled: boolean) => Promise<boolean>;
+  };
+  permissions?: {
+    checkAll: () => Promise<DesktopPermissionsMap>;
+    check: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;
+    request: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;
   };
   hotkey?: {
     get: () => Promise<Hotkey>;
