@@ -19,14 +19,19 @@ const PERMISSION_META: Record<
   screen: { icon: Monitor, title: 'Screen', short: 'Screen' },
 };
 
-function statusLabel(status: DesktopPermissionStatus): string {
+function statusLabel(
+  status: DesktopPermissionStatus,
+  kind: DesktopPermissionKind,
+  geolocationConfigured: boolean,
+): string {
+  if (kind === 'location' && !geolocationConfigured) return 'Needs API key';
   switch (status) {
     case 'granted':
       return 'Allowed';
     case 'denied':
       return 'Denied';
     case 'unsupported':
-      return 'N/A';
+      return 'Unavailable';
     default:
       return 'Tap to allow';
   }
@@ -36,29 +41,33 @@ function PermissionSquare({
   kind,
   status,
   busy,
+  geolocationConfigured,
   onRequest,
 }: {
   kind: DesktopPermissionKind;
   status: DesktopPermissionStatus;
   busy: boolean;
+  geolocationConfigured: boolean;
   onRequest: () => void;
 }) {
   const { icon: Icon, title, short } = PERMISSION_META[kind];
   const granted = status === 'granted';
   const denied = status === 'denied';
+  const needsApiKey = kind === 'location' && !geolocationConfigured;
 
   return (
     <button
       type="button"
-      disabled={busy || status === 'unsupported'}
+      disabled={busy}
       onClick={onRequest}
       className={cn(
         'flex h-full min-h-0 w-full flex-col items-center justify-center gap-2 rounded-lg border border-white/8 bg-zinc-900/35 p-2 text-center transition emerald-glow',
         'hover:border-white/15 hover:bg-zinc-800/50 disabled:cursor-not-allowed disabled:opacity-50',
         granted && 'border-emerald-500/35 bg-emerald-500/8',
         denied && 'border-rose-500/30 bg-rose-500/5',
+        needsApiKey && 'border-amber-500/35 bg-amber-500/5',
       )}
-      aria-label={`${title}: ${statusLabel(status)}`}
+      aria-label={`${title}: ${statusLabel(status, kind, geolocationConfigured)}`}
     >
       <span
         className={cn(
@@ -78,7 +87,7 @@ function PermissionSquare({
           denied && 'text-rose-400/90',
         )}
       >
-        {busy ? 'Checking…' : statusLabel(status)}
+        {busy ? 'Checking…' : statusLabel(status, kind, geolocationConfigured)}
       </span>
     </button>
   );
@@ -111,6 +120,7 @@ export function StartupPanel() {
     supportsMinimizeToTray,
     permissions,
     permissionsLoaded,
+    geolocationConfigured,
     refreshPermissions,
     requestAppPermission,
     setLaunchAtLogin,
@@ -128,6 +138,13 @@ export function StartupPanel() {
     try {
       const status = await requestAppPermission(kind);
       const meta = PERMISSION_META[kind];
+      if (kind === 'location' && !geolocationConfigured) {
+        showToast(
+          'Set GOOGLE_API_KEY in frontend/.env (Geolocation API + billing), then restart the desktop app.',
+          'error',
+        );
+        return;
+      }
       if (status === 'granted') {
         showToast(`${meta.title} access allowed`, 'success');
       } else if (status === 'denied') {
@@ -195,6 +212,7 @@ export function StartupPanel() {
           kind="location"
           status={permissions.location}
           busy={busyKind === 'location'}
+          geolocationConfigured={geolocationConfigured}
           onRequest={() => void requestPermission('location')}
         />
       </GridTile>
@@ -204,6 +222,7 @@ export function StartupPanel() {
           kind="microphone"
           status={permissions.microphone}
           busy={busyKind === 'microphone'}
+          geolocationConfigured={geolocationConfigured}
           onRequest={() => void requestPermission('microphone')}
         />
       </GridTile>
@@ -213,6 +232,7 @@ export function StartupPanel() {
           kind="screen"
           status={permissions.screen}
           busy={busyKind === 'screen'}
+          geolocationConfigured={geolocationConfigured}
           onRequest={() => void requestPermission('screen')}
         />
       </GridTile>

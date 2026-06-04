@@ -37,6 +37,10 @@ export type DesktopPermissionStatus =
 
 export type DesktopPermissionsMap = Record<DesktopPermissionKind, DesktopPermissionStatus>;
 
+export interface DesktopPermissionsMeta {
+  geolocationConfigured: boolean;
+}
+
 export interface AudioSettings {
   inputDeviceId: string | null;
   sampleRate: 16000 | 44100 | 48000;
@@ -130,6 +134,7 @@ export interface ElectronAPI {
     setMinimizeToTray: (enabled: boolean) => Promise<boolean>;
   };
   permissions?: {
+    getMeta: () => Promise<DesktopPermissionsMeta>;
     checkAll: () => Promise<DesktopPermissionsMap>;
     check: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;
     request: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;

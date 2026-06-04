@@ -129,6 +129,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   permissions: {
+    getMeta: () => ipcRenderer.invoke('permissions:get-meta'),
     checkAll: () => ipcRenderer.invoke('permissions:check-all'),
     check: (kind: string) => ipcRenderer.invoke('permissions:check', kind),
     request: (kind: string) => ipcRenderer.invoke('permissions:request', kind),

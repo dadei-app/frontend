@@ -30,6 +30,10 @@ import {
   micDevicesHaveLabels,
 } from '@dadei/ui/lib/audio/micDevices';
 import {
+  checkRendererPermission,
+  requestRendererPermission,
+} from '@dadei/ui/lib/platform/desktopPermissions';
+import {
   DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
   isDesktopTitleBarTarget,
   isElectronDesktop,
@@ -135,6 +139,8 @@ interface SystemContextValue {
   setMinimizeToTray: (enabled: boolean) => Promise<boolean>;
   permissions: DesktopPermissionsMap;
   permissionsLoaded: boolean;
+  /** Electron needs GOOGLE_API_KEY for Chromium geolocation (dev and packaged). */
+  geolocationConfigured: boolean;
   refreshPermissions: () => Promise<void>;
   requestAppPermission: (kind: DesktopPermissionKind) => Promise<DesktopPermissionStatus>;
   hotkey: Hotkey;
@@ -169,6 +175,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   const [startupLoaded, setStartupLoaded] = useState(!isElectron);
   const [permissions, setPermissions] = useState<DesktopPermissionsMap>(DEFAULT_PERMISSIONS);
   const [permissionsLoaded, setPermissionsLoaded] = useState(!isElectron);
+  const [geolocationConfigured, setGeolocationConfigured] = useState(!isElectron);
   const [hotkey, setHotkeyState] = useState<Hotkey>(DEFAULT_HOTKEY);
   const supportsMinimizeToTray = isElectron && platform !== 'darwin';
   const [audioSettings, setAudioSettings] = useState<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
@@ -271,10 +278,26 @@ export function SystemProvider({ children }: { children: ReactNode }) {
 
   const refreshPermissions = useCallback(async () => {
     const api = window.electronAPI?.permissions;
-    if (!api) return;
+    if (!api) {
+      setPermissionsLoaded(true);
+      return;
+    }
     try {
-      const map = await api.checkAll();
-      setPermissions(map);
+      const [mainMap, meta, location, microphone] = await Promise.all([
+        api.checkAll(),
+        api.getMeta?.() ?? Promise.resolve({ geolocationConfigured: false }),
+        checkRendererPermission('location'),
+        checkRendererPermission('microphone'),
+      ]);
+      setGeolocationConfigured(meta.geolocationConfigured);
+      setPermissions({
+        ...mainMap,
+        location,
+        microphone:
+          mainMap.microphone === 'granted' || mainMap.microphone === 'denied'
+            ? mainMap.microphone
+            : microphone,
+      });
       setPermissionsLoaded(true);
     } catch {
       setPermissionsLoaded(true);
@@ -283,6 +306,31 @@ export function SystemProvider({ children }: { children: ReactNode }) {
 
   const requestAppPermission = useCallback(
     async (kind: DesktopPermissionKind): Promise<DesktopPermissionStatus> => {
+      if (kind === 'location' || kind === 'microphone') {
+        try {
+          if (kind === 'location') {
+            const status = await requestRendererPermission('location', { geolocationConfigured });
+            setPermissions(prev => ({ ...prev, location: status }));
+            return status;
+          }
+          let mainStatus: DesktopPermissionStatus = 'not-determined';
+          if (window.electronAPI?.permissions) {
+            mainStatus = await window.electronAPI.permissions.request('microphone');
+          }
+          const rendererStatus = await requestRendererPermission('microphone');
+          const merged =
+            mainStatus === 'granted' || rendererStatus === 'granted'
+              ? 'granted'
+              : mainStatus === 'denied' || rendererStatus === 'denied'
+                ? 'denied'
+                : rendererStatus;
+          setPermissions(prev => ({ ...prev, microphone: merged }));
+          return merged;
+        } catch {
+          return 'denied';
+        }
+      }
+
       const api = window.electronAPI?.permissions;
       if (!api) return 'unsupported';
       try {
@@ -293,7 +341,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
         return 'denied';
       }
     },
-    [],
+    [geolocationConfigured],
   );
 
   useEffect(() => {
@@ -405,6 +453,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       setMinimizeToTray,
       permissions,
       permissionsLoaded,
+      geolocationConfigured,
       refreshPermissions,
       requestAppPermission,
       hotkey,
@@ -432,6 +481,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       setMinimizeToTray,
       permissions,
       permissionsLoaded,
+      geolocationConfigured,
       refreshPermissions,
       requestAppPermission,
       hotkey,

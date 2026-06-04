@@ -37,7 +37,12 @@
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "entitlements": "resources/entitlements.mac.plist",
-    "entitlementsInherit": "resources/entitlements.mac.inherit.plist"
+    "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
+    "extendInfo": {
+      "NSLocationWhenInUseUsageDescription": "Dadei uses your location for timezone and local assistant context.",
+      "NSMicrophoneUsageDescription": "Dadei uses the microphone for voice commands and wake word.",
+      "NSScreenCaptureUsageDescription": "Dadei captures the screen when you ask for screenshots or window context."
+    }
   },
   "linux": {
     "target": ["AppImage"],

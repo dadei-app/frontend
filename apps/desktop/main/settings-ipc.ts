@@ -13,6 +13,7 @@ import {
   setHotkey,
   setStartupField,
 } from './settings-store';
+import { isGeolocationApiKeyConfigured } from './geolocation-config';
 import { syncTrayFromSettings } from './tray';
 import { manualUpdaterCheck } from './updater';
 
@@ -47,6 +48,9 @@ export function registerSettingsIpc(): void {
     return enabled;
   });
 
+  ipcMain.handle('permissions:get-meta', () => ({
+    geolocationConfigured: isGeolocationApiKeyConfigured(),
+  }));
   ipcMain.handle('permissions:check-all', () => checkAllPermissions());
   ipcMain.handle('permissions:check', (_e, kind: PermissionKind) => checkPermission(kind));
   ipcMain.handle('permissions:request', (_e, kind: PermissionKind) => requestPermission(kind));

@@ -1,4 +1,7 @@
 import './env';
+import { configureGeolocationApiKey } from './geolocation-config';
+
+configureGeolocationApiKey();
 import { app, BrowserWindow, dialog, ipcMain, Menu, type WebContents } from 'electron';
 import path from 'path';
 import {
@@ -14,7 +17,6 @@ import { handleGoogleOAuth } from './auth/oauth-handler';
 import { registerDeviceControlIpcHandlers } from './device-control';
 import { buildApplicationMenu } from './menu';
 import { isAppQuitting, setAppQuitting } from './app-quit';
-import { bindPermissionsMainWindow } from './permissions';
 import { registerSettingsIpc } from './settings-ipc';
 import { configureSessionPermissions } from './session-permissions';
 import { getStartup } from './settings-store';
@@ -81,7 +83,6 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
   }
 
-  bindPermissionsMainWindow(() => mainWindow);
   setTrayMainWindow(mainWindow);
 
   mainWindow.on('close', event => {
