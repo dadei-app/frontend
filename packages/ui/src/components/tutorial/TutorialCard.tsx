@@ -16,13 +16,6 @@ import {
 } from './tutorialMotion';
 import type { TutorialStep } from './types';
 
-function tutorialChromeZ(step: TutorialStep): string {
-  if (step.id.startsWith('settings_') || step.id === 'settings_walkthrough') {
-    return 'z-[10050]';
-  }
-  return 'z-[10001]';
-}
-
 const KNOB_CLASS =
   'flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-zinc-900/90 text-zinc-400 shadow-sm transition hover:border-emerald-500/25 hover:bg-zinc-800 hover:text-emerald-200 disabled:pointer-events-none disabled:opacity-30';
 
@@ -441,8 +434,7 @@ export default function TutorialCard({
         role="dialog"
         aria-labelledby="tutorial-card-title"
         className={cn(
-          'pointer-events-auto fixed overflow-visible -translate-x-1/2 -translate-y-1/2',
-          tutorialChromeZ(displayedStep),
+          'pointer-events-auto fixed overflow-visible -translate-x-1/2 -translate-y-1/2 z-[10001]',
         )}
         initial={false}
         animate={{

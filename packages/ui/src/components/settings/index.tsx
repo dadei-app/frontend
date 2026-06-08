@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
@@ -24,6 +24,8 @@ import type { SettingsPanelProps } from './layout';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
+import { isSettingsTutorialStep } from '@dadei/ui/components/tutorial/constants';
+import TutorialSettingsGuide from '@dadei/ui/components/tutorial/TutorialSettingsGuide';
 import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 import { veilEase } from '@dadei/ui/lib/shared/motion';
 
@@ -89,9 +91,14 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const prefersReducedMotion = useReducedMotion();
   const { isElectron, preventDialogDismissOnTitleBar } = useSystem();
   const tutorial = useTutorialContext();
-  const tutorialSettingsStep = Boolean(
-    tutorial?.step.id === 'settings_walkthrough' || tutorial?.step.id.startsWith('settings_'),
-  );
+  const tutorialSettingsStep = Boolean(tutorial && isSettingsTutorialStep(tutorial.step.id));
+
+  const tutorialSectionId = useMemo(() => {
+    if (!tutorialSettingsStep || !tutorial) return null;
+    if (tutorial.step.id === 'settings_intro') return null;
+    const match = tutorial.step.id.match(/^settings_(.+)$/);
+    return match?.[1] ?? null;
+  }, [tutorial?.step.id, tutorialSettingsStep, tutorial]);
 
   const views = visibleViews();
   const isCenteredPanel = view === 'about' || view === 'subscription';
@@ -124,16 +131,19 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   useEffect(() => {
     if (!tutorialSettingsStep || !open) return;
-    const match = tutorial?.step.id.match(/^settings_(.+)$/);
-    if (!match) return;
-    const sectionId = match[1] as SidebarView;
-    if (ALL_VIEWS.some(v => v.id === sectionId)) {
+    if (tutorialSectionId && ALL_VIEWS.some(v => v.id === tutorialSectionId)) {
+      const sectionId = tutorialSectionId as SidebarView;
       if (sectionId === 'startup' && !isElectronDesktop()) return;
       if (sectionId === 'about' && !isElectronDesktop()) return;
       setView(sectionId);
       setPendingAction(undefined);
     }
-  }, [tutorial?.step.id, tutorialSettingsStep, open]);
+  }, [tutorialSectionId, tutorialSettingsStep, open]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && tutorialSettingsStep) return;
+    onOpenChange(nextOpen);
+  };
 
   const ActivePanel = PANELS[view];
 
@@ -157,7 +167,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
       };
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <AnimatePresence>
         {open ? (
           <Dialog.Portal forceMount>
@@ -167,18 +177,12 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={overlayTransition}
-                className={cn(
-                  dialogOverlayClass(isElectron),
-                  tutorialSettingsStep && 'z-[10040]',
-                )}
+                className={dialogOverlayClass(isElectron)}
               />
             </Dialog.Overlay>
             <Dialog.Content
               data-tutorial-target="settings-panel-root"
-              className={cn(
-                isElectron ? dialogContentClass : dialogContentClassWeb,
-                tutorialSettingsStep && 'z-[10045]',
-              )}
+              className={isElectron ? dialogContentClass : dialogContentClassWeb}
               onPointerDownOutside={preventDialogDismissOnTitleBar}
               onInteractOutside={preventDialogDismissOnTitleBar}
             >
@@ -192,6 +196,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   isElectron
                     ? 'h-[min(800px,calc(100vh-var(--assistant-titlebar-offset,2rem)-2rem))]'
                     : 'h-[min(800px,88dvh)]',
+                  tutorialSettingsStep && tutorial?.step.id === 'settings_intro' && 'ring-2 ring-emerald-400/35',
                 )}
               >
                 <div className="relative col-start-1 row-start-1 min-h-0 overflow-hidden rounded-2xl">
@@ -201,56 +206,92 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 <div className="relative col-start-1 row-start-1 flex min-h-0 flex-col">
                   <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
                     <Dialog.Title className="text-xl font-semibold text-zinc-50">Settings</Dialog.Title>
-                    <Dialog.Close asChild>
-                      <button
-                        type="button"
-                        className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
-                        aria-label="Close settings"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </Dialog.Close>
+                    {!tutorialSettingsStep ? (
+                      <Dialog.Close asChild>
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
+                          aria-label="Close settings"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </Dialog.Close>
+                    ) : (
+                      <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200/90">
+                        Guided tour
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex min-h-0 flex-1">
-                    <aside className="w-60 shrink-0 border-r border-white/5 bg-zinc-950/30 p-4">
-                      <nav className="space-y-1">
-                        {views.map(({ id, label, Icon }) => (
-                          <button
-                            key={id}
-                            type="button"
-                            data-tutorial-target={`settings-section-${id}`}
-                            onClick={() => {
-                              setView(id);
-                              setPendingAction(undefined);
-                            }}
-                            className={cn(
-                              'emerald-glow flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-base transition',
-                              view === id
-                                ? 'bg-emerald-500/10 text-emerald-200'
-                                : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
-                            )}
-                          >
-                            <Icon className="h-5 w-5 shrink-0" />
-                            <span>{label}</span>
-                          </button>
-                        ))}
-                      </nav>
-                    </aside>
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="flex min-h-0 flex-1">
+                      <aside
+                        className={cn(
+                          'w-60 shrink-0 border-r border-white/5 bg-zinc-950/30 p-4',
+                          tutorialSettingsStep && 'relative',
+                        )}
+                      >
+                        <nav className="space-y-1">
+                          {views.map(({ id, label, Icon }) => {
+                            const isActiveSection = view === id;
+                            const isTutorialHighlight =
+                              tutorialSettingsStep && tutorialSectionId === id;
+                            return (
+                              <button
+                                key={id}
+                                type="button"
+                                data-tutorial-target={`settings-section-${id}`}
+                                onClick={() => {
+                                  if (tutorialSettingsStep) return;
+                                  setView(id);
+                                  setPendingAction(undefined);
+                                }}
+                                className={cn(
+                                  'emerald-glow relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-base transition',
+                                  isActiveSection
+                                    ? 'bg-emerald-500/10 text-emerald-200'
+                                    : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+                                  tutorialSettingsStep &&
+                                    tutorialSectionId &&
+                                    !isTutorialHighlight &&
+                                    'opacity-45',
+                                  isTutorialHighlight &&
+                                    'bg-emerald-500/15 text-emerald-100 opacity-100 ring-2 ring-emerald-400/45 ring-offset-1 ring-offset-zinc-950/80',
+                                )}
+                              >
+                                {isTutorialHighlight ? (
+                                  <span
+                                    aria-hidden
+                                    className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)]"
+                                  />
+                                ) : null}
+                                <Icon className="h-5 w-5 shrink-0" />
+                                <span>{label}</span>
+                              </button>
+                            );
+                          })}
+                        </nav>
+                      </aside>
 
-                    <main
-                      className={cn(
-                        'flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none p-4 sm:p-5',
-                        isCenteredPanel && 'items-center justify-center',
-                      )}
-                    >
-                      <div className="flex min-h-0 w-full flex-1 flex-col">
-                        <ActivePanel
-                          pendingAction={pendingAction}
-                          onActionConsumed={() => setPendingAction(undefined)}
-                        />
-                      </div>
-                    </main>
+                      <main
+                        className={cn(
+                          'flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none p-4 sm:p-5',
+                          isCenteredPanel && 'items-center justify-center',
+                          tutorialSettingsStep &&
+                            tutorialSectionId &&
+                            'ring-1 ring-inset ring-emerald-500/15',
+                        )}
+                      >
+                        <div className="flex min-h-0 w-full flex-1 flex-col">
+                          <ActivePanel
+                            pendingAction={pendingAction}
+                            onActionConsumed={() => setPendingAction(undefined)}
+                          />
+                        </div>
+                      </main>
+                    </div>
+
+                    <TutorialSettingsGuide />
                   </div>
                 </div>
               </motion.div>

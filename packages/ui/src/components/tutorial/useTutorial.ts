@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@dadei/ui/lib/api/http/client';
 import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import { isSettingsTutorialStep } from './constants';
 import { useTutorialContext, TutorialProvider } from './TutorialContext';
 import type { ActionTrigger } from './types';
 
@@ -44,8 +45,10 @@ export function useTutorial() {
 
   useEffect(() => {
     scrollTargetIntoView(ctx.step.targetKey);
-    if (ctx.step.id.startsWith('settings_') || ctx.step.targetKey?.startsWith('settings-section-')) {
+    if (isSettingsTutorialStep(ctx.step.id)) {
       ctx.setOpenSettingsForTutorial(true);
+    } else if (ctx.openSettingsForTutorial) {
+      ctx.setOpenSettingsForTutorial(false);
     }
   }, [ctx.step, scrollTargetIntoView, ctx]);
 

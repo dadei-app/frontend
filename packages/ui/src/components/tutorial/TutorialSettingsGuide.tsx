@@ -1,0 +1,95 @@
+import { useEffect } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { cn } from '@dadei/ui/lib/shared/cn';
+import { isSettingsTutorialStep } from './constants';
+import { TutorialCardNav } from './TutorialCard';
+import { useTutorialContext } from './TutorialContext';
+
+function settingsStepsFrom(steps: { id: string }[]) {
+  return steps.filter(s => isSettingsTutorialStep(s.id));
+}
+
+export default function TutorialSettingsGuide() {
+  const ctx = useTutorialContext();
+  const reduceMotion = useReducedMotion();
+
+  const step = ctx?.step;
+  const active = Boolean(step && isSettingsTutorialStep(step.id));
+
+  const settingsSteps = ctx ? settingsStepsFrom(ctx.steps) : [];
+  const progressIndex = step ? settingsSteps.findIndex(s => s.id === step.id) : -1;
+  const canBack = (ctx?.currentStepIndex ?? 0) > 0;
+  const canNext = step?.kind === 'spotlight';
+
+  useEffect(() => {
+    if (!active || !ctx) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' && canNext) {
+        e.preventDefault();
+        ctx.next();
+      }
+      if (e.key === 'ArrowLeft' && canBack) {
+        e.preventDefault();
+        ctx.back();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, canBack, canNext, ctx]);
+
+  if (!active || !ctx || !step) return null;
+
+  return (
+    <div
+      data-tutorial-settings-guide
+      className={cn(
+        'shrink-0 border-t border-emerald-500/20',
+        'bg-gradient-to-t from-zinc-950/95 via-zinc-950/90 to-zinc-950/75',
+        'px-5 py-4 backdrop-blur-xl',
+      )}
+    >
+      <div className="flex items-start gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex items-center gap-2">
+            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-emerald-400/90">
+              Tutorial
+            </span>
+            <span className="text-xs tabular-nums text-zinc-500">
+              {progressIndex + 1} / {settingsSteps.length}
+            </span>
+          </div>
+          <motion.div
+            key={step.id}
+            initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: 'easeOut' }}
+          >
+            <h3 className="font-primary text-base font-semibold leading-snug text-zinc-50">
+              {step.title}
+            </h3>
+            <p className="mt-1 text-sm leading-relaxed text-zinc-400 font-secondary">{step.body}</p>
+          </motion.div>
+          <div className="mt-3 flex flex-wrap gap-1.5" aria-hidden>
+            {settingsSteps.map((s, i) => (
+              <span
+                key={s.id}
+                className={cn(
+                  'h-1.5 rounded-full transition-all duration-300',
+                  i === progressIndex ? 'w-6 bg-emerald-400/90' : 'w-1.5 bg-zinc-600/80',
+                )}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="shrink-0 pt-1">
+          <TutorialCardNav
+            canBack={canBack}
+            canNext={Boolean(canNext)}
+            onBack={ctx.back}
+            onNext={ctx.next}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}

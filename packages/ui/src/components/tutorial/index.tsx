@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import {
+  isSettingsTutorialStep,
   TUTORIAL_PLATFORM,
   TUTORIAL_TEST_BANNER_ID,
   TUTORIAL_TEST_BANNER_TITLE,
@@ -285,6 +286,10 @@ function TutorialOverlayInner() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [canNext, next, back]);
+
+  if (isSettingsTutorialStep(step.id)) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-[9999] pointer-events-none">

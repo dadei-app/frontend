@@ -143,27 +143,35 @@ const CORE_STEPS: TutorialStep[] = [
   },
 ];
 
+export function isSettingsTutorialStep(stepId: string): boolean {
+  return stepId === 'settings_intro' || stepId.startsWith('settings_');
+}
+
 function settingsSubSteps(): TutorialStep[] {
-  return SETTINGS_SECTIONS.map(section => ({
+  const intro: TutorialStep = {
+    id: 'settings_intro',
+    kind: 'spotlight',
+    title: 'Settings',
+    body: 'Everything you can configure lives here. Use the arrows to walk through each section.',
+    targetKey: 'settings-panel-root',
+  };
+  const sections = SETTINGS_SECTIONS.map(section => ({
     id: `settings_${section.id}`,
     kind: 'spotlight' as const,
     title: section.title,
     body: section.body,
     targetKey: `settings-section-${section.id}`,
   }));
+  return [intro, ...sections];
 }
 
-/** Full step list with settings_walkthrough expanded into per-section spotlights. */
+/** Full step list with settings_walkthrough expanded into in-panel tour steps. */
 export function buildTutorialSteps(): TutorialStep[] {
   const settingsIndex = CORE_STEPS.findIndex(s => s.id === 'settings_walkthrough');
   if (settingsIndex < 0) return CORE_STEPS;
   const before = CORE_STEPS.slice(0, settingsIndex);
   const after = CORE_STEPS.slice(settingsIndex + 1);
-  const subs = settingsSubSteps();
-  if (subs.length > 0) {
-    subs[0] = { ...subs[0], targetKey: 'settings-panel-root' };
-  }
-  return [...before, ...subs, ...after];
+  return [...before, ...settingsSubSteps(), ...after];
 }
 
 export const STEPS = buildTutorialSteps();

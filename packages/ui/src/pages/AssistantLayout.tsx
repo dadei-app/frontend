@@ -5,6 +5,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
 import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { TutorialOverlayContent, TutorialProvider } from '@dadei/ui/components/tutorial';
+import { isSettingsTutorialStep } from '@dadei/ui/components/tutorial/constants';
 import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
@@ -68,6 +69,14 @@ function TutorialSettingsBridge({
       setSettingsOpen(true);
     }
   }, [tutorial?.openSettingsForTutorial, setSettingsOpen]);
+
+  useLayoutEffect(() => {
+    if (!tutorial || settingsOpen === false) return;
+    if (!isSettingsTutorialStep(tutorial.step.id)) {
+      setSettingsOpen(false);
+    }
+  }, [tutorial?.step.id, settingsOpen, setSettingsOpen, tutorial]);
+
   return null;
 }
 
