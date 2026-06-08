@@ -1,25 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
+import {
+  TutorialProvider,
+  useTutorial,
+  useTutorialContext,
+} from '@dadei/ui/contexts/TutorialContext';
 import {
   backdropBlurForStep,
   isMeetDadeiStep,
   isSettingsTutorialStep,
-  TUTORIAL_PLATFORM,
   TUTORIAL_TEST_BANNER_ID,
   TUTORIAL_TEST_BANNER_TITLE,
-  TUTORIAL_TEST_TOAST_MESSAGE,
-} from './constants';
-import { permissionsForPlatform, type PermissionEntry } from './permissionsRegistry';
-import TutorialCard from './TutorialCard';
-import ArrowLayer from './ArrowLayer';
-import { TutorialProvider, useTutorialContext } from './TutorialContext';
-import { TUTORIAL_MORPH_TRANSITION } from './tutorialMotion';
-import { useTutorial } from './useTutorial';
-import type { TutorialStep } from './types';
-import { isTutorialClickAllowed } from './tutorialClickGuard';
-import TutorialVoiceCommandBridge from './TutorialVoiceCommandBridge';
+} from '@dadei/ui/lib/tutorial/constants';
+import {
+  permissionsForPlatform,
+  toTutorialPlatform,
+  type PermissionEntry,
+} from '@dadei/ui/lib/tutorial/permissionsRegistry';
+import { isTutorialClickAllowed } from '@dadei/ui/lib/tutorial/clickGuard';
+import { TUTORIAL_MORPH_TRANSITION } from '@dadei/ui/lib/tutorial/motion';
+import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
+import { cn } from '@dadei/ui/lib/shared/cn';
+import Card from './Card';
+import VoiceCommandBridge from './VoiceCommandBridge';
 
 const SPOTLIGHT_BACKDROP_COLOR = 'rgba(0,0,0,0.12)';
 const ACTION_BACKDROP_COLOR = 'rgba(0,0,0,0.02)';
@@ -126,7 +131,12 @@ function PermissionsContent({
   onPermissionsReady: () => void;
   onAdvanceAfterGrant: () => void;
 }) {
-  const entries = permissionsForPlatform(TUTORIAL_PLATFORM);
+  const { isElectron, platform } = useSystem();
+  const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+  const entries = useMemo(
+    () => permissionsForPlatform(tutorialPlatform, isElectron),
+    [tutorialPlatform, isElectron],
+  );
   const [statusById, setStatusById] = useState<Record<string, PermissionUiStatus>>({});
 
   useEffect(() => {
@@ -230,7 +240,7 @@ function PermissionsContent({
   );
 }
 
-function TutorialClickGuard({ step }: { step: TutorialStep }) {
+function ClickGuard({ step }: { step: TutorialStep }) {
   useEffect(() => {
     if (step.kind !== 'action') return;
 
@@ -251,8 +261,7 @@ function TutorialClickGuard({ step }: { step: TutorialStep }) {
   return null;
 }
 
-function TutorialOverlayInner() {
-  const cardRef = useRef<HTMLDivElement>(null);
+function OverlayInner() {
   const {
     step,
     next,
@@ -261,7 +270,6 @@ function TutorialOverlayInner() {
     permissionsResolved,
     isCurrentStepActionComplete,
     currentStepIndex,
-    showTestNotifications,
     wakeHintVisible,
     isActive,
   } = useTutorial();
@@ -307,24 +315,17 @@ function TutorialOverlayInner() {
   if (isMeetDadeiStep(step.id)) {
     return (
       <div className="fixed inset-0 z-[9999] pointer-events-none">
-        <TutorialClickGuard step={step} />
-        <TutorialCard
-          step={step}
-          canBack={canBack}
-          canNext={canNext}
-          onBack={back}
-          onNext={next}
-        />
+        <ClickGuard step={step} />
+        <Card step={step} canBack={canBack} canNext={canNext} onBack={back} onNext={next} />
       </div>
     );
   }
 
   return (
     <div className="fixed inset-0 z-[9999] pointer-events-none">
-      <TutorialClickGuard step={step} />
+      <ClickGuard step={step} />
       <Backdrop step={step} />
-      <ArrowLayer step={step} cardRef={cardRef} />
-      <TutorialCard
+      <Card
         step={step}
         showWakeHint={wakeHintVisible && wakeHintShown}
         canBack={canBack}
@@ -338,27 +339,15 @@ function TutorialOverlayInner() {
             onAdvanceAfterGrant={acknowledgePermissions}
           />
         ) : null}
-      </TutorialCard>
+      </Card>
     </div>
   );
 }
 
-/** Fires layout-tour toast/banner when that step is active. */
-export function TutorialNotificationsBridge() {
+function NotificationsBridge() {
   const ctx = useTutorialContext();
-  const { showToast, showBanner, dismissBanner, toasts, banners } = useNotifications();
-  const toastShownRef = useRef(false);
+  const { showBanner, dismissBanner, banners } = useNotifications();
   const bannerIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!ctx?.showTestNotifications) {
-      toastShownRef.current = false;
-      return;
-    }
-    if (toastShownRef.current) return;
-    toastShownRef.current = true;
-    showToast(TUTORIAL_TEST_TOAST_MESSAGE, 'info');
-  }, [ctx?.showTestNotifications, showToast]);
 
   useEffect(() => {
     if (!ctx?.showTestNotifications) {
@@ -393,16 +382,15 @@ export function TutorialNotificationsBridge() {
       dismissBanner(bannerId);
       bannerIdRef.current = null;
     };
-  }, [ctx?.showTestNotifications, showBanner, dismissBanner]);
+  }, [ctx?.showTestNotifications, showBanner, dismissBanner, ctx]);
 
   useEffect(() => {
     if (!ctx?.showTestNotifications || ctx.step.actionTrigger !== 'notifications-dismissed') return;
-    const toastGone = !toasts.some(t => t.message === TUTORIAL_TEST_TOAST_MESSAGE);
     const bannerGone = !banners.some(b => b.id === TUTORIAL_TEST_BANNER_ID);
-    if (toastGone && bannerGone) {
+    if (bannerGone) {
       ctx.markActionFired('notifications-dismissed');
     }
-  }, [ctx, toasts, banners]);
+  }, [ctx, banners]);
 
   return null;
 }
@@ -411,9 +399,9 @@ export function TutorialNotificationsBridge() {
 export function TutorialOverlayContent() {
   return (
     <>
-      <TutorialNotificationsBridge />
-      <TutorialVoiceCommandBridge />
-      <TutorialOverlayInner />
+      <NotificationsBridge />
+      <VoiceCommandBridge />
+      <OverlayInner />
     </>
   );
 }
@@ -425,5 +413,3 @@ export function TutorialOverlay() {
     </TutorialProvider>
   );
 }
-
-export { TutorialProvider } from './useTutorial';

@@ -1,4 +1,4 @@
-export type Platform = 'desktop-darwin' | 'desktop-win32' | 'desktop-linux' | 'web';
+export type TutorialPlatform = 'desktop-darwin' | 'desktop-win32' | 'desktop-linux' | 'web';
 
 export type StepKind = 'spotlight' | 'action';
 

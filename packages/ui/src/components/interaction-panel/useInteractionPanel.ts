@@ -14,15 +14,15 @@ import {
 } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
-import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
 import {
   TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS,
   TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS,
-} from '@dadei/ui/components/tutorial/constants';
+} from '@dadei/ui/lib/tutorial/constants';
 import {
   isTutorialTestId,
   TUTORIAL_TEST_CONVERSATION_ID,
-} from '@dadei/ui/components/tutorial/testData';
+} from '@dadei/ui/lib/tutorial/testData';
 import { ORPHAN_KEY } from './constants';
 
 const PERSON_COLOR_SHADES = [

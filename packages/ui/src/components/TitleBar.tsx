@@ -1,18 +1,15 @@
 import type { CSSProperties } from 'react';
 import { cn } from '@dadei/ui/lib/shared/cn';
-import { DESKTOP_TITLEBAR_ATTR } from '@dadei/ui/contexts/SystemContext';
-import {
-  DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
-  isElectronDesktop,
-  isElectronMac,
-} from '@dadei/ui/lib/platform/electronWindowChrome';
+import { DESKTOP_TITLEBAR_ATTR, useSystem } from '@dadei/ui/contexts/SystemContext';
+import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS } from '@dadei/ui/lib/platform/electronWindowChrome';
 
 /**
  * Draggable title-bar region only (Electron custom-title-bar tutorial / WCO pattern).
  * Window min/max/close are native via titleBarOverlay (win/linux) or traffic lights (mac).
  */
-export function DesktopTitleBarStrip() {
-  if (!isElectronDesktop()) return null;
+export function TitleBar() {
+  const { isElectron, isMac } = useSystem();
+  if (!isElectron) return null;
 
   return (
     <header
@@ -33,7 +30,7 @@ export function DesktopTitleBarStrip() {
       <span
         className={cn(
           'pointer-events-none mx-auto select-none font-semibold tracking-tight text-zinc-500 font-primary',
-          isElectronMac() ? 'text-sm leading-none' : 'text-base',
+          isMac ? 'text-sm leading-none' : 'text-base',
         )}
       >
         dadei

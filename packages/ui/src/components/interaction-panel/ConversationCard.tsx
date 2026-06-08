@@ -5,7 +5,7 @@ import { accordionEase } from './constants';
 import { formatLocalDate, getConversationTitle } from './conversationUtils';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import InteractionCard from './InteractionCard';
-import { useTutorialTargetInteractive } from '@dadei/ui/components/tutorial/tutorialClickGuard';
+import { useTutorialTargetInteractive } from '@dadei/ui/contexts/TutorialContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 function ConversationExpandedSummary({ group }: { group: ConversationGroupView }) {

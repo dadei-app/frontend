@@ -9,12 +9,11 @@ import {
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@dadei/ui/lib/shared/cn';
-import TutorialStepCardFrame from './TutorialStepCardFrame';
 import {
   TUTORIAL_MORPH_MS,
   TUTORIAL_MORPH_TRANSITION,
-} from './tutorialMotion';
-import type { TutorialStep } from './types';
+} from '@dadei/ui/lib/tutorial/motion';
+import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
 
 const KNOB_CLASS =
   'flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-zinc-900/90 text-zinc-400 shadow-sm transition hover:border-emerald-500/25 hover:bg-zinc-800 hover:text-emerald-200 disabled:pointer-events-none disabled:opacity-30';
@@ -35,7 +34,49 @@ type Phase = 'idle' | 'morph';
 type BoxSize = { width: number; height: number };
 type Point = { top: number; left: number };
 
-export function TutorialCardNav({
+/** Pulsing emerald ring around step card content. */
+function StepCardFrame({ children, className }: { children: ReactNode; className?: string }) {
+  const reduceMotion = useReducedMotion();
+
+  return (
+    <div
+      className={cn(
+        'relative overflow-visible rounded-2xl border border-emerald-200/60 bg-zinc-950/80',
+        'shadow-[0_0_0_1px_rgba(167,243,208,0.3)_inset,0_18px_50px_-18px_rgba(16,185,129,0.45)]',
+        'backdrop-blur-xl',
+        className,
+      )}
+    >
+      <motion.span
+        aria-hidden
+        className="pointer-events-none absolute inset-0 z-0 rounded-2xl border border-emerald-200/45"
+        style={{ transformOrigin: '50% 50%' }}
+        initial={{ scale: 1, opacity: 0.85 }}
+        animate={
+          reduceMotion
+            ? { scale: 1, opacity: 0.5 }
+            : {
+                scale: [1, 1, 1.12, 1.12, 1, 1],
+                opacity: [0.85, 0.85, 0.25, 0.25, 0.85, 0.85],
+              }
+        }
+        transition={
+          reduceMotion
+            ? { duration: 0 }
+            : {
+                duration: 8,
+                times: [0, 0.1, 0.22, 0.52, 0.72, 1],
+                repeat: Infinity,
+                ease: 'easeInOut',
+              }
+        }
+      />
+      <div className="relative z-10 p-5">{children}</div>
+    </div>
+  );
+}
+
+export function CardNav({
   canBack,
   canNext,
   onBack,
@@ -102,7 +143,6 @@ function fitsViewport(pos: { top: number; left: number }, cardW: number, cardH: 
   );
 }
 
-/** Placement candidates tuned for shell vs panel row targets (stable, predictable). */
 function placementCandidates(rect: DOMRect, cardW: number, cardH: number) {
   const vw = window.innerWidth;
   const cx = rect.left + rect.width / 2;
@@ -141,19 +181,19 @@ function placementForRect(
 
   if (placement === 'left') {
     const pos = { top: rowAlignedY, left: rect.left - cardW - CARD_MARGIN };
-    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+    return clampTopLeft(pos, cardW, cardH);
   }
   if (placement === 'right') {
     const pos = { top: rowAlignedY, left: rect.right + CARD_MARGIN };
-    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+    return clampTopLeft(pos, cardW, cardH);
   }
   if (placement === 'below') {
     const pos = { top: rect.bottom + CARD_MARGIN, left: cx - cardW / 2 };
-    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+    return clampTopLeft(pos, cardW, cardH);
   }
   if (placement === 'above') {
     const pos = { top: rect.top - cardH - CARD_MARGIN, left: cx - cardW / 2 };
-    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+    return clampTopLeft(pos, cardW, cardH);
   }
 
   for (const pos of placementCandidates(rect, cardW, cardH)) {
@@ -201,7 +241,7 @@ function defaultBoxSize(step: TutorialStep): BoxSize {
   return { width: cardWidthFor(step), height: 200 };
 }
 
-function TutorialCardBody({
+function CardBody({
   step,
   permissionsChildren,
 }: {
@@ -222,9 +262,8 @@ function TutorialCardBody({
   );
 }
 
-function TutorialCardContent({
+function CardContent({
   step,
-  showWakeHint,
   permissionsChildren,
   canBack,
   canNext,
@@ -234,7 +273,6 @@ function TutorialCardContent({
   interactive,
 }: {
   step: TutorialStep;
-  showWakeHint?: boolean;
   permissionsChildren?: ReactNode;
   canBack: boolean;
   canNext: boolean;
@@ -248,17 +286,17 @@ function TutorialCardContent({
       <div
         className={`absolute top-0 right-0 z-20 ${interactive ? 'pointer-events-auto' : 'pointer-events-none'}`}
       >
-        <TutorialCardNav canBack={canBack} canNext={canNext} onBack={onBack} onNext={onNext} />
+        <CardNav canBack={canBack} canNext={canNext} onBack={onBack} onNext={onNext} />
       </div>
       <h2 id={titleId} className="sr-only">
         {step.title}
       </h2>
-      <TutorialCardBody step={step} permissionsChildren={permissionsChildren} />
+      <CardBody step={step} permissionsChildren={permissionsChildren} />
     </>
   );
 }
 
-export default function TutorialCard({
+export default function Card({
   step,
   showWakeHint,
   canBack,
@@ -343,7 +381,6 @@ export default function TutorialCard({
     setReady(true);
   }, [step, children, phase, showWakeHint, applyLayout]);
 
-  /** Permissions list layout settles after mount — remeasure once without interrupting morph. */
   useLayoutEffect(() => {
     if (phase !== 'idle' || step.id !== 'permissions') return;
     const id = requestAnimationFrame(() => {
@@ -365,11 +402,19 @@ export default function TutorialCard({
     if (phase !== 'idle') return;
     const onLayout = () => applyLayout(displayedStep);
     window.addEventListener('resize', onLayout);
-    window.addEventListener('scroll', onLayout, true);
-    return () => {
-      window.removeEventListener('resize', onLayout);
-      window.removeEventListener('scroll', onLayout, true);
-    };
+    return () => window.removeEventListener('resize', onLayout);
+  }, [phase, applyLayout, displayedStep]);
+
+  useEffect(() => {
+    if (phase !== 'idle') return;
+    const anchorKey = displayedStep.cardAnchorKey ?? displayedStep.targetKey;
+    if (!anchorKey) return;
+    const anchor = document.querySelector(`[data-tutorial-target="${anchorKey}"]`);
+    if (!anchor) return;
+    const onAnchorLayout = () => applyLayout(displayedStep);
+    const ro = new ResizeObserver(onAnchorLayout);
+    ro.observe(anchor);
+    return () => ro.disconnect();
   }, [phase, applyLayout, displayedStep]);
 
   useEffect(() => {
@@ -402,11 +447,10 @@ export default function TutorialCard({
         aria-hidden
         style={{ width: cardWidthFor(step) }}
       >
-        <TutorialStepCardFrame>
+        <StepCardFrame>
           <div className="relative">
-            <TutorialCardContent
+            <CardContent
               step={step}
-              showWakeHint={showWakeHint}
               permissionsChildren={step.id === 'permissions' ? children : undefined}
               canBack={false}
               canNext={false}
@@ -416,7 +460,7 @@ export default function TutorialCard({
               interactive={false}
             />
           </div>
-        </TutorialStepCardFrame>
+        </StepCardFrame>
       </div>
 
       <motion.div
@@ -443,7 +487,7 @@ export default function TutorialCard({
           opacity: { duration: reduceMotion ? 0 : 0.1 },
         }}
       >
-        <TutorialStepCardFrame className="h-full w-full">
+        <StepCardFrame className="h-full w-full">
           <div className="relative">
             <motion.div
               className="relative"
@@ -452,9 +496,8 @@ export default function TutorialCard({
               transition={{ opacity: textTransition }}
               style={{ pointerEvents: phase === 'idle' ? 'auto' : 'none' }}
             >
-              <TutorialCardContent
+              <CardContent
                 step={displayedStep}
-                showWakeHint={showWakeHint}
                 permissionsChildren={
                   displayedStep.id === 'permissions' ? displayedChildren : undefined
                 }
@@ -467,7 +510,7 @@ export default function TutorialCard({
               />
             </motion.div>
           </div>
-        </TutorialStepCardFrame>
+        </StepCardFrame>
       </motion.div>
     </>
   );

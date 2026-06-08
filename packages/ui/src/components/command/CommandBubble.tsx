@@ -342,11 +342,11 @@ export default function CommandBubble() {
     setEdgeMaskStyle(stackEdgeMaskStyle(fadeTop, fadeBottom));
   }, []);
 
-  const liveTurnActive = userBubbleText.trim().length > 0;
   const assistantIsBusy = state === 'thinking' || state === 'responding';
-  const showAssistant =
-    liveTurnActive &&
-    (assistantIsBusy || assistantBubbleText.trim().length > 0 || !!assistantStatusLine);
+  const hasAssistantLive =
+    assistantIsBusy || assistantBubbleText.trim().length > 0 || !!assistantStatusLine;
+  const liveTurnActive = userBubbleText.trim().length > 0 || hasAssistantLive;
+  const showAssistant = liveTurnActive && hasAssistantLive;
 
   const userBubble = liveTurnActive ? (
     <GlassBubble
@@ -360,7 +360,7 @@ export default function CommandBubble() {
   const assistantBubble = showAssistant ? (
     <GlassBubble
       role="assistant"
-      label="Dadei"
+      label="dadei"
       text={assistantBubbleText}
       state={state}
       assistantStatus={assistantBubbleStatus}
@@ -436,7 +436,7 @@ export default function CommandBubble() {
                   {turn.assistantText.trim() ? (
                     <GlassBubble
                       role="assistant"
-                      label="Dadei"
+                      label="dadei"
                       text={turn.assistantText}
                       state="follow_up"
                       assistantStatus="done"

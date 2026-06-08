@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock3, CloudSun, Globe, Map as MapIcon } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { useIntegrationsStatusQuery } from '@dadei/ui/lib/query/queryHooks';
@@ -76,6 +77,7 @@ function googleStatus(
 export function IntegrationsPanel() {
   const queryClient = useQueryClient();
   const { user: me, refreshUser, saveTokens } = useAuth();
+  const { isElectron } = useSystem();
   const integrationsStatusQuery = useIntegrationsStatusQuery(true);
   const [googleConnectError, setGoogleConnectError] = useState('');
   const [connectingGoogle, setConnectingGoogle] = useState(false);
@@ -109,7 +111,6 @@ export function IntegrationsPanel() {
 
   const handleGoogleConnect = async () => {
     setGoogleConnectError('');
-    const isElectron = Boolean(window.electronAPI);
     if (isElectron) setConnectingGoogle(true);
     try {
       await triggerGoogleOAuth({

@@ -3,11 +3,10 @@ import { motion } from 'framer-motion';
 import { Mic } from 'lucide-react';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { BootstrapPhase } from '@dadei/ui/types/electron';
-import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 const PHASE_LABELS: Record<BootstrapPhase, string> = {
-  booting: 'Starting Dadei…',
+  booting: 'Starting dadei…',
   checking_server: 'Connecting to backend…',
   checking_updates: 'Checking for updates…',
   downloading: 'Downloading update…',
@@ -40,7 +39,7 @@ function openDownloadUrl(url: string) {
 }
 
 export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string }) {
-  const { bootstrapState, isBootstrapReady } = useSystem();
+  const { bootstrapState, isBootstrapReady, isElectron } = useSystem();
   const { phase, progress, message, downloadUrl } = bootstrapState;
 
   const subtitle = useMemo(
@@ -56,7 +55,7 @@ export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string 
     <motion.div
       className={cn(
         'z-50 flex flex-col bg-black',
-        isElectronDesktop() ? 'absolute inset-0' : 'fixed inset-0',
+        isElectron ? 'absolute inset-0' : 'fixed inset-0',
       )}
       animate={{ opacity: isBootstrapReady ? 0 : 1 }}
       transition={{ duration: 0.25 }}
@@ -114,7 +113,7 @@ export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string 
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center px-6">
         <Mic className="mb-4 h-12 w-12 text-emerald-50" strokeWidth={1.5} aria-hidden />
-        <h1 className="font-brand text-4xl tracking-wider text-emerald-50">Dadei</h1>
+        <h1 className="font-brand text-4xl tracking-wider text-emerald-50">dadei</h1>
 
         {subtitle ? (
           <motion.p

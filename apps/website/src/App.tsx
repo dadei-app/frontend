@@ -12,8 +12,8 @@ import { NotificationProvider } from '@dadei/ui/contexts/NotificationContext';
 import AssistantLayout from '@dadei/ui/pages/AssistantLayout';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@dadei/ui/pages/LoginPage';
-import SubscribePage from '@dadei/ui/pages/SubscribePage';
-import AuthOAuthCallbackPage from '@/pages/AuthOAuthCallbackPage';
+import OAuthCallback from '@dadei/ui/pages/OAuthCallback';
+import { OAUTH_CALLBACK_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 
 export function App() {
   const [queryClient] = useState(() => createQueryClient());
@@ -30,7 +30,7 @@ export function App() {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
-              <Route path="/auth/callback" element={<AuthOAuthCallbackPage />} />
+              <Route path={OAUTH_CALLBACK_PATH} element={<OAuthCallback />} />
               <Route path="/app" element={<Navigate to="/assistant" replace />} />
               <Route
                 path="/assistant"
@@ -44,8 +44,6 @@ export function App() {
                   </ServiceProvider>
                 }
               />
-              <Route path="/subscribe" element={<SubscribePage />} />
-
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </NotificationProvider>

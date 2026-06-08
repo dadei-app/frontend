@@ -1,15 +1,15 @@
 import { useEffect } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { cn } from '@dadei/ui/lib/shared/cn';
-import { isSettingsTutorialStep } from './constants';
-import { TutorialCardNav } from './TutorialCard';
-import { useTutorialContext } from './TutorialContext';
+import { CardNav } from './Card';
 
 function settingsStepsFrom(steps: { id: string }[]) {
   return steps.filter(s => isSettingsTutorialStep(s.id));
 }
 
-export default function TutorialSettingsGuide() {
+export default function SettingsGuide() {
   const ctx = useTutorialContext();
   const reduceMotion = useReducedMotion();
 
@@ -82,7 +82,7 @@ export default function TutorialSettingsGuide() {
           </div>
         </div>
         <div className="shrink-0">
-          <TutorialCardNav
+          <CardNav
             canBack={canBack}
             canNext={Boolean(canNext)}
             onBack={ctx.back}

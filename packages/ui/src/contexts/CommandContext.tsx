@@ -17,7 +17,7 @@ import {
   streamTutorialIntroductionFromText,
   type CommandSSEEvent,
 } from '@dadei/ui/lib/api/command';
-import { TUTORIAL_INTRO_KICKOFF_TEXT } from '@dadei/ui/components/tutorial/constants';
+import { TUTORIAL_INTRO_KICKOFF_TEXT } from '@dadei/ui/lib/tutorial/constants';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import { getRealtimeSessionToken } from '@dadei/ui/lib/realtime/realtimeClient';
 import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
@@ -48,7 +48,7 @@ import {
   formatAssistantStatusLine,
 } from '@dadei/ui/lib/voice/labels/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/voice/session/sessionEndDetection';
-import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
 import {
   notifyCommandCaptureCommit,
   subscribeVoiceSpeechActivity,
@@ -90,7 +90,7 @@ interface CommandContextValue {
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
-  /** Dadei-led tutorial introduction: assistant speaks first (no user bubble). */
+  /** Tutorial meet_dadei: claim assistant mode and stream the canned opener. */
   beginTutorialIntroduction: () => void;
   /** User finished speaking; mic spinner only until transcript arrives. */
   notifyCommandUtteranceEnded: () => void;

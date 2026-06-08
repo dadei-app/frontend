@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Settings2, LogOut, Users, Mic } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import PersonsPanel from '@dadei/ui/components/PersonsPanel';
-import { useTutorialChromeInteractive } from '@dadei/ui/components/tutorial/tutorialClickGuard';
+import { useTutorialChromeInteractive } from '@dadei/ui/contexts/TutorialContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 interface HeaderProps {

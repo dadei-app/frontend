@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { Modifier } from '@dadei/ui/types/electron';
-import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { useMicLevelPreview } from '@dadei/ui/contexts/AudioContext';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
 import {
@@ -25,6 +24,7 @@ const MODIFIER_ONLY = new Set([
 
 export function AudioPanel() {
   const {
+    isElectron,
     audioSettings: settings,
     updateAudioSettings,
     setHotkey,
@@ -103,7 +103,7 @@ export function AudioPanel() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      {!isElectronDesktop() ? (
+      {!isElectron ? (
         <p className="shrink-0 text-xs text-zinc-500 font-secondary">
           Device preferences persist in the desktop app. Mic changes apply to this session.
         </p>

@@ -4,9 +4,9 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
 import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
-import { TutorialOverlayContent, TutorialProvider } from '@dadei/ui/components/tutorial';
-import { isMeetDadeiStep, isSettingsTutorialStep } from '@dadei/ui/components/tutorial/constants';
-import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
+import { TutorialProvider, useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { isMeetDadeiStep, isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { CommandBubbleStackHost } from '@dadei/ui/contexts/CommandContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
@@ -15,7 +15,6 @@ import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import AssistantSettingsModal from '@dadei/ui/components/settings';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
-import { viewportFillClass } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { Mic } from 'lucide-react';
 
@@ -65,7 +64,7 @@ function TutorialPersonsBridge({
 
 function AssistantLayoutShell() {
   const { isAuthenticated, isLoading } = useAuth();
-  const { isBootstrapReady, formatHotkey } = useSystem();
+  const { isBootstrapReady, formatHotkey, viewportFillClass } = useSystem();
   const tutorial = useTutorialContext();
   const elevateNotifications = tutorial?.step.id === 'layout_tour';
   const showTalkHint = Boolean(tutorial?.isActive && isMeetDadeiStep(tutorial.step.id));
@@ -109,7 +108,7 @@ function AssistantLayoutShell() {
       data-tutorial-target="assistant-layout-shell"
       className={cn(
         'assistant-shell relative flex flex-col overflow-hidden overscroll-none bg-zinc-950 text-zinc-100',
-        viewportFillClass(),
+        viewportFillClass,
       )}
       style={
         {
@@ -176,7 +175,7 @@ function AssistantLayoutShell() {
                       transition={{ duration: 0.2 }}
                       className={ASSISTANT_HINT_ROW}
                     >
-                      <span>Dadei will guide you — listen and follow along</span>
+                      <span>dadei will guide you — listen and follow along</span>
                     </motion.p>
                   ) : null}
                 </AnimatePresence>

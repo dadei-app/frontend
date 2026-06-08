@@ -1,5 +1,6 @@
 export { default as AssistantLayout } from './pages/AssistantLayout';
 export { default as LoginPage } from './pages/LoginPage';
+export { default as OAuthCallback } from './pages/OAuthCallback';
 
 export { AuthProvider, AuthContext, useAuth } from './contexts/AuthContext';
 export { ServiceProvider, ServiceContext, useService } from './contexts/ServiceContext';
@@ -23,5 +24,11 @@ export { default as InteractionPanel } from './components/interaction-panel';
 export { default as Banner } from './components/notifications/Banner';
 export { default as Toast } from './components/notifications/Toast';
 export { default as PeoplePanel } from './components/PersonsPanel';
-export { TutorialOverlay, TutorialProvider } from './components/tutorial';
-export { default as SubscribePage } from './pages/SubscribePage';
+export { TutorialOverlay } from './components/tutorial/Overlay';
+export {
+  TutorialProvider,
+  useTutorial,
+  useTutorialContext,
+  useTutorialChromeInteractive,
+  useTutorialTargetInteractive,
+} from './contexts/TutorialContext';

@@ -248,7 +248,7 @@ export async function captureScreenshot(): Promise<ScreenshotInfo> {
     const primary =
       sources.find((s) => String(s.display_id) === String(display.id)) ?? sources[0];
     if (!primary) return { ok: false, error: 'No screen source available' };
-    const dir = path.join(app.getPath('pictures'), 'Dadei');
+    const dir = path.join(app.getPath('pictures'), 'dadei');
     await mkdir(dir, { recursive: true });
     const filePath = path.join(dir, `screenshot-${Date.now()}.png`);
     const png = primary.thumbnail.toPNG();

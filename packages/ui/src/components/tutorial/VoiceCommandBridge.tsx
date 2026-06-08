@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { isMeetDadeiStep } from './constants';
-import { useTutorialContext } from './TutorialContext';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { isMeetDadeiStep } from '@dadei/ui/lib/tutorial/constants';
 
-/** Starts the Dadei-led introduction (assistant speaks first, then listens). */
-export default function TutorialVoiceCommandBridge() {
+/** Auto-starts the tutorial introduction command session on meet_dadei. */
+export default function VoiceCommandBridge() {
   const tutorial = useTutorialContext();
   const { isConnected } = useService();
   const { state, beginTutorialIntroduction } = useCommand();

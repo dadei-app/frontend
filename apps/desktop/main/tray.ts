@@ -42,11 +42,11 @@ export function syncTrayFromSettings(): void {
   }
 
   tray = new Tray(image.resize({ width: 16, height: 16 }));
-  tray.setToolTip('Dadei');
+  tray.setToolTip('dadei');
   tray.on('click', () => showMainWindow());
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Show Dadei', click: () => showMainWindow() },
+      { label: 'Show dadei', click: () => showMainWindow() },
       { type: 'separator' },
       {
         label: 'Quit',

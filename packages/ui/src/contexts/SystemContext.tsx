@@ -38,7 +38,6 @@ import {
 import {
   DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
   isDesktopTitleBarTarget,
-  isElectronDesktop,
 } from '@dadei/ui/lib/platform/electronWindowChrome';
 
 const DEFAULT_HOTKEY: Hotkey = { key: 'Space', modifiers: [] };
@@ -123,7 +122,11 @@ function syncTitleBarCssVars(): void {
 
 interface SystemContextValue {
   isElectron: boolean;
+  /** True when running the desktop app on macOS. */
+  isMac: boolean;
   platform: Platform;
+  /** Full-page layout height class for Electron vs web viewport models. */
+  viewportFillClass: string;
   /** Installed app version (desktop IPC); also mirrored on bootstrapState when booting. */
   appVersion: string | null;
   appBuildHash: string | null;
@@ -190,7 +193,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   micDevicesRef.current = micDevices;
 
   useEffect(() => {
-    if (!isElectronDesktop()) return;
+    if (!isElectron) return;
     const apply = () => {
       syncTitleBarCssVars();
       const next = readTitleBarOffsetCss();
@@ -205,7 +208,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       document.documentElement.style.removeProperty('--assistant-titlebar-offset');
       document.documentElement.style.removeProperty('--desktop-titlebar-controls-width');
     };
-  }, []);
+  }, [isElectron]);
 
   const preventDialogDismissOnTitleBar = useCallback(
     (event: {
@@ -213,7 +216,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       target: EventTarget | null;
       detail?: { originalEvent: PointerEvent };
     }) => {
-      if (!isElectronDesktop()) return;
+      if (!isElectron) return;
       if (isDesktopTitleBarTarget(event.target)) {
         event.preventDefault();
         return;
@@ -223,8 +226,10 @@ export function SystemProvider({ children }: { children: ReactNode }) {
         event.preventDefault();
       }
     },
-    [],
+    [isElectron],
   );
+
+  const viewportFillClass = isElectron ? 'h-full min-h-0' : 'min-h-screen';
 
   useEffect(() => {
     if (!window.electronAPI?.appGetVersion) return;
@@ -428,7 +433,9 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   const value = useMemo<SystemContextValue>(
     () => ({
       isElectron,
+      isMac,
       platform,
+      viewportFillClass,
       appVersion,
       appBuildHash,
       bootstrapState,
@@ -457,7 +464,9 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     }),
     [
       isElectron,
+      isMac,
       platform,
+      viewportFillClass,
       appVersion,
       appBuildHash,
       bootstrapState,

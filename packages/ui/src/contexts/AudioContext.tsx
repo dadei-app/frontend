@@ -26,7 +26,7 @@ import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
 import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/audio/audioSettingsEvents';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
 
 const COMMAND_START_RETRY_MS = 500;
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;

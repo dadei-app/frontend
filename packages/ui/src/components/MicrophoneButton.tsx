@@ -6,7 +6,7 @@ import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
-import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;

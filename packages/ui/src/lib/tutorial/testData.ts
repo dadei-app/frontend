@@ -49,7 +49,7 @@ export function buildTutorialFixtures(anchorIso: string): TutorialFixtures {
     conversation: {
       id: TUTORIAL_TEST_CONVERSATION_ID,
       started_at: anchorIso,
-      topic_summary: 'Getting started with Dadei',
+      topic_summary: 'Getting started with dadei',
       context_summary: `Sample conversation from ${whenLabel}. Interactions like these are grouped together so you can review what happened at a glance.`,
       is_active: false,
     },

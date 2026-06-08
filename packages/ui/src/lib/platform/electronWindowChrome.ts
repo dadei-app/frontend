@@ -10,7 +10,7 @@ export function isElectronMac(): boolean {
   return window.electronAPI?.platform === 'darwin';
 }
 
-/** Pixel height of `DesktopTitleBarStrip` as CSS length; keep in sync with main TITLE_BAR_HEIGHT. */
+/** Pixel height of `TitleBar` as CSS length; keep in sync with main TITLE_BAR_HEIGHT. */
 export const DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS = '2rem';
 
 /** CSS selector for the fixed window-chrome strip (not part of app layout). */

@@ -4,9 +4,9 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
-import { viewportFillClass } from '@dadei/ui/lib/platform/electronWindowChrome';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 
@@ -23,6 +23,7 @@ function isSafeInternalPath(path: string): boolean {
 
 export default function LoginPage() {
   const { isAuthenticated, isLoading, login, register, saveTokens } = useAuth();
+  const { isElectron, viewportFillClass } = useSystem();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -101,7 +102,6 @@ export default function LoginPage() {
 
   const handleGoogleLogin = async () => {
     setError('');
-    const isElectron = Boolean(window.electronAPI);
     if (isElectron) {
       setLoading(true);
     }
@@ -121,7 +121,7 @@ export default function LoginPage() {
 
   if (isLoading || isAuthenticated) {
     return (
-      <div className={cn('flex flex-col bg-zinc-950', viewportFillClass())}>
+      <div className={cn('flex flex-col bg-zinc-950', viewportFillClass)}>
         <div className="flex flex-1 items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <i className="fas fa-microphone-alt text-6xl text-emerald-400/80 animate-pulse" />
@@ -133,7 +133,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className={cn('relative flex flex-col overflow-x-hidden', viewportFillClass())}>
+    <div className={cn('relative flex flex-col overflow-x-hidden', viewportFillClass)}>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-6">
         <div className="absolute inset-0 bg-zinc-950" aria-hidden />
         <div

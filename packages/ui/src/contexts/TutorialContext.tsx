@@ -4,22 +4,29 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '@dadei/ui/lib/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import {
+  buildTutorialSteps,
   isMeetDadeiStep,
-  MIC_UNLOCK_STEP_INDEX,
-  STEPS,
+  isSettingsTutorialStep,
+  meetDadeiStepIndex,
   TUTORIAL_STEP_EVENT,
-  WAKE_UNLOCK_STEP_INDEX,
-} from './constants';
+} from '@dadei/ui/lib/tutorial/constants';
+import { isTutorialTargetInteractive } from '@dadei/ui/lib/tutorial/clickGuard';
 import {
   buildTutorialFixtures,
   isTutorialTestId,
-} from './testData';
-import type { ActionTrigger, TutorialStep } from './types';
+} from '@dadei/ui/lib/tutorial/testData';
+import type { ActionTrigger, TutorialStep } from '@dadei/ui/types/tutorial.types';
+import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 
 export interface TutorialContextValue {
@@ -90,6 +97,7 @@ function isStepActionComplete(
 }
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
+  const { isElectron } = useSystem();
   const { persons } = useService();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [removedInteractionIds, setRemovedInteractionIds] = useState<Set<string>>(
@@ -111,9 +119,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     return buildTutorialFixtures(anchorIso);
   }, [persons]);
 
-  const steps = STEPS;
+  const steps = useMemo(() => buildTutorialSteps(isElectron), [isElectron]);
   const step = steps[currentStepIndex] ?? steps[0];
   const totalSteps = steps.length;
+  const micUnlockStepIndex = useMemo(() => meetDadeiStepIndex(steps), [steps]);
 
   const actionFlags = useMemo(
     () => ({
@@ -248,8 +257,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     return [fixtures.conversation];
   }, [fixtures.conversation, conversationRemoved]);
 
-  const micInteractive = currentStepIndex >= MIC_UNLOCK_STEP_INDEX;
-  const wakeWordEnabled = currentStepIndex >= WAKE_UNLOCK_STEP_INDEX;
+  const micInteractive = currentStepIndex >= micUnlockStepIndex;
+  const wakeWordEnabled = currentStepIndex >= micUnlockStepIndex;
   const tutorialCommandMode = isMeetDadeiStep(step.id) && !wakeSessionEnded;
   const showTestNotifications = step.id === 'layout_tour';
   const wakeHintVisible = isMeetDadeiStep(step.id) && !wakeSessionEnded;
@@ -316,4 +325,77 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
 export function useTutorialContext(): TutorialContextValue | null {
   return useContext(TutorialContext);
+}
+
+/** Overlay orchestration: completion, scroll-into-view, settings sync. Requires TutorialProvider. */
+export function useTutorial() {
+  const ctx = useTutorialContext();
+  if (!ctx) {
+    throw new Error('useTutorial must be used within TutorialProvider');
+  }
+
+  const queryClient = useQueryClient();
+  const introCompleteRef = useRef(false);
+
+  const scrollTargetIntoView = useCallback((targetKey: string | null) => {
+    if (!targetKey) return;
+    const el = document.querySelector(`[data-tutorial-target="${targetKey}"]`);
+    if (el) {
+      el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, []);
+
+  const completeTutorial = useCallback(async () => {
+    await api.post(ENDPOINTS.TUTORIAL_COMPLETE);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+  }, [queryClient]);
+
+  const markActionFired = useCallback(
+    (trigger: ActionTrigger) => {
+      ctx.markActionFired(trigger);
+      if (trigger === 'wake-session-ended') {
+        if (introCompleteRef.current) return;
+        introCompleteRef.current = true;
+        void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
+        void completeTutorial();
+      }
+    },
+    [ctx, completeTutorial, queryClient],
+  );
+
+  useEffect(() => {
+    scrollTargetIntoView(ctx.step.targetKey);
+    if (isSettingsTutorialStep(ctx.step.id)) {
+      ctx.setOpenSettingsForTutorial(true);
+    } else if (ctx.openSettingsForTutorial) {
+      ctx.setOpenSettingsForTutorial(false);
+    }
+  }, [ctx, scrollTargetIntoView]);
+
+  useEffect(() => {
+    const onSessionEnd = () => {
+      markActionFired('wake-session-ended');
+    };
+    window.addEventListener('tutorial-wake-session-ended', onSessionEnd);
+    return () => window.removeEventListener('tutorial-wake-session-ended', onSessionEnd);
+  }, [markActionFired]);
+
+  return {
+    ...ctx,
+    markActionFired,
+    completeTutorial,
+  };
+}
+
+export function useTutorialTargetInteractive(targetKey: string | null | undefined): boolean {
+  const tutorial = useTutorialContext();
+  if (!tutorial?.isActive) return true;
+  return isTutorialTargetInteractive(targetKey, tutorial.step);
+}
+
+/** Non-target UI (e.g. panel chrome buttons) during action steps. */
+export function useTutorialChromeInteractive(): boolean {
+  const tutorial = useTutorialContext();
+  if (!tutorial?.isActive) return true;
+  return tutorial.step.kind !== 'action';
 }

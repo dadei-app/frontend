@@ -4,11 +4,11 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { resolvePostOAuthPath } from '@dadei/ui/lib/platform/assistantPaths';
 
 /**
- * Handles redirect return from server-side web OAuth.
- * Expects `access_token`, `refresh_token` (snake_case) and optional `next` path.
- * On `error` / `error_description`, shows a message and routes to login.
+ * Web OAuth return handler — not a user-facing page.
+ * The API redirects here with tokens (or errors) in the query string after Google sign-in.
+ * Desktop uses main-process IPC OAuth instead and does not mount this route.
  */
-export default function AuthOAuthCallbackPage() {
+export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { saveTokens } = useAuth();
@@ -34,7 +34,7 @@ export default function AuthOAuthCallbackPage() {
     }
 
     let cancelled = false;
-    (async () => {
+    void (async () => {
       try {
         await saveTokens({ accessToken: access, refreshToken: refresh });
         if (cancelled) return;
@@ -52,8 +52,8 @@ export default function AuthOAuthCallbackPage() {
   }, [navigate, saveTokens, searchParams]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
-      <p className="text-center text-sm text-slate-600">{message}</p>
+    <div className="flex min-h-screen items-center justify-center bg-zinc-950 px-4">
+      <p className="text-center text-sm text-zinc-400 font-secondary">{message}</p>
     </div>
   );
 }

@@ -1,8 +1,8 @@
 import type { Interaction } from '@dadei/ui/types/models.types';
 import { formatLocalTime } from './conversationUtils';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
-import { isTutorialTestId } from '@dadei/ui/components/tutorial/testData';
-import { useTutorialTargetInteractive } from '@dadei/ui/components/tutorial/tutorialClickGuard';
+import { useTutorialTargetInteractive } from '@dadei/ui/contexts/TutorialContext';
+import { isTutorialTestId } from '@dadei/ui/lib/tutorial/testData';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 export default function InteractionCard({

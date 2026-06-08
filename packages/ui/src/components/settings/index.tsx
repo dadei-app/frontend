@@ -12,7 +12,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { AmbientShader } from '@dadei/ui/components/theme/AmbientShader';
+import { AmbientShader } from '@dadei/ui/components/settings/AmbientShader';
 import { AboutPanel } from './about/AboutPanel';
 import { AccountPanel } from './account/AccountPanel';
 import { AudioPanel } from './audio/AudioPanel';
@@ -23,10 +23,9 @@ import { SubscriptionPanel } from './subscription/SubscriptionPanel';
 import type { SettingsPanelProps } from './layout';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
-import { isSettingsTutorialStep } from '@dadei/ui/components/tutorial/constants';
-import TutorialSettingsGuide from '@dadei/ui/components/tutorial/TutorialSettingsGuide';
-import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
+import SettingsGuide from '@dadei/ui/components/tutorial/SettingsGuide';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { veilEase } from '@dadei/ui/lib/shared/motion';
 
 type AssistantSettingsModalProps = {
@@ -53,11 +52,10 @@ const ALL_VIEWS: { id: SidebarView; label: string; Icon: LucideIcon }[] = [
   { id: 'about', label: 'About', Icon: Info },
 ];
 
-function visibleViews() {
-  const desktop = isElectronDesktop();
+function visibleViews(isElectron: boolean) {
   return ALL_VIEWS.filter(v => {
-    if (v.id === 'startup' && !desktop) return false;
-    if (v.id === 'about' && !desktop) return false;
+    if (v.id === 'startup' && !isElectron) return false;
+    if (v.id === 'about' && !isElectron) return false;
     return true;
   });
 }
@@ -100,7 +98,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     return match?.[1] ?? null;
   }, [tutorial?.step.id, tutorialSettingsStep, tutorial]);
 
-  const views = visibleViews();
+  const views = useMemo(() => visibleViews(isElectron), [isElectron]);
   const isCenteredPanel = view === 'about' || view === 'subscription';
 
   useEffect(() => {
@@ -108,20 +106,20 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     const off = window.electronAPI.onOpenSettingsSection(({ section, action }) => {
       if (ALL_VIEWS.some(v => v.id === section)) {
         const target = section as SidebarView;
-        if (target === 'startup' && !isElectronDesktop()) return;
+        if (target === 'startup' && !isElectron) return;
         setView(target);
         setPendingAction(action);
         onOpenChange(true);
       }
     });
     return off;
-  }, [onOpenChange]);
+  }, [onOpenChange, isElectron]);
 
   useEffect(() => {
-    if (!isElectronDesktop() && (view === 'startup' || view === 'about')) {
+    if (!isElectron && (view === 'startup' || view === 'about')) {
       setView('integrations');
     }
-  }, [view]);
+  }, [view, isElectron]);
 
   useEffect(() => {
     if (open) return;
@@ -133,12 +131,12 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     if (!tutorialSettingsStep || !open) return;
     if (tutorialSectionId && ALL_VIEWS.some(v => v.id === tutorialSectionId)) {
       const sectionId = tutorialSectionId as SidebarView;
-      if (sectionId === 'startup' && !isElectronDesktop()) return;
-      if (sectionId === 'about' && !isElectronDesktop()) return;
+      if (sectionId === 'startup' && !isElectron) return;
+      if (sectionId === 'about' && !isElectron) return;
       setView(sectionId);
       setPendingAction(undefined);
     }
-  }, [tutorialSectionId, tutorialSettingsStep, open]);
+  }, [tutorialSectionId, tutorialSettingsStep, open, isElectron]);
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && tutorialSettingsStep) return;
@@ -291,7 +289,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                       </main>
                     </div>
 
-                    <TutorialSettingsGuide />
+                    <SettingsGuide />
                   </div>
                 </div>
               </motion.div>

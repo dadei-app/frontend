@@ -8,8 +8,8 @@ import { cn } from '@dadei/ui/lib/shared/cn';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import { VoiceRetrainDialog } from '@dadei/ui/components/persons/VoiceRetrainDialog';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
-import { isTutorialTestId } from '@dadei/ui/components/tutorial/testData';
+import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { isTutorialTestId } from '@dadei/ui/lib/tutorial/testData';
 
 /** Below client tooltip (195); above main chrome. Raised during tutorial persons step. */
 const PERSONS_DRAWER_Z = 170;

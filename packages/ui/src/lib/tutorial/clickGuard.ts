@@ -1,5 +1,4 @@
-import { useTutorialContext } from './TutorialContext';
-import type { TutorialStep } from './types';
+import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
 
 export function allowedClickTargetKeys(step: TutorialStep): string[] {
   if (step.allowedClickTargets?.length) return step.allowedClickTargets;
@@ -16,19 +15,6 @@ export function isTutorialTargetInteractive(
   if (step.kind !== 'action') return true;
   if (!targetKey) return false;
   return allowedClickTargetKeys(step).includes(targetKey);
-}
-
-export function useTutorialTargetInteractive(targetKey: string | null | undefined): boolean {
-  const tutorial = useTutorialContext();
-  if (!tutorial?.isActive) return true;
-  return isTutorialTargetInteractive(targetKey, tutorial.step);
-}
-
-/** Non-target UI (e.g. panel chrome buttons) during action steps. */
-export function useTutorialChromeInteractive(): boolean {
-  const tutorial = useTutorialContext();
-  if (!tutorial?.isActive) return true;
-  return tutorial.step.kind !== 'action';
 }
 
 export function isTutorialClickAllowed(target: EventTarget | null, step: TutorialStep): boolean {

@@ -1,6 +1,6 @@
 import { useInteractionPanel } from './useInteractionPanel';
 import ConversationCard from './ConversationCard';
-import { useTutorialChromeInteractive } from '@dadei/ui/components/tutorial/tutorialClickGuard';
+import { useTutorialChromeInteractive } from '@dadei/ui/contexts/TutorialContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 export default function InteractionPanel() {

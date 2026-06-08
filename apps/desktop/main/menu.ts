@@ -25,8 +25,8 @@ function openSettings(section?: string, action?: string) {
 function showAboutDialog() {
   void dialog.showMessageBox({
     type: 'info',
-    title: 'About Dadei',
-    message: 'Dadei',
+    title: 'About dadei',
+    message: 'dadei',
     detail: `Version ${app.getVersion()}\n\nAmbient AI assistant.\nhttps://dadei.app`,
     buttons: ['OK'],
   });
@@ -83,7 +83,7 @@ export function buildApplicationMenu(): Menu | null {
         ...(isMac
           ? []
           : [
-              { label: 'About Dadei', click: showAboutDialog },
+              { label: 'About dadei', click: showAboutDialog },
               {
                 label: 'Settings…',
                 accelerator: 'CmdOrCtrl+,',
