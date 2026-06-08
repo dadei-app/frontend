@@ -9,6 +9,7 @@ import {
 } from 'react';
 import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
 import {
+  isMeetDadeiStep,
   MIC_UNLOCK_STEP_INDEX,
   STEPS,
   TUTORIAL_STEP_EVENT,
@@ -249,13 +250,13 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   const micInteractive = currentStepIndex >= MIC_UNLOCK_STEP_INDEX;
   const wakeWordEnabled = currentStepIndex >= WAKE_UNLOCK_STEP_INDEX;
-  const tutorialCommandMode = step.id === 'introduce_yourself' && !wakeSessionEnded;
+  const tutorialCommandMode = isMeetDadeiStep(step.id) && !wakeSessionEnded;
   const showTestNotifications = step.id === 'layout_tour';
-  const wakeHintVisible = step.id === 'introduce_yourself';
+  const wakeHintVisible = isMeetDadeiStep(step.id) && !wakeSessionEnded;
 
   const value = useMemo<TutorialContextValue>(
     () => ({
-      isActive: true,
+      isActive: !wakeSessionEnded,
       steps,
       currentStepIndex,
       step,

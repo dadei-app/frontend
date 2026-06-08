@@ -23,17 +23,23 @@ export interface BannerProps {
   onCancel?: () => Promise<void> | void;
   onAutoDismiss?: () => Promise<void> | void;
   onDismiss: () => void;
-  /** Top of stack — only front card runs countdown auto-dismiss. */
+  /** Active (top z-order) card — interactive with countdown when enabled. */
   isStackFront?: boolean;
   stackDepth?: number;
-  /** Waiting in serial queue behind the active countdown. */
   queued?: boolean;
+  /** When false, countdown bar stays hidden (e.g. waiting for prior exit). */
+  countdownEnabled?: boolean;
+  /** Called when crumble or expire-fade exit begins. */
+  onExitStart?: () => void;
+  /** Called after exit animation fully completes. */
+  onExitComplete?: () => void;
 }
 
 const ENTER_EASE = [0.16, 1, 0.3, 1] as const;
-const EXPIRE_EASE = [0.4, 0, 0.2, 1] as const;
 const CRUMBLE_EASE = [0.7, 0, 0.84, 0] as const;
 const CRUMBLE_DURATION_MS = 520;
+const EXPIRE_FADE_DURATION_MS = 620;
+const COUNTDOWN_SLIDE_MS = 0.38;
 
 export default function Banner({
   id,
@@ -51,40 +57,76 @@ export default function Banner({
   isStackFront = true,
   stackDepth = 0,
   queued = false,
+  countdownEnabled = true,
+  onExitStart,
+  onExitComplete,
 }: BannerProps) {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [exitMode, setExitMode] = useState<'expire' | 'cancel'>('expire');
+  const [exitMode, setExitMode] = useState<'idle' | 'cancel' | 'expire-fade'>('idle');
+  const [contentVisible, setContentVisible] = useState(true);
+  const [fadeToSolid, setFadeToSolid] = useState(false);
 
   const theme = operation ? OPERATION_BANNER_THEME[operation] : NEUTRAL_BANNER_THEME;
+  const buried = !isStackFront && stackDepth > 0;
 
   const rawId = useId();
   const filterId = `dadei-crumble-${rawId.replace(/:/g, '')}`;
   const displaceRef = useRef<SVGFEDisplacementMapElement>(null);
   const crumbleStartedRef = useRef(false);
-  const countdownFiredRef = useRef(false);
-  const [countdownExpired, setCountdownExpired] = useState(false);
+  const expiryStartedRef = useRef(false);
+  const exitReportedRef = useRef(false);
 
   useEffect(() => {
-    countdownFiredRef.current = false;
-    setCountdownExpired(false);
+    expiryStartedRef.current = false;
+    exitReportedRef.current = false;
+    setExitMode('idle');
+    setContentVisible(true);
+    setFadeToSolid(false);
   }, [id]);
 
+  const reportExitComplete = () => {
+    if (exitReportedRef.current) return;
+    exitReportedRef.current = true;
+    onExitComplete?.();
+  };
+
+  const beginExpireFade = () => {
+    if (expiryStartedRef.current || exitMode !== 'idle') return;
+    expiryStartedRef.current = true;
+    onExitStart?.();
+    setContentVisible(false);
+    setExitMode('expire-fade');
+    window.setTimeout(() => setFadeToSolid(true), EXPIRE_FADE_DURATION_MS * 0.35);
+    window.setTimeout(() => {
+      void onAutoDismiss?.();
+      if (!id.startsWith('action:')) {
+        onDismiss();
+      }
+      reportExitComplete();
+    }, EXPIRE_FADE_DURATION_MS);
+  };
+
   useEffect(() => {
-    // Action approval banners are removed when the server queue updates, not on a local timer.
-    if (!isStackFront || !showCountdown || queued || id.startsWith('action:')) return;
+    if (!isStackFront || !showCountdown || queued || !countdownEnabled || exitMode !== 'idle') {
+      return;
+    }
+
     const now = Date.now();
     const end = countdownEndsAt ? parseApiDateTimeMs(countdownEndsAt) : now + durationMs;
     const delay = Math.max(end - now, 0);
-    const t = window.setTimeout(() => {
-      if (countdownFiredRef.current) return;
-      countdownFiredRef.current = true;
-      setCountdownExpired(true);
-      void onAutoDismiss?.();
-      onDismiss();
-    }, delay);
+    const t = window.setTimeout(beginExpireFade, delay);
     return () => window.clearTimeout(t);
-  }, [id, durationMs, countdownEndsAt, onDismiss, onAutoDismiss, isStackFront, showCountdown, queued]);
+  }, [
+    id,
+    durationMs,
+    countdownEndsAt,
+    isStackFront,
+    showCountdown,
+    queued,
+    countdownEnabled,
+    exitMode,
+  ]);
 
   useEffect(() => {
     if (exitMode !== 'cancel' || crumbleStartedRef.current) return;
@@ -100,50 +142,45 @@ export default function Banner({
       if (progress < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const done = window.setTimeout(() => reportExitComplete(), CRUMBLE_DURATION_MS);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(done);
+    };
   }, [exitMode]);
 
   const handleCancel = async () => {
-    if (!onCancel || cancelling || countdownFiredRef.current) return;
+    if (!onCancel || cancelling || exitMode !== 'idle') return;
     setCancelling(true);
     setError(null);
+    onExitStart?.();
     setExitMode('cancel');
     try {
       await onCancel();
+      if (!id.startsWith('action:')) {
+        onDismiss();
+      }
     } catch (e) {
       setError(getUserErrorMessage(e, 'Could not cancel this notification.'));
-      setExitMode('expire');
+      setExitMode('idle');
       crumbleStartedRef.current = false;
       setCancelling(false);
     }
   };
 
-  const backdropBlur =
-    stackDepth > 0
-      ? `blur(${Math.min(16 + stackDepth * 8, 36)}px) saturate(112%)`
-      : theme.shell.backdropFilter;
+  const shellStyle =
+    fadeToSolid && exitMode === 'expire-fade'
+      ? {
+          background: theme.shell.background,
+          border: theme.shell.border,
+          boxShadow: 'none',
+          backdropFilter: 'none',
+          WebkitBackdropFilter: 'none',
+        }
+      : theme.shell;
 
-  const variants = {
-    enter: { opacity: 0, y: -40, scale: 0.96, filter: 'blur(8px)' },
-    visible: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      filter: 'blur(0px)',
-      transition: { duration: 0.55, ease: ENTER_EASE },
-    },
-    expire: {
-      opacity: 0,
-      y: -72,
-      scale: 0.98,
-      transition: { duration: 0.5, ease: EXPIRE_EASE },
-    },
-    cancel: {
-      opacity: 0,
-      scale: 0.92,
-      transition: { duration: CRUMBLE_DURATION_MS / 1000, ease: CRUMBLE_EASE },
-    },
-  };
+  const isExiting = exitMode !== 'idle';
+  const cardOpacity = exitMode === 'expire-fade' ? (fadeToSolid ? 0.35 : 1) : 1;
 
   return (
     <>
@@ -168,41 +205,45 @@ export default function Banner({
 
       <motion.div
         data-tutorial-target={id}
-        initial={isStackFront ? 'enter' : false}
-        animate="visible"
-        exit={exitMode}
-        variants={variants}
-        style={{
-          ...theme.shell,
-          backdropFilter: backdropBlur,
-          WebkitBackdropFilter: backdropBlur,
-          filter: exitMode === 'cancel' ? `url(#${filterId})` : undefined,
-          willChange: 'transform, opacity, filter',
-          pointerEvents: isStackFront ? 'auto' : 'none',
+        animate={{
+          opacity: cardOpacity,
+          scale: exitMode === 'cancel' ? 0.92 : 1,
+          filter: exitMode === 'cancel' ? `url(#${filterId})` : 'none',
         }}
-        className="group relative w-full overflow-hidden rounded-xl transition-[box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+        transition={{
+          opacity: { duration: EXPIRE_FADE_DURATION_MS / 1000, ease: 'easeOut' },
+          scale: { duration: CRUMBLE_DURATION_MS / 1000, ease: CRUMBLE_EASE },
+        }}
+        style={{
+          ...shellStyle,
+          backdropFilter: theme.shell.backdropFilter,
+          WebkitBackdropFilter: theme.shell.backdropFilter,
+          willChange: 'transform, opacity, filter',
+          pointerEvents: isStackFront && !isExiting ? 'auto' : 'none',
+        }}
+        className="group relative w-full overflow-hidden rounded-xl"
       >
         <div
-          className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"
-          style={{ background: theme.tint }}
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl transition-opacity duration-500"
+          style={{
+            background: theme.tint,
+            opacity: fadeToSolid ? 0 : 1,
+          }}
           aria-hidden
         />
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/12 to-transparent" />
-        {queued ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-10 flex h-[3px] items-center justify-center bg-black/25"
-            aria-hidden
-          >
-            <div className={`h-full w-full opacity-40 ${theme.countdownBarClass}`} />
-          </div>
-        ) : null}
-        {showCountdown && !queued ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/12 to-transparent transition-opacity duration-500"
+          style={{ opacity: fadeToSolid ? 0 : 1 }}
+        />
+
+        {showCountdown && !queued && countdownEnabled ? (
           <CountdownBar
             durationMs={durationMs}
             countdownEndsAt={countdownEndsAt}
             fillClassName={theme.countdownBarClass}
           />
         ) : null}
+
         <div className="relative flex items-center gap-4 px-4 py-3.5">
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
@@ -215,46 +256,54 @@ export default function Banner({
                 </>
               ) : null}
               <span className="text-zinc-400/90">{category || 'Notification'}</span>
-              {queued ? (
-                <>
-                  <span className="text-zinc-500/80"> · </span>
-                  <span className="text-zinc-500/90">Queued</span>
-                </>
-              ) : null}
             </p>
-            <p className="mt-1 truncate text-sm font-semibold leading-snug text-zinc-100">
-              {title}
-            </p>
-            {body ? (
-              <p className="mt-0.5 truncate text-xs leading-relaxed text-zinc-400 font-secondary">
-                {body}
-              </p>
-            ) : null}
-            {error ? (
-              <p className="mt-1 text-xs text-red-400/90 font-secondary">{error}</p>
+            {!buried && contentVisible ? (
+              <>
+                <motion.p
+                  className="mt-1 truncate text-sm font-semibold leading-snug text-zinc-100"
+                  animate={{ opacity: exitMode === 'expire-fade' ? 0 : 1 }}
+                  transition={{ duration: 0.42, ease: 'easeOut' }}
+                >
+                  {title}
+                </motion.p>
+                {body ? (
+                  <motion.p
+                    className="mt-0.5 truncate text-xs leading-relaxed text-zinc-400 font-secondary"
+                    animate={{ opacity: exitMode === 'expire-fade' ? 0 : 1 }}
+                    transition={{ duration: 0.42, ease: 'easeOut' }}
+                  >
+                    {body}
+                  </motion.p>
+                ) : null}
+                {error ? (
+                  <p className="mt-1 text-xs text-red-400/90 font-secondary">{error}</p>
+                ) : null}
+              </>
             ) : null}
           </div>
-          {onCancel ? (
-            <div className="shrink-0">
+          {!buried && contentVisible && isStackFront ? (
+            onCancel ? (
+              <div className="shrink-0">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  disabled={cancelling || isExiting}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+                >
+                  {cancelling ? 'Cancelling…' : cancelLabel || 'Cancel'}
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                onClick={handleCancel}
-                disabled={cancelling || countdownExpired}
-                className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+                onClick={onDismiss}
+                className="shrink-0 rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
+                aria-label="Dismiss"
               >
-                {cancelling ? 'Cancelling…' : cancelLabel || 'Cancel'}
+                <X className="h-4 w-4" strokeWidth={2} />
               </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="shrink-0 rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
-              aria-label="Dismiss"
-            >
-              <X className="h-4 w-4" strokeWidth={2} />
-            </button>
-          )}
+            )
+          ) : null}
         </div>
       </motion.div>
     </>
@@ -297,9 +346,12 @@ function CountdownBar({
   }, [countdownEndsAt, durationMs]);
 
   return (
-    <div
+    <motion.div
       className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[3px] overflow-hidden bg-black/20"
       aria-hidden
+      initial={{ y: '-100%', opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: COUNTDOWN_SLIDE_MS, ease: ENTER_EASE }}
     >
       <div
         className={`absolute inset-y-0 left-0 ${fillClassName}`}
@@ -308,6 +360,6 @@ function CountdownBar({
           willChange: 'width',
         }}
       />
-    </div>
+    </motion.div>
   );
 }

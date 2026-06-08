@@ -18,6 +18,9 @@ import {
   COMMAND_SPEECH_RMS,
   COMMAND_UTTERANCE_END_SILENCE_MS,
   FOLLOW_UP_SPEECH_RMS,
+  INTRODUCTION_COMMAND_SPEECH_RMS,
+  INTRODUCTION_FOLLOW_UP_SPEECH_RMS,
+  INTRODUCTION_UTTERANCE_END_SILENCE_MS,
 } from '@dadei/ui/lib/voice/session/voiceConstants';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
@@ -171,6 +174,17 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const commandAudioEndSentRef = useRef(false);
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
+  const tutorialIntroductionModeRef = useRef(false);
+
+  useEffect(() => {
+    const intro = Boolean(tutorial?.tutorialCommandMode);
+    tutorialIntroductionModeRef.current = intro;
+    if (!intro || !commandStreamActiveRef.current) return;
+    commandStreamReadyRef.current = false;
+    lastCommandStartAttemptMsRef.current = 0;
+    commandAudioEndSentRef.current = false;
+    sendRealtimeMessage({ type: 'command_audio_cancel' });
+  }, [tutorial?.tutorialCommandMode]);
 
   const setMicLevelPreview = useCallback((active: boolean) => {
     micPreviewRequestsRef.current = Math.max(
@@ -289,13 +303,24 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const inCapture =
           stateRef.current === 'listening' || stateRef.current === 'follow_up';
         if (inCapture) {
-          const speaking = level >= FOLLOW_UP_SPEECH_RMS;
+          const introCapture = tutorialIntroductionModeRef.current;
+          const followUpSpeechRms = introCapture
+            ? INTRODUCTION_FOLLOW_UP_SPEECH_RMS
+            : FOLLOW_UP_SPEECH_RMS;
+          const commandSpeechRms = introCapture
+            ? INTRODUCTION_COMMAND_SPEECH_RMS
+            : COMMAND_SPEECH_RMS;
+          const utteranceEndSilenceMs = introCapture
+            ? INTRODUCTION_UTTERANCE_END_SILENCE_MS
+            : COMMAND_UTTERANCE_END_SILENCE_MS;
+
+          const speaking = level >= followUpSpeechRms;
           if (speaking && !speechActive && stateRef.current === 'follow_up') {
             notifyVoiceSpeechActivity();
           }
           speechActive = speaking;
 
-          const commandSpeaking = level >= COMMAND_SPEECH_RMS;
+          const commandSpeaking = level >= commandSpeechRms;
           if (commandSpeaking) {
             commandSpeechSeenRef.current = true;
             commandSilenceStartedMsRef.current = null;
@@ -303,9 +328,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
             const now = performance.now();
             if (commandSilenceStartedMsRef.current === null) {
               commandSilenceStartedMsRef.current = now;
-            } else if (
-              now - commandSilenceStartedMsRef.current >= COMMAND_UTTERANCE_END_SILENCE_MS
-            ) {
+            } else if (now - commandSilenceStartedMsRef.current >= utteranceEndSilenceMs) {
               commandSpeechSeenRef.current = false;
               commandSilenceStartedMsRef.current = null;
               notifyCommandUtteranceEnded();
@@ -399,6 +422,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     sendRealtimeMessage({
       type: 'command_audio_start',
       sample_rate: audioSettingsRef.current.sampleRate,
+      ...(tutorialIntroductionModeRef.current ? { introduction_mode: true } : {}),
     });
   }, []);
 

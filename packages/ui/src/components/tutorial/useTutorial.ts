@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@dadei/ui/lib/api/http/client';
@@ -18,6 +18,7 @@ export function useTutorial() {
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const introCompleteRef = useRef(false);
 
   const scrollTargetIntoView = useCallback((targetKey: string | null) => {
     if (!targetKey) return;
@@ -37,6 +38,8 @@ export function useTutorial() {
     (trigger: ActionTrigger) => {
       ctx.markActionFired(trigger);
       if (trigger === 'wake-session-ended') {
+        if (introCompleteRef.current) return;
+        introCompleteRef.current = true;
         void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
         void completeTutorial();
       }

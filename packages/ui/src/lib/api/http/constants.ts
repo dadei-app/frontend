@@ -25,7 +25,8 @@ export const ENDPOINTS = {
   /** Browser redirect flow (backend must implement). */
   AUTH_GOOGLE_WEB_LOGIN: '/auth/google/web/login',
   AUTH_ME: '/auth/me',
-  TUTORIAL_COMPLETE: '/tutorial/complete',
+  TUTORIAL_COMPLETE: '/service/tutorial/complete',
+  TUTORIAL_INTRODUCTION_TEXT: '/service/tutorial/introduction/text',
 
   // Service
   SERVICE_CLIENTS: '/service/clients',
@@ -55,6 +56,5 @@ export const ENDPOINTS = {
   MEMORY_BY_ID: '/memories/:memoryId',
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
-  COMMAND: '/service/command',
   COMMAND_TEXT: '/service/command/text',
 } as const;

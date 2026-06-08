@@ -14,6 +14,17 @@ import Banner from '@dadei/ui/components/notifications/Banner';
 import Toast from '@dadei/ui/components/notifications/Toast';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { actionsApi } from '@dadei/ui/lib/api/actions';
+import {
+  BANNER_ENTER_SPRING,
+  BANNER_ENTER_TRAVEL_MULT,
+  BANNER_LAYER_STEP_PX,
+  BANNER_PUSH_SPRING,
+  BANNER_STACK_STAGGER_MS,
+  buildStackBanners,
+  stackContainerHeight,
+  stackLayoutForSlot,
+  type StackBanner,
+} from '@dadei/ui/lib/notifications/bannerStack';
 import { playNotificationPing } from '@dadei/ui/lib/notifications/notificationSound';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
@@ -24,9 +35,8 @@ import {
 } from '@dadei/ui/lib/notifications/actionBannerSync';
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
-const STACK_PEEK_PX = 11;
-const STACK_SCALE_STEP = 0.028;
-const STACK_MAX_VISIBLE = 4;
+const STACK_OPACITY_EASE = [0.22, 1, 0.36, 1] as const;
+const MOTION_SETTLE_MS = 650;
 
 export type ShowBannerInput = {
   id?: string;
@@ -73,6 +83,8 @@ type NotificationsContextValue = {
   showBanner: (input: ShowBannerInput) => string;
   dismissBanner: (id: string) => void;
   dismissBannerById: (id: string) => void;
+  actionBanners: BannerItem[];
+  manualBanners: BannerItem[];
 };
 
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined);
@@ -189,67 +201,196 @@ export function ToastStackHost({ className = '' }: { className?: string }) {
   );
 }
 
-/** Front banner (index 0) is interactive; deeper cards peek beneath with blur. */
+/** Literal overlapping stack — active on top at the bottom slot; pending rise behind above. */
 export function BannerStackHost({ className = '' }: { className?: string }) {
   const ctx = useContext(NotificationsContext);
-  if (!ctx || ctx.banners.length === 0) return null;
+  if (!ctx) return null;
 
-  const { banners, dismissBannerById } = ctx;
-  const visible = banners.slice(0, STACK_MAX_VISIBLE);
-  const overflow = banners.length - visible.length;
-  const stackHeight =
-    72 + Math.max(visible.length - 1, 0) * STACK_PEEK_PX + (overflow > 0 ? 18 : 0);
+  const { actionBanners, manualBanners, dismissBannerById } = ctx;
+
+  const stack = useMemo(
+    () => buildStackBanners(actionBanners, manualBanners),
+    [actionBanners, manualBanners],
+  );
+
+  const slotByIdRef = useRef<Map<string, number>>(new Map());
+  const prevStackIdsRef = useRef<string[]>([]);
+  const lastKnownRef = useRef<Map<string, StackBanner>>(new Map());
+  const newEnterIndexRef = useRef<Map<string, number>>(new Map());
+  const pushedIdsRef = useRef<Set<string>>(new Set());
+
+  const [exitingIds, setExitingIds] = useState<Set<string>>(() => new Set());
+  const [exitBarrier, setExitBarrier] = useState(false);
+
+  useEffect(() => {
+    for (const banner of stack) {
+      lastKnownRef.current.set(banner.id, banner);
+    }
+
+    const currentIds = stack.map((b) => b.id);
+    const prevIds = prevStackIdsRef.current;
+    const prevIdSet = new Set(prevIds);
+    const newIds = currentIds.filter((id) => !prevIdSet.has(id));
+
+    if (prevIds.length === 0 && currentIds.length > 0) {
+      const initial = new Map<string, number>();
+      stack.forEach((b) => initial.set(b.id, b.slotFromTop));
+      slotByIdRef.current = initial;
+    } else if (newIds.length > 0) {
+      const next = new Map(slotByIdRef.current);
+      const bump = newIds.length;
+      for (const [id, slot] of next) {
+        if (!newIds.includes(id)) {
+          next.set(id, slot + bump);
+        }
+      }
+      const enterMap = new Map<string, number>();
+      newIds.forEach((id, i) => {
+        next.set(id, i);
+        enterMap.set(id, i);
+      });
+      slotByIdRef.current = next;
+      newEnterIndexRef.current = enterMap;
+      pushedIdsRef.current = new Set(
+        currentIds.filter((id) => !newIds.includes(id) && prevIdSet.has(id)),
+      );
+    }
+
+    prevStackIdsRef.current = currentIds;
+  }, [stack]);
+
+  useEffect(() => {
+    if (newEnterIndexRef.current.size === 0 && pushedIdsRef.current.size === 0) return;
+    const t = window.setTimeout(() => {
+      newEnterIndexRef.current = new Map();
+      pushedIdsRef.current = new Set();
+    }, MOTION_SETTLE_MS);
+    return () => window.clearTimeout(t);
+  }, [stack]);
+
+  const handleExitStart = useCallback((id: string) => {
+    setExitBarrier(true);
+    setExitingIds((prev) => new Set(prev).add(id));
+  }, []);
+
+  const handleExitComplete = useCallback((id: string) => {
+    setExitingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      if (next.size === 0) {
+        setExitBarrier(false);
+      }
+      return next;
+    });
+    slotByIdRef.current.delete(id);
+  }, []);
+
+  if (stack.length === 0 && exitingIds.size === 0) return null;
+
+  const stackIds = new Set(stack.map((b) => b.id));
+  const itemById = new Map<
+    string,
+    { banner: StackBanner; slotFromTop: number; isExiting: boolean; enterIndex: number }
+  >();
+
+  for (const banner of stack) {
+    itemById.set(banner.id, {
+      banner,
+      slotFromTop: slotByIdRef.current.get(banner.id) ?? banner.slotFromTop,
+      isExiting: exitingIds.has(banner.id),
+      enterIndex: newEnterIndexRef.current.get(banner.id) ?? 0,
+    });
+  }
+
+  for (const id of exitingIds) {
+    if (stackIds.has(id)) continue;
+    const known = lastKnownRef.current.get(id);
+    const slot = slotByIdRef.current.get(id);
+    if (!known || slot === undefined) continue;
+    itemById.set(id, {
+      banner: known,
+      slotFromTop: slot,
+      isExiting: true,
+      enterIndex: 0,
+    });
+  }
+
+  const renderItems = [...itemById.values()].sort((a, b) => a.slotFromTop - b.slotFromTop);
+
+  const maxSlot = renderItems.reduce((max, item) => Math.max(max, item.slotFromTop), 0);
+  const totalLayers = maxSlot + 1;
+  const activeId = stack.find((b) => b.isActive)?.id ?? null;
 
   return (
     <div
-      className={`pointer-events-none relative w-full max-w-xl ${className}`}
-      style={{ minHeight: stackHeight }}
+      className={`pointer-events-none relative mx-auto w-full max-w-xl ${className}`}
+      style={{ minHeight: stackContainerHeight(totalLayers) }}
       aria-live="polite"
     >
-      {overflow > 0 ? (
-        <p className="pointer-events-none absolute right-0 bottom-0 text-[10px] font-medium tracking-wide text-zinc-500/90 font-secondary">
-          +{overflow} more
-        </p>
-      ) : null}
       <AnimatePresence initial={false}>
-        {visible.map((banner, index) => {
-          const depth = index;
-          const isFront = depth === 0;
-          const y = depth * STACK_PEEK_PX;
-          const scale = 1 - depth * STACK_SCALE_STEP;
-          const stackBlurPx = isFront ? 0 : Math.min(4 + depth * 5, 18);
+        {renderItems.map(({ banner, slotFromTop, isExiting, enterIndex }) => {
+          const layout = stackLayoutForSlot(slotFromTop, totalLayers);
+          const isActive = banner.isActive && !isExiting;
+          const stackDepth = maxSlot - slotFromTop;
+          const activeZ = 1000;
+          const isNewEntrant = !isExiting && newEnterIndexRef.current.has(banner.id);
+          const isPushed = !isExiting && !isNewEntrant && pushedIdsRef.current.has(banner.id);
+          const stagger = enterIndex * (BANNER_STACK_STAGGER_MS / 1000);
+          const enterTravel = BANNER_LAYER_STEP_PX * BANNER_ENTER_TRAVEL_MULT;
 
           return (
             <motion.div
               key={banner.id}
-              layout
               className="absolute left-0 w-full"
               style={{
                 top: 0,
-                zIndex: visible.length - depth,
+                zIndex: isActive ? activeZ : layout.zIndex,
                 transformOrigin: 'top center',
               }}
-              initial={{ opacity: 0, y: -28, scale: 0.94, filter: 'blur(10px)' }}
+              initial={
+                isExiting
+                  ? false
+                  : isNewEntrant
+                    ? {
+                        opacity: 0,
+                        y: layout.y - enterTravel,
+                        scale: layout.scale * 0.9,
+                      }
+                    : false
+              }
               animate={{
                 opacity: 1,
-                y,
-                scale,
-                filter: stackBlurPx > 0 ? `blur(${stackBlurPx}px)` : 'blur(0px)',
+                y: layout.y,
+                scale: isPushed
+                  ? [layout.scale * 1.012, layout.scale * 0.992, layout.scale]
+                  : layout.scale,
               }}
-              exit={{
-                opacity: 0,
-                y: -40,
-                scale: scale * 0.96,
-                filter: 'blur(12px)',
-                transition: { duration: 0.35 },
-              }}
-              transition={{
-                layout: { duration: 0.4, ease: [0.22, 1, 0.36, 1] },
-                opacity: { duration: 0.35 },
-                y: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
-                scale: { duration: 0.45, ease: [0.22, 1, 0.36, 1] },
-                filter: { duration: 0.4 },
-              }}
+              exit={{ opacity: 0 }}
+              transition={
+                isNewEntrant
+                  ? {
+                      opacity: {
+                        duration: 0.32,
+                        ease: STACK_OPACITY_EASE,
+                        delay: stagger,
+                      },
+                      y: { ...BANNER_ENTER_SPRING, delay: stagger },
+                      scale: { ...BANNER_ENTER_SPRING, delay: stagger },
+                    }
+                  : isPushed
+                    ? {
+                        y: { ...BANNER_PUSH_SPRING, delay: stagger * 0.35 },
+                        scale: {
+                          duration: 0.48,
+                          ease: [0.42, 0, 0.22, 1],
+                          delay: stagger * 0.35,
+                        },
+                      }
+                    : {
+                        y: BANNER_PUSH_SPRING,
+                        scale: BANNER_PUSH_SPRING,
+                      }
+              }
             >
               <Banner
                 id={banner.id}
@@ -263,10 +404,13 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
                 cancelLabel={banner.cancelLabel}
                 onCancel={banner.onCancel}
                 onAutoDismiss={banner.onAutoDismiss}
-                onDismiss={() => dismissBannerById(banner.id)}
-                isStackFront={isFront}
-                stackDepth={depth}
+                onDismiss={() => dismissBannerById?.(banner.id)}
+                isStackFront={isActive}
+                stackDepth={stackDepth}
                 queued={banner.queued}
+                countdownEnabled={isActive && activeId === banner.id && !exitBarrier}
+                onExitStart={() => handleExitStart(banner.id)}
+                onExitComplete={() => handleExitComplete(banner.id)}
               />
             </motion.div>
           );
@@ -282,7 +426,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const [manualBanners, setManualBanners] = useState<BannerItem[]>([]);
   const [actionBanners, setActionBanners] = useState<BannerItem[]>([]);
   const banners = useMemo(
-    () => [...actionBanners, ...manualBanners.filter((m) => !actionBanners.some((a) => a.id === m.id))],
+    () => buildStackBanners(actionBanners, manualBanners),
     [actionBanners, manualBanners],
   );
 
@@ -344,8 +488,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       showBanner,
       dismissBanner,
       dismissBannerById,
+      actionBanners,
+      manualBanners,
     }),
-    [toasts, showToast, removeToast, banners, showBanner, dismissBanner, dismissBannerById]
+    [toasts, showToast, removeToast, banners, showBanner, dismissBanner, dismissBannerById, actionBanners, manualBanners]
   );
 
   return (

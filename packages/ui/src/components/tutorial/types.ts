@@ -12,7 +12,7 @@ export type ActionTrigger =
   | 'wake-session-ended'
   | 'interactions-logged';
 
-export type TutorialCardPlacement = 'auto' | 'left' | 'right' | 'below';
+export type TutorialCardPlacement = 'auto' | 'left' | 'right' | 'below' | 'above';
 
 export interface TutorialStep {
   id: string;

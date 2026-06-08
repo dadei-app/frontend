@@ -20,14 +20,14 @@ export function isTutorialTargetInteractive(
 
 export function useTutorialTargetInteractive(targetKey: string | null | undefined): boolean {
   const tutorial = useTutorialContext();
-  if (!tutorial) return true;
+  if (!tutorial?.isActive) return true;
   return isTutorialTargetInteractive(targetKey, tutorial.step);
 }
 
 /** Non-target UI (e.g. panel chrome buttons) during action steps. */
 export function useTutorialChromeInteractive(): boolean {
   const tutorial = useTutorialContext();
-  if (!tutorial) return true;
+  if (!tutorial?.isActive) return true;
   return tutorial.step.kind !== 'action';
 }
 

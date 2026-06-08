@@ -151,6 +151,10 @@ function placementForRect(
     const pos = { top: rect.bottom + CARD_MARGIN, left: cx - cardW / 2 };
     if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
   }
+  if (placement === 'above') {
+    const pos = { top: rect.top - cardH - CARD_MARGIN, left: cx - cardW / 2 };
+    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+  }
 
   for (const pos of placementCandidates(rect, cardW, cardH)) {
     if (fitsViewport(pos, cardW, cardH)) {
@@ -199,11 +203,9 @@ function defaultBoxSize(step: TutorialStep): BoxSize {
 
 function TutorialCardBody({
   step,
-  showWakeHint,
   permissionsChildren,
 }: {
   step: TutorialStep;
-  showWakeHint?: boolean;
   permissionsChildren?: ReactNode;
 }) {
   return (
@@ -213,16 +215,9 @@ function TutorialCardBody({
       </h2>
       {step.id === 'permissions' ? (
         permissionsChildren
-      ) : (
-        <>
-          <p className="mt-2 text-sm leading-relaxed text-zinc-300 font-secondary">{step.body}</p>
-          {showWakeHint && step.id === 'introduce_yourself' ? (
-            <p className="mt-3 text-xs text-zinc-500 font-secondary">
-              Say hello and share your name when you are ready.
-            </p>
-          ) : null}
-        </>
-      )}
+      ) : step.body.trim() ? (
+        <p className="mt-2 text-sm leading-relaxed text-zinc-300 font-secondary">{step.body}</p>
+      ) : null}
     </>
   );
 }
@@ -258,11 +253,7 @@ function TutorialCardContent({
       <h2 id={titleId} className="sr-only">
         {step.title}
       </h2>
-      <TutorialCardBody
-        step={step}
-        showWakeHint={showWakeHint}
-        permissionsChildren={permissionsChildren}
-      />
+      <TutorialCardBody step={step} permissionsChildren={permissionsChildren} />
     </>
   );
 }

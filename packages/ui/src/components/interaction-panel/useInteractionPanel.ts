@@ -110,7 +110,7 @@ export function useInteractionPanel() {
     bootstrapInteractions.length > 0 ? bootstrapInteractions : EMPTY_INTERACTIONS;
 
   const interactions = useMemo(() => {
-    if (!tutorial?.tutorialInteractions.length) return baseInteractions;
+    if (!tutorial?.isActive || !tutorial.tutorialInteractions.length) return baseInteractions;
     const seen = new Set(baseInteractions.map(i => i.id));
     const injected = tutorial.tutorialInteractions.filter(i => !seen.has(i.id));
     return [...injected, ...baseInteractions];
@@ -151,7 +151,7 @@ export function useInteractionPanel() {
 
   const conversationById = useMemo(() => {
     const map = new Map<string, Conversation>();
-    for (const conv of tutorial?.tutorialConversations ?? []) {
+    for (const conv of tutorial?.isActive ? tutorial.tutorialConversations : []) {
       map.set(conv.id, conv);
     }
     apiConversationIds.forEach((id, index) => {
@@ -167,7 +167,7 @@ export function useInteractionPanel() {
 
   const personsById = useMemo(() => {
     const map = new Map(persons.map(person => [person.id, person]));
-    for (const person of tutorial?.tutorialPersons ?? []) {
+    for (const person of tutorial?.isActive ? tutorial.tutorialPersons : []) {
       if (!map.has(person.id)) map.set(person.id, person);
     }
     return map;

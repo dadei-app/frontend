@@ -4,6 +4,7 @@ import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import {
   backdropBlurForStep,
+  isMeetDadeiStep,
   isSettingsTutorialStep,
   TUTORIAL_PLATFORM,
   TUTORIAL_TEST_BANNER_ID,
@@ -262,6 +263,7 @@ function TutorialOverlayInner() {
     currentStepIndex,
     showTestNotifications,
     wakeHintVisible,
+    isActive,
   } = useTutorial();
   const canBack = currentStepIndex > 0;
   const canNext =
@@ -298,14 +300,21 @@ function TutorialOverlayInner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [canNext, next, back]);
 
-  if (isSettingsTutorialStep(step.id)) {
+  if (!isActive || isSettingsTutorialStep(step.id)) {
     return null;
   }
 
-  if (step.id === 'introduce_yourself') {
+  if (isMeetDadeiStep(step.id)) {
     return (
       <div className="fixed inset-0 z-[9999] pointer-events-none">
         <TutorialClickGuard step={step} />
+        <TutorialCard
+          step={step}
+          canBack={canBack}
+          canNext={canNext}
+          onBack={back}
+          onNext={next}
+        />
       </div>
     );
   }

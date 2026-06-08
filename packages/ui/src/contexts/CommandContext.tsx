@@ -14,8 +14,10 @@ import axios from 'axios';
 import {
   isAbortError,
   streamCommandFromText,
+  streamTutorialIntroductionFromText,
   type CommandSSEEvent,
 } from '@dadei/ui/lib/api/command';
+import { TUTORIAL_INTRO_KICKOFF_TEXT } from '@dadei/ui/components/tutorial/constants';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import { getRealtimeSessionToken } from '@dadei/ui/lib/realtime/realtimeClient';
 import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
@@ -88,6 +90,8 @@ interface CommandContextValue {
   cancel: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
+  /** Dadei-led tutorial introduction: assistant speaks first (no user bubble). */
+  beginTutorialIntroduction: () => void;
   /** User finished speaking; mic spinner only until transcript arrives. */
   notifyCommandUtteranceEnded: () => void;
   /** First typewriter character of the final response (mic → follow-up listen). */
@@ -284,10 +288,21 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   } = useService();
   const tutorial = useTutorialContext();
   const tutorialCommandModeRef = useRef(false);
+  const tutorialIntroEndNotifiedRef = useRef(false);
 
   useEffect(() => {
     tutorialCommandModeRef.current = Boolean(tutorial?.tutorialCommandMode);
+    if (tutorial?.tutorialCommandMode) {
+      tutorialIntroEndNotifiedRef.current = false;
+    }
   }, [tutorial?.tutorialCommandMode]);
+
+  const notifyTutorialIntroductionEnded = useCallback(() => {
+    if (tutorialIntroEndNotifiedRef.current) return;
+    if (!tutorialCommandModeRef.current) return;
+    tutorialIntroEndNotifiedRef.current = true;
+    window.dispatchEvent(new CustomEvent('tutorial-wake-session-ended'));
+  }, []);
 
   const [state, setState] = useState<CommandState>('idle');
   const [userBubbleText, setUserBubbleText] = useState('');
@@ -516,6 +531,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetInterimCaptionState, resetLiveBubbles]);
 
   const endSession = useCallback(() => {
+    notifyTutorialIntroductionEnded();
     sessionEndingRef.current = true;
     clearFollowUpTimer();
     clearWakeTimeout();
@@ -531,10 +547,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer,
     clearWakeTimeout,
     goIdle,
+    notifyTutorialIntroductionEnded,
     releaseAssistantMode,
   ]);
 
   const cancel = useCallback(() => {
+    notifyTutorialIntroductionEnded();
     void (async () => {
       clearFollowUpTimer();
       clearWakeTimeout();
@@ -549,6 +567,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer,
     clearWakeTimeout,
     goIdle,
+    notifyTutorialIntroductionEnded,
     releaseAssistantMode,
   ]);
 
@@ -575,6 +594,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     wakeTimeoutRef.current = setTimeout(() => {
       if (stateRef.current !== 'listening') return;
       void (async () => {
+        notifyTutorialIntroductionEnded();
         await releaseAssistantMode();
         goIdle();
       })();
@@ -594,6 +614,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const ms = computeFollowUpMs(responseChars);
     followUpTimerRef.current = setTimeout(() => {
       void (async () => {
+        notifyTutorialIntroductionEnded();
         await releaseAssistantMode();
         goIdle();
       })();
@@ -604,6 +625,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer();
     followUpTimerRef.current = setTimeout(() => {
       void (async () => {
+        notifyTutorialIntroductionEnded();
         await releaseAssistantMode();
         goIdle();
       })();
@@ -727,9 +749,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
         case 'session_end':
           setAssistantBubbleStatus('done');
-          if (tutorialCommandModeRef.current) {
-            window.dispatchEvent(new CustomEvent('tutorial-wake-session-ended'));
-          }
           endSession();
           break;
         case 'done':
@@ -841,9 +860,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         try {
           let sawDone = false;
-          for await (const ev of streamCommandFromText(submitText, accessToken, {
+          const streamText = tutorialCommandModeRef.current
+            ? streamTutorialIntroductionFromText
+            : streamCommandFromText;
+          for await (const ev of streamText(submitText, accessToken, {
             signal: abortController.signal,
-            tutorialMode: tutorialCommandModeRef.current,
           })) {
             if (ev.type === 'error' && abortController.signal.aborted) continue;
             if (ev.type === 'done') sawDone = true;
@@ -897,6 +918,114 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       startRequestActivity,
     ],
   );
+
+  const beginTutorialIntroduction = useCallback(() => {
+    if (stateRef.current !== 'idle') return;
+    if (commandStreamInFlightRef.current) return;
+
+    startNewTurn();
+    clearWakeTimeout();
+    clearFollowUpTimer();
+    followUpCaptureRef.current = false;
+    pendingNewResponseRef.current = false;
+    lastSubmittedTextRef.current = null;
+    resetInterimCaptionState();
+    streamHadOutputRef.current = false;
+    lastToolBubbleSnippetRef.current = '';
+    responseRevealStartedRef.current = false;
+    revealCompleteHandledRef.current = false;
+    setAssistantBubbleTextSynced('');
+    setAssistantBubbleStatus('pending');
+    pendingNewResponseRef.current = true;
+    assignLiveTurnId();
+    startRequestActivity();
+    userBubbleTextRef.current = '';
+    awaitingTranscriptRef.current = false;
+    transcribeFromFollowUpRef.current = false;
+    setUserBubbleText('');
+    setState('thinking');
+
+    void (async () => {
+      const claimed = await claimAssistantMode();
+      if (!claimed) {
+        setAssistantBubbleTextSynced(ERROR_CODES.invalid_session);
+        setAssistantBubbleStatus('revealing');
+        setState('responding');
+        return;
+      }
+
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setAssistantBubbleTextSynced('Sign in to use the assistant.');
+        setAssistantBubbleStatus('revealing');
+        setState('responding');
+        return;
+      }
+
+      if (!isConnected || !getRealtimeSessionToken()) {
+        setAssistantBubbleTextSynced(ERROR_CODES.invalid_session);
+        setAssistantBubbleStatus('revealing');
+        setState('responding');
+        return;
+      }
+
+      commandStreamInFlightRef.current = true;
+      abortActiveStream();
+      const abortController = new AbortController();
+      streamAbortRef.current = abortController;
+
+      try {
+        let sawDone = false;
+        for await (const ev of streamTutorialIntroductionFromText(TUTORIAL_INTRO_KICKOFF_TEXT, accessToken, {
+          signal: abortController.signal,
+        })) {
+          if (ev.type === 'error' && abortController.signal.aborted) continue;
+          if (ev.type === 'done') sawDone = true;
+          handleStreamEvent(ev);
+        }
+        if (
+          !sawDone &&
+          !abortController.signal.aborted &&
+          (stateRef.current === 'responding' || stateRef.current === 'thinking')
+        ) {
+          handleStreamEvent({ type: 'done' });
+        }
+      } catch (e) {
+        if (isAbortError(e) || abortController.signal.aborted) {
+          if (
+            stateRef.current === 'thinking' &&
+            !streamHadOutputRef.current &&
+            !assistantBubbleTextRef.current.trim()
+          ) {
+            setAssistantBubbleTextSynced('Request cancelled');
+            setAssistantBubbleStatus('revealing');
+            setState('responding');
+          }
+          return;
+        }
+        streamHadOutputRef.current = true;
+        setAssistantBubbleTextSynced(getUserErrorMessage(e));
+        setAssistantBubbleStatus('revealing');
+        setState('responding');
+      } finally {
+        streamAbortRef.current = null;
+        commandStreamInFlightRef.current = false;
+      }
+    })();
+  }, [
+    abortActiveStream,
+    assignLiveTurnId,
+    claimAssistantMode,
+    clearFollowUpTimer,
+    clearWakeTimeout,
+    getAccessToken,
+    handleStreamEvent,
+    isConnected,
+    resetInterimCaptionState,
+    setAssistantBubbleTextSynced,
+    startNewTurn,
+    startRequestActivity,
+  ]);
 
   useEffect(() => {
     const off = subscribeRealtimeMessages((msg) => {
@@ -1136,6 +1265,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     liveTurnId,
     cancel,
     startListening,
+    beginTutorialIntroduction,
     notifyCommandUtteranceEnded,
     notifyAssistantRevealStarted,
     notifyAssistantRevealComplete,

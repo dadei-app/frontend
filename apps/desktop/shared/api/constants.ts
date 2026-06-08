@@ -43,5 +43,5 @@ export const ENDPOINTS = {
   MEMORIES: '/memories',
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
-  COMMAND: '/service/command',
+  COMMAND_TEXT: '/service/command/text',
 } as const;

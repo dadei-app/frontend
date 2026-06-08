@@ -5,7 +5,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
 import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { TutorialOverlayContent, TutorialProvider } from '@dadei/ui/components/tutorial';
-import { isSettingsTutorialStep } from '@dadei/ui/components/tutorial/constants';
+import { isMeetDadeiStep, isSettingsTutorialStep } from '@dadei/ui/components/tutorial/constants';
 import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 import { CommandBubbleStackHost } from '@dadei/ui/contexts/CommandContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
@@ -68,7 +68,7 @@ function AssistantLayoutShell() {
   const { isBootstrapReady, formatHotkey } = useSystem();
   const tutorial = useTutorialContext();
   const elevateNotifications = tutorial?.step.id === 'layout_tour';
-  const showTalkHint = tutorial?.step.id === 'introduce_yourself';
+  const showTalkHint = Boolean(tutorial?.isActive && isMeetDadeiStep(tutorial.step.id));
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
@@ -176,7 +176,7 @@ function AssistantLayoutShell() {
                       transition={{ duration: 0.2 }}
                       className={ASSISTANT_HINT_ROW}
                     >
-                      <span>Dadei is listening — introduce yourself</span>
+                      <span>Dadei will guide you — listen and follow along</span>
                     </motion.p>
                   ) : null}
                 </AnimatePresence>

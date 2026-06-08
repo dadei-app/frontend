@@ -7,12 +7,12 @@ const SETTINGS_SECTIONS: { id: string; title: string; body: string }[] = [
   {
     id: 'integrations',
     title: 'Integrations',
-    body: 'Connect Google Workspace and realtime data sources.',
+    body: 'Connect Google Workspace and the realtime data sources Dadei uses to act on your behalf.',
   },
   {
     id: 'memories',
     title: 'Memories',
-    body: 'Facts Dadei remembers and proposed memories awaiting approval.',
+    body: 'Everything Dadei has learned about you, plus proposed memories waiting for your approval.',
   },
   {
     id: 'account',
@@ -22,30 +22,30 @@ const SETTINGS_SECTIONS: { id: string; title: string; body: string }[] = [
   {
     id: 'audio',
     title: 'Audio',
-    body: 'Microphone, noise suppression, assistant hotkey, and input level.',
+    body: 'Microphone selection, noise suppression, the assistant hotkey, and your input level.',
   },
   ...(isElectronDesktop()
     ? [
-        {
-          id: 'startup',
-          title: 'Startup',
-          body: 'Launch at login, window behavior, and desktop permissions.',
-        },
-      ]
+      {
+        id: 'startup',
+        title: 'Startup',
+        body: 'Launch at login, window behavior, and desktop permissions.',
+      },
+    ]
     : []),
   {
     id: 'subscription',
     title: 'Subscription',
-    body: 'Plans and billing when subscriptions launch.',
+    body: 'Your plan and billing details.',
   },
   ...(isElectronDesktop()
     ? [
-        {
-          id: 'about',
-          title: 'About',
-          body: 'App version, updates, and legal links.',
-        },
-      ]
+      {
+        id: 'about',
+        title: 'About',
+        body: 'App version, updates, and legal links.',
+      },
+    ]
     : []),
 ];
 
@@ -54,14 +54,14 @@ const CORE_STEPS: TutorialStep[] = [
     id: 'welcome',
     kind: 'spotlight',
     title: 'Meet Dadei',
-    body: "An ambient assistant that listens, remembers, and helps when you ask. Let's take two minutes to set things up.",
+    body: "Dadei is an ambient assistant — it listens in the background, remembers what matters, and helps when you ask. The next couple of minutes will get you set up.",
     targetKey: null,
   },
   {
     id: 'permissions',
     kind: 'spotlight',
-    title: 'Permissions',
-    body: "Dadei needs a few permissions to work. Grant what you're comfortable with — you can skip any of them.",
+    title: 'A few permissions',
+    body: "Dadei needs access to your microphone and a couple of system services to actually do its job. Grant what you're comfortable with — anything you skip, you can turn on later in Settings.",
     targetKey: null,
     actionTrigger: 'permission-resolved',
   },
@@ -69,7 +69,7 @@ const CORE_STEPS: TutorialStep[] = [
     id: 'expand_conversation',
     kind: 'action',
     title: 'Conversations',
-    body: 'Interactions group into conversations. Click the sample conversation in the panel to expand it.',
+    body: 'Everything Dadei hears gets grouped into conversations — one per session of people talking. Click the sample conversation in the panel to open it up.',
     targetKey: 'tutorial-test-conversation',
     actionTrigger: 'expand-conversation',
     autoAdvanceOnAction: true,
@@ -79,7 +79,7 @@ const CORE_STEPS: TutorialStep[] = [
     id: 'delete_interaction',
     kind: 'action',
     title: 'Interactions',
-    body: 'Each line is one interaction. Hover the first one and click the trash icon to delete it.',
+    body: 'Inside a conversation, each line is a single interaction — one thing someone said. Hover the first one and click the trash icon to delete it.',
     targetKey: 'tutorial-test-interaction-1',
     cardAnchorKey: 'interaction-panel-root',
     cardPlacement: 'left',
@@ -89,8 +89,8 @@ const CORE_STEPS: TutorialStep[] = [
   {
     id: 'layout_tour',
     kind: 'action',
-    title: 'Your space',
-    body: 'Dismiss the toast. The banner proposes deleting the test conversation — Cancel keeps it, or let the countdown finish to remove it.',
+    title: 'Notifications',
+    body: "When Dadei wants to do something on your behalf, you'll see it here. Dismiss the toast, then handle the banner — Cancel keeps the test conversation, or let the countdown run out to remove it.",
     targetKey: 'assistant-layout-shell',
     actionTrigger: 'notifications-dismissed',
     allowedClickTargets: ['tutorial-test-toast', 'tutorial-delete-conversation-banner'],
@@ -99,7 +99,7 @@ const CORE_STEPS: TutorialStep[] = [
     id: 'delete_person',
     kind: 'action',
     title: 'Persons',
-    body: 'Dadei recognizes voices over time. Delete the demo person named dadei shown here.',
+    body: "Dadei learns to recognize voices over time and lists everyone it's heard here. This one is just a placeholder named after the app — delete it to clean house.",
     targetKey: 'tutorial-test-person',
     cardAnchorKey: 'persons-panel-root',
     cardPlacement: 'left',
@@ -111,32 +111,40 @@ const CORE_STEPS: TutorialStep[] = [
     id: 'settings_walkthrough',
     kind: 'spotlight',
     title: 'Settings',
-    body: 'A quick tour of your settings.',
+    body: "Everything you can tune lives here — integrations, what Dadei remembers, your account, audio, and more. Quick tour now so you know where to come back to.",
     targetKey: 'settings-panel-root',
   },
   {
     id: 'how_dadei_works',
     kind: 'spotlight',
-    title: 'How does Dadei work?',
-    body: 'When you enable Dadei, listening turns on across every device on your network. Say "hey Dadei" anytime to start a conversation.',
+    title: 'How Dadei works',
+    body: 'Turn Dadei on and every device on your network starts listening together. It runs quietly in the background. To get its attention, say "hey Dadei" or press the mic button.',
     targetKey: 'mic-button',
     cardAnchorKey: 'mic-button',
     cardPlacement: 'below',
     backdropBlurPx: 4,
   },
   {
-    id: 'introduce_yourself',
+    id: 'meet_dadei',
     kind: 'action',
-    title: 'Introduce yourself',
-    body: 'Dadei is listening — say hello and share your name. This is how Dadei learns who you are and recognizes your voice.',
+    title: 'Say hello',
+    body: "Click the mic button to wake Dadei up. It'll introduce itself and ask a bit about you so it knows who it's working for. Take your time — the more you talk, the better it gets at recognizing your voice later.",
     targetKey: 'mic-button',
     cardAnchorKey: 'mic-button',
-    cardPlacement: 'below',
+    cardPlacement: 'above',
     actionTrigger: 'wake-session-ended',
     backdropBlurPx: 0,
     allowedClickTargets: ['mic-button'],
   },
 ];
+
+export const TUTORIAL_INTRO_KICKOFF_TEXT = '__dadei_tutorial_intro_kickoff__';
+
+export const TUTORIAL_MEET_DADEI_STEP_ID = 'meet_dadei';
+
+export function isMeetDadeiStep(stepId: string): boolean {
+  return stepId === TUTORIAL_MEET_DADEI_STEP_ID;
+}
 
 export function isSettingsTutorialStep(stepId: string): boolean {
   return stepId === 'settings_intro' || stepId.startsWith('settings_');
@@ -181,11 +189,11 @@ export const STEPS = buildTutorialSteps();
 
 export const TUTORIAL_PLATFORM = detectPlatform();
 
-/** Step index where mic becomes interactive (introduce_yourself). */
-export const MIC_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'introduce_yourself');
+/** Step index where mic becomes interactive (meet_dadei). */
+export const MIC_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === TUTORIAL_MEET_DADEI_STEP_ID);
 
-/** Step index where voice command / introduction mode is enabled (introduce_yourself). */
-export const WAKE_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'introduce_yourself');
+/** Step index where voice command / introduction mode is enabled (meet_dadei). */
+export const WAKE_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === TUTORIAL_MEET_DADEI_STEP_ID);
 
 export const TUTORIAL_STEP_EVENT = 'tutorial-step';
 
