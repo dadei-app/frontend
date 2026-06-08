@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
-import { TUTORIAL_PLATFORM } from './constants';
+import {
+  TUTORIAL_PLATFORM,
+  TUTORIAL_TEST_BANNER_ID,
+  TUTORIAL_TEST_BANNER_TITLE,
+  TUTORIAL_TEST_TOAST_MESSAGE,
+} from './constants';
 import { permissionsForPlatform, type PermissionEntry } from './permissionsRegistry';
 import TutorialCard from './TutorialCard';
 import ArrowLayer from './ArrowLayer';
@@ -64,7 +69,7 @@ function Backdrop({ step }: { step: TutorialStep }) {
     <>
       <motion.div
         aria-hidden
-        className="fixed inset-0 z-[9998] cursor-default"
+        className="fixed inset-0 z-[9998] cursor-default pointer-events-none"
         initial={false}
         animate={isSpotlight ? SPOTLIGHT_BACKDROP : ACTION_BACKDROP}
         transition={transition}
@@ -74,7 +79,7 @@ function Backdrop({ step }: { step: TutorialStep }) {
       />
       {cutout ? (
         <motion.svg
-          className="fixed inset-0 z-[9999] h-full w-full cursor-default"
+          className="fixed inset-0 z-[9999] h-full w-full cursor-default pointer-events-none"
           aria-hidden
           initial={false}
           animate={{ opacity: showActionCutout ? 1 : 0 }}
@@ -217,17 +222,22 @@ function TutorialOverlayInner() {
     step,
     next,
     back,
-    markActionFired,
     acknowledgePermissions,
     permissionsResolved,
+    isCurrentStepActionComplete,
     currentStepIndex,
     showTestNotifications,
     wakeHintVisible,
   } = useTutorial();
   const canBack = currentStepIndex > 0;
   const canNext =
-    step.id === 'permissions' ? permissionsResolved : step.kind === 'spotlight';
-  const ctx = useTutorialContext();
+    step.id === 'permissions'
+      ? permissionsResolved
+      : step.kind === 'spotlight'
+        ? true
+        : step.actionTrigger
+          ? isCurrentStepActionComplete
+          : false;
   const [wakeHintShown, setWakeHintShown] = useState(false);
 
   useEffect(() => {
@@ -254,17 +264,8 @@ function TutorialOverlayInner() {
     return () => window.removeEventListener('keydown', onKey);
   }, [canNext, next, back]);
 
-  useEffect(() => {
-    if (step.actionTrigger !== 'click' || !step.targetKey) return;
-    const el = document.querySelector(`[data-tutorial-target="${step.targetKey}"]`);
-    if (!el) return;
-    const onTargetClick = () => markActionFired('click');
-    el.addEventListener('click', onTargetClick);
-    return () => el.removeEventListener('click', onTargetClick);
-  }, [step.id, step.actionTrigger, step.targetKey, markActionFired]);
-
   return (
-    <div className="fixed inset-0 z-[9999]">
+    <div className="fixed inset-0 z-[9999] pointer-events-none">
       <Backdrop step={step} />
       <ArrowLayer step={step} cardRef={cardRef} />
       <TutorialCard
@@ -278,7 +279,7 @@ function TutorialOverlayInner() {
         {step.id === 'permissions' ? (
           <PermissionsContent
             onPermissionsReady={acknowledgePermissions}
-            onAdvanceAfterGrant={() => markActionFired('permission-resolved')}
+            onAdvanceAfterGrant={acknowledgePermissions}
           />
         ) : null}
       </TutorialCard>
@@ -289,18 +290,38 @@ function TutorialOverlayInner() {
 /** Fires layout-tour toast/banner when that step is active. */
 export function TutorialNotificationsBridge() {
   const ctx = useTutorialContext();
-  const { showToast, showBanner, dismissBanner } = useNotifications();
+  const { showToast, showBanner, dismissBanner, toasts, banners } = useNotifications();
 
   useEffect(() => {
     if (!ctx?.showTestNotifications) return;
-    showToast('Test notification — this is what alerts look like.', 'info');
+    showToast(TUTORIAL_TEST_TOAST_MESSAGE, 'info');
     const bannerId = showBanner({
-      title: 'Test action — click cancel to dismiss.',
+      id: TUTORIAL_TEST_BANNER_ID,
+      operation: 'delete',
+      category: 'Tutorial',
+      title: TUTORIAL_TEST_BANNER_TITLE,
+      body: 'Cancel to keep the conversation, or wait for the countdown to delete it.',
+      showCountdown: true,
+      durationMs: 15_000,
       cancelLabel: 'Cancel',
-      onCancel: () => dismissBanner(bannerId),
+      onCancel: () => {
+        dismissBanner(bannerId);
+      },
+      onAutoDismiss: () => {
+        ctx.removeTutorialConversation();
+      },
     });
     return () => dismissBanner(bannerId);
-  }, [ctx?.showTestNotifications, showToast, showBanner, dismissBanner]);
+  }, [ctx?.showTestNotifications, ctx, showToast, showBanner, dismissBanner]);
+
+  useEffect(() => {
+    if (!ctx?.showTestNotifications || ctx.step.actionTrigger !== 'notifications-dismissed') return;
+    const toastGone = !toasts.some(t => t.message === TUTORIAL_TEST_TOAST_MESSAGE);
+    const bannerGone = !banners.some(b => b.id === TUTORIAL_TEST_BANNER_ID);
+    if (toastGone && bannerGone) {
+      ctx.markActionFired('notifications-dismissed');
+    }
+  }, [ctx, toasts, banners]);
 
   return null;
 }

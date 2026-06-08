@@ -3,6 +3,35 @@ import type {
   DesktopPermissionStatus,
 } from '@dadei/ui/types/electron';
 
+function mergePermissionStatus(
+  main: DesktopPermissionStatus,
+  renderer: DesktopPermissionStatus,
+): DesktopPermissionStatus {
+  if (main === 'granted' || renderer === 'granted') return 'granted';
+  if (main === 'denied' || renderer === 'denied') return 'denied';
+  if (main === 'unsupported' && renderer === 'unsupported') return 'unsupported';
+  return 'not-determined';
+}
+
+/** macOS media access (main) + Chromium mic prompt (renderer) on Windows/Linux. */
+export async function checkElectronMicrophonePermission(): Promise<DesktopPermissionStatus> {
+  let main: DesktopPermissionStatus = 'not-determined';
+  if (window.electronAPI?.permissions) {
+    main = await window.electronAPI.permissions.check('microphone');
+  }
+  if (main === 'granted' || main === 'denied') return main;
+  return checkRendererPermission('microphone');
+}
+
+export async function requestElectronMicrophonePermission(): Promise<DesktopPermissionStatus> {
+  let main: DesktopPermissionStatus = 'not-determined';
+  if (window.electronAPI?.permissions) {
+    main = await window.electronAPI.permissions.request('microphone');
+  }
+  const renderer = await requestRendererPermission('microphone');
+  return mergePermissionStatus(main, renderer);
+}
+
 /** Geolocation/mic must run in the renderer (user gesture). Main process handles screen + macOS media. */
 export async function checkRendererPermission(
   kind: Extract<DesktopPermissionKind, 'location' | 'microphone'>,

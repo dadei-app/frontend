@@ -15,7 +15,14 @@ import {
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
-import { isTutorialTestId } from '@dadei/ui/components/tutorial/testData';
+import {
+  TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS,
+  TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS,
+} from '@dadei/ui/components/tutorial/constants';
+import {
+  isTutorialTestId,
+  TUTORIAL_TEST_CONVERSATION_ID,
+} from '@dadei/ui/components/tutorial/testData';
 import { ORPHAN_KEY } from './constants';
 
 const PERSON_COLOR_SHADES = [
@@ -166,10 +173,13 @@ export function useInteractionPanel() {
   const [conversationGroups, setConversationGroups] = useState<ConversationGroupState[]>([]);
   const loading = interactionsLoading;
 
-  const personsById = useMemo(
-    () => new Map(persons.map(person => [person.id, person])),
-    [persons],
-  );
+  const personsById = useMemo(() => {
+    const map = new Map(persons.map(person => [person.id, person]));
+    for (const person of tutorial?.tutorialPersons ?? []) {
+      if (!map.has(person.id)) map.set(person.id, person);
+    }
+    return map;
+  }, [persons, tutorial?.tutorialPersons]);
 
   useEffect(() => {
     if (!isConnected || personsLoading) return;
@@ -243,8 +253,37 @@ export function useInteractionPanel() {
   }, [retryInteractions]);
 
   useEffect(() => {
-    setConversationGroups(previous => buildConversationGroups(interactions, conversationById, previous));
-  }, [interactions, conversationById]);
+    setConversationGroups(previous => {
+      const groups = buildConversationGroups(interactions, conversationById, previous);
+      if (!tutorial) return groups;
+
+      if (TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS.has(tutorial.step.id)) {
+        return groups.map(g => {
+          if (groupKey(g) !== TUTORIAL_TEST_CONVERSATION_ID) return g;
+          return { ...g, isExpanded: false };
+        });
+      }
+
+      if (TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS.has(tutorial.step.id)) {
+        return groups.map(g => {
+          if (groupKey(g) !== TUTORIAL_TEST_CONVERSATION_ID) return g;
+          return { ...g, isExpanded: true };
+        });
+      }
+
+      return groups;
+    });
+  }, [interactions, conversationById, tutorial?.step.id]);
+
+  useEffect(() => {
+    if (tutorial?.step.id !== 'expand_conversation') return;
+    const expanded = displayGroups.some(
+      g => groupKey(g) === TUTORIAL_TEST_CONVERSATION_ID && g.isExpanded,
+    );
+    if (expanded) {
+      tutorial.markActionFired('expand-conversation');
+    }
+  }, [tutorial, displayGroups]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -254,14 +293,28 @@ export function useInteractionPanel() {
   const toggleConversation = (index: number) => {
     setConversationGroups(prev => {
       const activeKey = activeConversationKey(prev);
-      return prev.map((g, i) => {
+      const target = prev[index];
+      if (!target) return prev;
+      const derived =
+        target.isExpanded !== undefined
+          ? target.isExpanded
+          : activeKey !== null && groupKey(target) === activeKey;
+      const willExpand = !derived;
+
+      const next = prev.map((g, i) => {
         if (i !== index) return g;
-        const derived =
-          g.isExpanded !== undefined
-            ? g.isExpanded
-            : activeKey !== null && groupKey(g) === activeKey;
         return { ...g, isExpanded: !derived };
       });
+
+      if (
+        willExpand &&
+        tutorial?.step.id === 'expand_conversation' &&
+        groupKey(target) === TUTORIAL_TEST_CONVERSATION_ID
+      ) {
+        queueMicrotask(() => tutorial.markActionFired('expand-conversation'));
+      }
+
+      return next;
     });
   };
 

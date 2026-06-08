@@ -21,6 +21,7 @@ export interface BannerProps {
   countdownEndsAt?: string;
   cancelLabel?: string;
   onCancel?: () => Promise<void> | void;
+  onAutoDismiss?: () => Promise<void> | void;
   onDismiss: () => void;
   /** Top of stack — only front card runs countdown auto-dismiss. */
   isStackFront?: boolean;
@@ -45,6 +46,7 @@ export default function Banner({
   countdownEndsAt,
   cancelLabel,
   onCancel,
+  onAutoDismiss,
   onDismiss,
   isStackFront = true,
   stackDepth = 0,
@@ -67,9 +69,12 @@ export default function Banner({
     const now = Date.now();
     const end = countdownEndsAt ? parseApiDateTimeMs(countdownEndsAt) : now + durationMs;
     const delay = Math.max(end - now, 0);
-    const t = window.setTimeout(() => onDismiss(), delay);
+    const t = window.setTimeout(() => {
+      void onAutoDismiss?.();
+      onDismiss();
+    }, delay);
     return () => window.clearTimeout(t);
-  }, [id, durationMs, countdownEndsAt, onDismiss, isStackFront, showCountdown, queued]);
+  }, [id, durationMs, countdownEndsAt, onDismiss, onAutoDismiss, isStackFront, showCountdown, queued]);
 
   useEffect(() => {
     if (exitMode !== 'cancel' || crumbleStartedRef.current) return;

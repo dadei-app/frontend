@@ -46,7 +46,7 @@ export default function Header({
               ? 'border-emerald-500/45 bg-emerald-500/15 text-emerald-300'
               : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-emerald-500/30 hover:bg-zinc-800/80 hover:text-emerald-300/90'
           )}
-          title="People"
+          title="Persons"
         >
           <Users className="h-4 w-4" strokeWidth={2} />
         </button>

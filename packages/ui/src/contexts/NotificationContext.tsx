@@ -39,6 +39,8 @@ export type ShowBannerInput = {
   queued?: boolean;
   cancelLabel?: string;
   onCancel?: () => Promise<void> | void;
+  /** Called when the countdown completes, before the banner is removed. */
+  onAutoDismiss?: () => Promise<void> | void;
 };
 
 export type BannerItem = {
@@ -53,6 +55,7 @@ export type BannerItem = {
   queued?: boolean;
   cancelLabel?: string;
   onCancel?: () => Promise<void> | void;
+  onAutoDismiss?: () => Promise<void> | void;
 };
 
 type ToastMessage = {
@@ -252,6 +255,7 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
                 countdownEndsAt={banner.countdownEndsAt}
                 cancelLabel={banner.cancelLabel}
                 onCancel={banner.onCancel}
+                onAutoDismiss={banner.onAutoDismiss}
                 onDismiss={() => dismissBannerById(banner.id)}
                 isStackFront={isFront}
                 stackDepth={depth}
@@ -311,6 +315,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         countdownEndsAt: input.countdownEndsAt,
         cancelLabel: input.cancelLabel,
         onCancel: input.onCancel,
+        onAutoDismiss: input.onAutoDismiss,
       };
       const idx = prev.findIndex((b) => b.id === id);
       if (idx === -1) return [...prev, next];

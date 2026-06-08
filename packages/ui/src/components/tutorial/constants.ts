@@ -65,50 +65,42 @@ const CORE_STEPS: TutorialStep[] = [
     actionTrigger: 'permission-resolved',
   },
   {
-    id: 'layout_tour',
-    kind: 'spotlight',
-    title: 'Your space',
-    body: 'This is where Dadei lives. Notifications appear here as toasts, and pending actions show up as banners you can cancel.',
-    targetKey: 'assistant-layout-shell',
-  },
-  {
-    id: 'interactions_panel',
+    id: 'expand_conversation',
     kind: 'action',
-    title: 'Interactions',
-    body: 'Each line is one interaction. Click the highlighted one to continue.',
-    targetKey: 'tutorial-test-interaction-2',
-    actionTrigger: 'click',
+    title: 'Conversations',
+    body: 'Interactions group into conversations. Click the sample conversation in the panel to expand it.',
+    targetKey: 'tutorial-test-conversation',
+    actionTrigger: 'expand-conversation',
+    autoAdvanceOnAction: true,
   },
   {
     id: 'delete_interaction',
     kind: 'action',
-    title: 'Delete an interaction',
-    body: 'Hover any single interaction and click the trash icon. Try it on the first one.',
+    title: 'Interactions',
+    body: 'Each line is one interaction. Hover the first one and click the trash icon to delete it.',
     targetKey: 'tutorial-test-interaction-1',
+    cardAnchorKey: 'interaction-panel-root',
+    cardPlacement: 'left',
     actionTrigger: 'delete-interaction',
   },
   {
-    id: 'delete_conversation',
+    id: 'layout_tour',
     kind: 'action',
-    title: 'Delete the conversation',
-    body: 'You can also delete an entire conversation at once. Try it on the test conversation.',
-    targetKey: 'tutorial-test-conversation',
-    actionTrigger: 'delete-conversation',
-  },
-  {
-    id: 'persons_panel',
-    kind: 'spotlight',
-    title: 'People',
-    body: 'Dadei recognizes voices over time. You can rename anyone here, or delete them and their interactions.',
-    targetKey: 'people-panel-root',
+    title: 'Your space',
+    body: 'Dismiss the toast. The banner proposes deleting the sample conversation — Cancel keeps it, or let the countdown finish to remove it.',
+    targetKey: 'assistant-layout-shell',
+    actionTrigger: 'notifications-dismissed',
   },
   {
     id: 'delete_person',
     kind: 'action',
-    title: 'Delete the test person',
-    body: 'Click the trash icon on the test person to remove them.',
+    title: 'Persons',
+    body: 'Dadei recognizes voices over time. Delete the demo person named dadei shown here.',
     targetKey: 'tutorial-test-person',
+    cardAnchorKey: 'persons-panel-root',
+    cardPlacement: 'left',
     actionTrigger: 'delete-person',
+    openPersonsPanel: true,
   },
   {
     id: 'settings_walkthrough',
@@ -178,3 +170,13 @@ export const MIC_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'enable_servi
 export const WAKE_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'wake_word_demo');
 
 export const TUTORIAL_STEP_EVENT = 'tutorial-step';
+
+/** Keep the sample conversation collapsed so the user can expand it. */
+export const TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS = new Set(['expand_conversation']);
+
+/** Keep the sample conversation open so interactions are reachable. */
+export const TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS = new Set(['delete_interaction']);
+
+export const TUTORIAL_TEST_TOAST_MESSAGE = 'Test notification — this is what alerts look like.';
+export const TUTORIAL_TEST_BANNER_TITLE = 'Delete sample conversation';
+export const TUTORIAL_TEST_BANNER_ID = 'tutorial-delete-conversation-banner';

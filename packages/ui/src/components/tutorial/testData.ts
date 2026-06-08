@@ -1,60 +1,89 @@
 import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
+import { parseApiDateTime } from '@dadei/ui/lib/shared/parseApiDateTime';
+import { formatForUser } from '@dadei/ui/utils/time';
 
-export const TEST_PERSON: Person = {
-  id: 'tutorial-test-person',
-  name: 'Tutorial Demo',
-  is_user: false,
-  network_id: 'tutorial',
-  created_at: new Date(0).toISOString(),
-  updated_at: new Date(0).toISOString(),
-};
+export const TUTORIAL_TEST_PERSON_ID = 'tutorial-test-person';
+export const TUTORIAL_TEST_CONVERSATION_ID = 'tutorial-test-conversation';
 
-export const TEST_CONVERSATION: Conversation = {
-  id: 'tutorial-test-conversation',
-  started_at: new Date(0).toISOString(),
-  topic_summary: 'Tutorial demo',
-  context_summary: null,
-  is_active: false,
-};
+export interface TutorialFixtures {
+  person: Person;
+  conversation: Conversation;
+  interactions: Interaction[];
+}
 
-export const TEST_INTERACTIONS: Interaction[] = [
-  {
-    id: 'tutorial-test-interaction-1',
-    text: 'Hey, this is Dadei.',
-    timestamp: new Date(0).toISOString(),
-    network_id: 'tutorial',
-    person_id: 'tutorial-test-person',
-    conversation_id: 'tutorial-test-conversation',
-    sentiment: null,
-  },
-  {
-    id: 'tutorial-test-interaction-2',
-    text: 'This is an interaction.',
-    timestamp: new Date(1000).toISOString(),
-    network_id: 'tutorial',
-    person_id: 'tutorial-test-person',
-    conversation_id: 'tutorial-test-conversation',
-    sentiment: null,
-  },
-  {
-    id: 'tutorial-test-interaction-3',
-    text: 'Interactions are single sentence statements.',
-    timestamp: new Date(2000).toISOString(),
-    network_id: 'tutorial',
-    person_id: 'tutorial-test-person',
-    conversation_id: 'tutorial-test-conversation',
-    sentiment: null,
-  },
-  {
-    id: 'tutorial-test-interaction-4',
-    text: 'We all fit into a conversation.',
-    timestamp: new Date(3000).toISOString(),
-    network_id: 'tutorial',
-    person_id: 'tutorial-test-person',
-    conversation_id: 'tutorial-test-conversation',
-    sentiment: null,
-  },
-];
+function formatAnchorLabel(iso: string): string {
+  const d = parseApiDateTime(iso);
+  if (Number.isNaN(d.getTime())) return 'your first session';
+  const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return formatForUser(d.toISOString(), userTz, { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function isoAt(anchorIso: string, offsetMs: number): string {
+  const base = parseApiDateTime(anchorIso).getTime();
+  if (Number.isNaN(base)) return new Date(offsetMs).toISOString();
+  return new Date(base + offsetMs).toISOString();
+}
+
+/** Demo person, conversation, and interactions anchored to account / user creation time. */
+export function buildTutorialFixtures(anchorIso: string): TutorialFixtures {
+  const whenLabel = formatAnchorLabel(anchorIso);
+
+  return {
+    person: {
+      id: TUTORIAL_TEST_PERSON_ID,
+      name: 'dadei',
+      is_user: false,
+      network_id: 'tutorial',
+      created_at: anchorIso,
+      updated_at: anchorIso,
+    },
+    conversation: {
+      id: TUTORIAL_TEST_CONVERSATION_ID,
+      started_at: anchorIso,
+      topic_summary: 'Getting started with Dadei',
+      context_summary: `Sample conversation from ${whenLabel}. Interactions like these are grouped together so you can review what happened at a glance.`,
+      is_active: false,
+    },
+    interactions: [
+      {
+        id: 'tutorial-test-interaction-1',
+        text: 'Hey, this is dadei.',
+        timestamp: isoAt(anchorIso, 30_000),
+        network_id: 'tutorial',
+        person_id: TUTORIAL_TEST_PERSON_ID,
+        conversation_id: TUTORIAL_TEST_CONVERSATION_ID,
+        sentiment: null,
+      },
+      {
+        id: 'tutorial-test-interaction-2',
+        text: 'Each line you see is one interaction.',
+        timestamp: isoAt(anchorIso, 90_000),
+        network_id: 'tutorial',
+        person_id: TUTORIAL_TEST_PERSON_ID,
+        conversation_id: TUTORIAL_TEST_CONVERSATION_ID,
+        sentiment: null,
+      },
+      {
+        id: 'tutorial-test-interaction-3',
+        text: 'Interactions are short, single-sentence statements.',
+        timestamp: isoAt(anchorIso, 150_000),
+        network_id: 'tutorial',
+        person_id: TUTORIAL_TEST_PERSON_ID,
+        conversation_id: TUTORIAL_TEST_CONVERSATION_ID,
+        sentiment: null,
+      },
+      {
+        id: 'tutorial-test-interaction-4',
+        text: 'They roll up into conversations like this one.',
+        timestamp: isoAt(anchorIso, 210_000),
+        network_id: 'tutorial',
+        person_id: TUTORIAL_TEST_PERSON_ID,
+        conversation_id: TUTORIAL_TEST_CONVERSATION_ID,
+        sentiment: null,
+      },
+    ],
+  };
+}
 
 export function isTutorialTestId(id: string): boolean {
   return id.startsWith('tutorial-test-');

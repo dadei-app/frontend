@@ -15,12 +15,11 @@ import {
   WAKE_UNLOCK_STEP_INDEX,
 } from './constants';
 import {
-  TEST_CONVERSATION,
-  TEST_INTERACTIONS,
-  TEST_PERSON,
+  buildTutorialFixtures,
   isTutorialTestId,
 } from './testData';
 import type { ActionTrigger, TutorialStep } from './types';
+import { useService } from '@dadei/ui/contexts/ServiceContext';
 
 export interface TutorialContextValue {
   isActive: boolean;
@@ -33,6 +32,7 @@ export interface TutorialContextValue {
   markActionFired: (trigger: ActionTrigger) => void;
   acknowledgePermissions: () => void;
   permissionsResolved: boolean;
+  isCurrentStepActionComplete: boolean;
   tutorialPersons: Person[];
   tutorialInteractions: Interaction[];
   tutorialConversations: Conversation[];
@@ -52,7 +52,44 @@ export interface TutorialContextValue {
 
 const TutorialContext = createContext<TutorialContextValue | null>(null);
 
+function isStepActionComplete(
+  step: TutorialStep | undefined,
+  flags: {
+    permissionsResolved: boolean;
+    expandConversationDone: boolean;
+    notificationsDismissed: boolean;
+    removedInteractionIds: Set<string>;
+    personRemoved: boolean;
+    serviceEnabledFired: boolean;
+    tutorialInteractionCount: number;
+    wakeSessionEnded: boolean;
+  },
+): boolean {
+  if (!step?.actionTrigger) return true;
+  switch (step.actionTrigger) {
+    case 'permission-resolved':
+      return flags.permissionsResolved;
+    case 'expand-conversation':
+      return flags.expandConversationDone;
+    case 'notifications-dismissed':
+      return flags.notificationsDismissed;
+    case 'delete-interaction':
+      return flags.removedInteractionIds.size > 0;
+    case 'delete-person':
+      return flags.personRemoved;
+    case 'service-enabled':
+      return flags.serviceEnabledFired;
+    case 'interactions-logged':
+      return flags.tutorialInteractionCount >= (step.requiredInteractions ?? 2);
+    case 'wake-session-ended':
+      return flags.wakeSessionEnded;
+    default:
+      return false;
+  }
+}
+
 export function TutorialProvider({ children }: { children: ReactNode }) {
+  const { persons } = useService();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [removedInteractionIds, setRemovedInteractionIds] = useState<Set<string>>(
     () => new Set(),
@@ -61,14 +98,49 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const [personRemoved, setPersonRemoved] = useState(false);
   const [tutorialInteractionCount, setTutorialInteractionCount] = useState(0);
   const [permissionsResolved, setPermissionsResolved] = useState(false);
+  const [expandConversationDone, setExpandConversationDone] = useState(false);
   const [serviceEnabledFired, setServiceEnabledFired] = useState(false);
   const [wakeSessionEnded, setWakeSessionEnded] = useState(false);
-  const [targetClicked, setTargetClicked] = useState(false);
+  const [notificationsDismissed, setNotificationsDismissed] = useState(false);
   const [openSettingsForTutorial, setOpenSettingsForTutorial] = useState(false);
+
+  const fixtures = useMemo(() => {
+    const userPerson = persons.find(p => p.is_user);
+    const anchorIso = userPerson?.created_at ?? new Date().toISOString();
+    return buildTutorialFixtures(anchorIso);
+  }, [persons]);
 
   const steps = STEPS;
   const step = steps[currentStepIndex] ?? steps[0];
   const totalSteps = steps.length;
+
+  const actionFlags = useMemo(
+    () => ({
+      permissionsResolved,
+      expandConversationDone,
+      notificationsDismissed,
+      removedInteractionIds,
+      personRemoved,
+      serviceEnabledFired,
+      tutorialInteractionCount,
+      wakeSessionEnded,
+    }),
+    [
+      permissionsResolved,
+      expandConversationDone,
+      notificationsDismissed,
+      removedInteractionIds,
+      personRemoved,
+      serviceEnabledFired,
+      tutorialInteractionCount,
+      wakeSessionEnded,
+    ],
+  );
+
+  const isCurrentStepActionComplete = useMemo(
+    () => isStepActionComplete(step, actionFlags),
+    [step, actionFlags],
+  );
 
   const publishStep = useCallback((index: number) => {
     window.dispatchEvent(
@@ -77,61 +149,22 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    setTargetClicked(false);
-  }, [currentStepIndex]);
-
-  const tryAdvanceFromAction = useCallback(
-    (index: number) => {
-      const current = steps[index];
-      if (!current?.actionTrigger) return false;
-      switch (current.actionTrigger) {
-        case 'permission-resolved':
-          return permissionsResolved;
-        case 'delete-interaction':
-          return removedInteractionIds.size > 0;
-        case 'delete-conversation':
-          return conversationRemoved;
-        case 'delete-person':
-          return personRemoved;
-        case 'service-enabled':
-          return serviceEnabledFired;
-        case 'interactions-logged':
-          return tutorialInteractionCount >= (current.requiredInteractions ?? 2);
-        case 'wake-session-ended':
-          return wakeSessionEnded;
-        case 'click':
-          return targetClicked;
-        default:
-          return false;
-      }
-    },
-    [
-      steps,
-      permissionsResolved,
-      removedInteractionIds,
-      conversationRemoved,
-      personRemoved,
-      serviceEnabledFired,
-      tutorialInteractionCount,
-      wakeSessionEnded,
-      targetClicked,
-    ],
-  );
+    if (step.id === 'layout_tour') {
+      setNotificationsDismissed(false);
+    }
+  }, [currentStepIndex, step.id]);
 
   const next = useCallback(() => {
     setCurrentStepIndex(prev => {
       const current = steps[prev];
-      if (current?.actionTrigger && !tryAdvanceFromAction(prev)) {
-        return prev;
-      }
-      if (current?.kind === 'action' && !tryAdvanceFromAction(prev)) {
+      if (current?.actionTrigger && !isStepActionComplete(current, actionFlags)) {
         return prev;
       }
       const nextIndex = Math.min(prev + 1, steps.length - 1);
       publishStep(nextIndex);
       return nextIndex;
     });
-  }, [steps, tryAdvanceFromAction, publishStep]);
+  }, [steps, actionFlags, publishStep]);
 
   const back = useCallback(() => {
     setCurrentStepIndex(prev => {
@@ -148,18 +181,18 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const markActionFired = useCallback(
     (trigger: ActionTrigger) => {
       if (trigger === 'permission-resolved') setPermissionsResolved(true);
+      if (trigger === 'expand-conversation') setExpandConversationDone(true);
+      if (trigger === 'notifications-dismissed') setNotificationsDismissed(true);
       if (trigger === 'service-enabled') setServiceEnabledFired(true);
       if (trigger === 'wake-session-ended') setWakeSessionEnded(true);
-      if (trigger === 'click') setTargetClicked(true);
+      if (trigger === 'interactions-logged') {
+        const required = steps[currentStepIndex]?.requiredInteractions ?? 2;
+        setTutorialInteractionCount(required);
+      }
+
       setCurrentStepIndex(prev => {
         const current = steps[prev];
-        if (current?.actionTrigger !== trigger) return prev;
-        if (!tryAdvanceFromAction(prev)) {
-          if (trigger === 'permission-resolved' || trigger === 'click') {
-            const nextIndex = Math.min(prev + 1, steps.length - 1);
-            publishStep(nextIndex);
-            return nextIndex;
-          }
+        if (current?.actionTrigger !== trigger || !current.autoAdvanceOnAction) {
           return prev;
         }
         const nextIndex = Math.min(prev + 1, steps.length - 1);
@@ -167,32 +200,31 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         return nextIndex;
       });
     },
-    [steps, tryAdvanceFromAction, publishStep],
+    [steps, currentStepIndex, publishStep],
   );
 
   const removeTutorialInteraction = useCallback((id: string) => {
     if (!isTutorialTestId(id)) return;
     setRemovedInteractionIds(prev => new Set(prev).add(id));
-    markActionFired('delete-interaction');
-  }, [markActionFired]);
+  }, []);
 
   const removeTutorialConversation = useCallback(() => {
     setConversationRemoved(true);
-    markActionFired('delete-conversation');
-  }, [markActionFired]);
+  }, []);
 
   const removeTutorialPerson = useCallback(() => {
     setPersonRemoved(true);
-    markActionFired('delete-person');
-  }, [markActionFired]);
+  }, []);
 
   const recordTutorialInteraction = useCallback(() => {
     setTutorialInteractionCount(prev => {
       const nextCount = prev + 1;
-      const required = steps[currentStepIndex]?.requiredInteractions ?? 2;
+      const current = steps[currentStepIndex];
+      const required = current?.requiredInteractions ?? 2;
       if (
-        steps[currentStepIndex]?.actionTrigger === 'interactions-logged' &&
-        nextCount >= required
+        current?.actionTrigger === 'interactions-logged' &&
+        nextCount >= required &&
+        current.autoAdvanceOnAction
       ) {
         setTimeout(() => markActionFired('interactions-logged'), 0);
       }
@@ -202,18 +234,18 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   const tutorialInteractions = useMemo(() => {
     if (conversationRemoved) return [];
-    return TEST_INTERACTIONS.filter(i => !removedInteractionIds.has(i.id));
-  }, [removedInteractionIds, conversationRemoved]);
+    return fixtures.interactions.filter(i => !removedInteractionIds.has(i.id));
+  }, [fixtures.interactions, removedInteractionIds, conversationRemoved]);
 
   const tutorialPersons = useMemo(() => {
     if (personRemoved) return [];
-    return [TEST_PERSON];
-  }, [personRemoved]);
+    return [fixtures.person];
+  }, [fixtures.person, personRemoved]);
 
   const tutorialConversations = useMemo(() => {
     if (conversationRemoved) return [];
-    return [TEST_CONVERSATION];
-  }, [conversationRemoved]);
+    return [fixtures.conversation];
+  }, [fixtures.conversation, conversationRemoved]);
 
   const micInteractive = currentStepIndex >= MIC_UNLOCK_STEP_INDEX;
   const wakeWordEnabled = currentStepIndex >= WAKE_UNLOCK_STEP_INDEX;
@@ -234,6 +266,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       markActionFired,
       acknowledgePermissions,
       permissionsResolved,
+      isCurrentStepActionComplete,
       tutorialPersons,
       tutorialInteractions,
       tutorialConversations,
@@ -260,6 +293,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       markActionFired,
       acknowledgePermissions,
       permissionsResolved,
+      isCurrentStepActionComplete,
       tutorialPersons,
       tutorialInteractions,
       tutorialConversations,

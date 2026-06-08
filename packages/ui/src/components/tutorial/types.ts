@@ -3,21 +3,31 @@ export type Platform = 'desktop-darwin' | 'desktop-win32' | 'desktop-linux' | 'w
 export type StepKind = 'spotlight' | 'action';
 
 export type ActionTrigger =
-  | 'click'
   | 'permission-resolved'
+  | 'expand-conversation'
+  | 'notifications-dismissed'
   | 'delete-interaction'
-  | 'delete-conversation'
   | 'delete-person'
   | 'service-enabled'
   | 'wake-session-ended'
   | 'interactions-logged';
+
+export type TutorialCardPlacement = 'auto' | 'left' | 'right' | 'below';
 
 export interface TutorialStep {
   id: string;
   kind: StepKind;
   title: string;
   body: string;
+  /** Action cutout / arrow target. */
   targetKey: string | null;
+  /** Card position anchor when different from `targetKey`. */
+  cardAnchorKey?: string | null;
+  cardPlacement?: TutorialCardPlacement;
   actionTrigger?: ActionTrigger;
+  /** When true, completing the action trigger advances to the next step automatically. */
+  autoAdvanceOnAction?: boolean;
+  /** Open the persons drawer when this step is active. */
+  openPersonsPanel?: boolean;
   requiredInteractions?: number;
 }

@@ -168,7 +168,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'tween', duration: 0.34, ease: [0.32, 0.72, 0, 1] }}
-            data-tutorial-target="people-panel-root"
+            data-tutorial-target="persons-panel-root"
             className="fixed bottom-0 right-0 top-[calc(var(--assistant-titlebar-offset,0px)+var(--assistant-header-h,4.75rem))] flex min-h-0 w-full max-w-md flex-col border-l border-white/10 bg-zinc-950/95 shadow-[-10px_0_40px_rgba(0,0,0,0.4)] backdrop-blur-xl will-change-transform sm:w-1/3"
             style={{ zIndex: PEOPLE_DRAWER_Z }}
           >
@@ -176,7 +176,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-zinc-100">
                 <i className="fas fa-users text-emerald-400/90" />
-                People
+                Persons
               </h2>
               <button
                 onClick={onClose}

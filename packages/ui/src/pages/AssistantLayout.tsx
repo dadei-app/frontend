@@ -71,12 +71,27 @@ function TutorialSettingsBridge({
   return null;
 }
 
+function TutorialPersonsBridge({
+  setIsPeoplePanelOpen,
+}: {
+  setIsPeoplePanelOpen: (open: boolean) => void;
+}) {
+  const tutorial = useTutorialContext();
+  useLayoutEffect(() => {
+    if (tutorial?.step.openPersonsPanel) {
+      setIsPeoplePanelOpen(true);
+    }
+  }, [tutorial?.step.openPersonsPanel, tutorial?.step.id, setIsPeoplePanelOpen]);
+  return null;
+}
+
 function AssistantLayoutShell() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isBootstrapReady, formatHotkey } = useSystem();
   const { isConnected, isServiceEnabled } = useService();
   const { state } = useCommand();
   const tutorial = useTutorialContext();
+  const elevateNotifications = tutorial?.step.id === 'layout_tour';
   const showWakeHint =
     state === 'idle' && isServiceEnabled && (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
@@ -154,7 +169,12 @@ function AssistantLayoutShell() {
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
             }}
           >
-            <div className="pointer-events-none absolute top-4 left-10 z-30 w-[calc(100%-5rem)]">
+            <div
+              className={cn(
+                'pointer-events-none absolute top-4 left-10 w-[calc(100%-5rem)]',
+                elevateNotifications ? 'z-[10002]' : 'z-30',
+              )}
+            >
               <BannerStackHost />
             </div>
             <div className="relative min-h-0 flex-1 overflow-hidden">
@@ -208,9 +228,12 @@ function AssistantLayoutShell() {
       </div>
 
       <TutorialSettingsBridge settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
+      <TutorialPersonsBridge setIsPeoplePanelOpen={setIsPeoplePanelOpen} />
       <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
-      <ToastStackHost className="fixed right-5 bottom-5 z-[260]" />
+      <ToastStackHost
+        className={cn('fixed right-5 bottom-5', elevateNotifications ? 'z-[10002]' : 'z-[260]')}
+      />
     </div>
   );
 }

@@ -7,6 +7,7 @@ const AUTO_ALLOW = new Set([
   'screen',
   'audioCapture',
   'videoCapture',
+  'notifications',
 ]);
 
 /** Allow Chromium permission prompts used by geolocation, mic, and screen capture. */

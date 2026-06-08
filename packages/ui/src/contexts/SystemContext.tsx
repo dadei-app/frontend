@@ -30,7 +30,9 @@ import {
   micDevicesHaveLabels,
 } from '@dadei/ui/lib/audio/micDevices';
 import {
+  checkElectronMicrophonePermission,
   checkRendererPermission,
+  requestElectronMicrophonePermission,
   requestRendererPermission,
 } from '@dadei/ui/lib/platform/desktopPermissions';
 import {
@@ -287,16 +289,13 @@ export function SystemProvider({ children }: { children: ReactNode }) {
         api.checkAll(),
         api.getMeta?.() ?? Promise.resolve({ geolocationConfigured: false }),
         checkRendererPermission('location'),
-        checkRendererPermission('microphone'),
+        checkElectronMicrophonePermission(),
       ]);
       setGeolocationConfigured(meta.geolocationConfigured);
       setPermissions({
         ...mainMap,
         location,
-        microphone:
-          mainMap.microphone === 'granted' || mainMap.microphone === 'denied'
-            ? mainMap.microphone
-            : microphone,
+        microphone,
       });
       setPermissionsLoaded(true);
     } catch {
@@ -313,17 +312,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
             setPermissions(prev => ({ ...prev, location: status }));
             return status;
           }
-          let mainStatus: DesktopPermissionStatus = 'not-determined';
-          if (window.electronAPI?.permissions) {
-            mainStatus = await window.electronAPI.permissions.request('microphone');
-          }
-          const rendererStatus = await requestRendererPermission('microphone');
-          const merged =
-            mainStatus === 'granted' || rendererStatus === 'granted'
-              ? 'granted'
-              : mainStatus === 'denied' || rendererStatus === 'denied'
-                ? 'denied'
-                : rendererStatus;
+          const merged = await requestElectronMicrophonePermission();
           setPermissions(prev => ({ ...prev, microphone: merged }));
           return merged;
         } catch {

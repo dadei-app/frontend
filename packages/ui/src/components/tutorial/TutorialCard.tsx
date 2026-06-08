@@ -122,13 +122,34 @@ function placementCandidates(rect: DOMRect, cardW: number, cardH: number) {
   return [belowCentered, belowLeft, right, left, aboveCentered];
 }
 
-function placementForRect(rect: DOMRect, cardW: number, cardH: number): { top: number; left: number } {
+function placementForRect(
+  rect: DOMRect,
+  cardW: number,
+  cardH: number,
+  placement: TutorialStep['cardPlacement'] = 'auto',
+) {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const fallback = {
     top: Math.max(CARD_MARGIN, (vh - cardH) / 2),
     left: Math.max(CARD_MARGIN, (vw - cardW) / 2),
   };
+
+  const cx = rect.left + rect.width / 2;
+  const rowAlignedY = rect.top + rect.height / 2 - cardH / 2;
+
+  if (placement === 'left') {
+    const pos = { top: rowAlignedY, left: rect.left - cardW - CARD_MARGIN };
+    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+  }
+  if (placement === 'right') {
+    const pos = { top: rowAlignedY, left: rect.right + CARD_MARGIN };
+    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+  }
+  if (placement === 'below') {
+    const pos = { top: rect.bottom + CARD_MARGIN, left: cx - cardW / 2 };
+    if (fitsViewport(pos, cardW, cardH)) return clampTopLeft(pos, cardW, cardH);
+  }
 
   for (const pos of placementCandidates(rect, cardW, cardH)) {
     if (fitsViewport(pos, cardW, cardH)) {
@@ -139,20 +160,26 @@ function placementForRect(rect: DOMRect, cardW: number, cardH: number): { top: n
 }
 
 function topLeftForStep(step: TutorialStep, cardW: number, cardH: number) {
-  if (!step.targetKey) {
+  const anchorKey = step.cardAnchorKey ?? step.targetKey;
+  if (!anchorKey) {
     return {
       top: (window.innerHeight - cardH) / 2,
       left: (window.innerWidth - cardW) / 2,
     };
   }
-  const target = document.querySelector(`[data-tutorial-target="${step.targetKey}"]`);
+  const target = document.querySelector(`[data-tutorial-target="${anchorKey}"]`);
   if (!target) {
     return {
       top: (window.innerHeight - cardH) / 2,
       left: (window.innerWidth - cardW) / 2,
     };
   }
-  return placementForRect(target.getBoundingClientRect(), cardW, cardH);
+  return placementForRect(
+    target.getBoundingClientRect(),
+    cardW,
+    cardH,
+    step.cardPlacement ?? 'auto',
+  );
 }
 
 function centerForStep(step: TutorialStep, size: BoxSize): Point {

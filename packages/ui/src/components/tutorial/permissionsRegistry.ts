@@ -1,6 +1,8 @@
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import {
+  checkElectronMicrophonePermission,
   checkRendererPermission,
+  requestElectronMicrophonePermission,
   requestRendererPermission,
 } from '@dadei/ui/lib/platform/desktopPermissions';
 import type { Platform } from './types';
@@ -27,16 +29,23 @@ function mapDesktopStatus(
 }
 
 async function checkNotifications(): Promise<'granted' | 'denied' | 'unknown'> {
-  if (typeof Notification === 'undefined') return 'unknown';
+  if (typeof Notification === 'undefined') {
+    return isElectronDesktop() ? 'granted' : 'unknown';
+  }
   if (Notification.permission === 'granted') return 'granted';
   if (Notification.permission === 'denied') return 'denied';
   return 'unknown';
 }
 
 async function requestNotifications(): Promise<'granted' | 'denied'> {
-  if (typeof Notification === 'undefined') return 'denied';
+  if (typeof Notification === 'undefined') {
+    return isElectronDesktop() ? 'granted' : 'denied';
+  }
   const result = await Notification.requestPermission();
-  return result === 'granted' ? 'granted' : 'denied';
+  if (result === 'granted') return 'granted';
+  // Desktop uses in-app toasts/banners; no separate OS notification gate.
+  if (isElectronDesktop()) return 'granted';
+  return 'denied';
 }
 
 async function checkMacTutorialPermission(kind: string): Promise<'granted' | 'denied' | 'unknown'> {
@@ -61,15 +70,14 @@ export const PERMISSIONS: PermissionEntry[] = [
     label: 'Microphone',
     description: 'Listen to conversations and wake-word commands.',
     check: async () => {
-      if (isElectronDesktop() && window.electronAPI?.permissions) {
-        const status = await window.electronAPI.permissions.check('microphone');
-        return mapDesktopStatus(status);
+      if (isElectronDesktop()) {
+        return mapDesktopStatus(await checkElectronMicrophonePermission());
       }
       return mapDesktopStatus(await checkRendererPermission('microphone'));
     },
     request: async () => {
-      if (isElectronDesktop() && window.electronAPI?.permissions) {
-        const status = await window.electronAPI.permissions.request('microphone');
+      if (isElectronDesktop()) {
+        const status = await requestElectronMicrophonePermission();
         return status === 'granted' ? 'granted' : 'denied';
       }
       const status = await requestRendererPermission('microphone');
