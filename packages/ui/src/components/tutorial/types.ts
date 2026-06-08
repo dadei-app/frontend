@@ -32,4 +32,6 @@ export interface TutorialStep {
   /** data-tutorial-target keys that accept clicks during action steps (defaults to targetKey). */
   allowedClickTargets?: string[];
   requiredInteractions?: number;
+  /** Overlay backdrop blur in px; action steps default to 0, spotlight to 12. */
+  backdropBlurPx?: number;
 }

@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import {
+  backdropBlurForStep,
   isSettingsTutorialStep,
   TUTORIAL_PLATFORM,
   TUTORIAL_TEST_BANNER_ID,
@@ -17,10 +18,20 @@ import { TUTORIAL_MORPH_TRANSITION } from './tutorialMotion';
 import { useTutorial } from './useTutorial';
 import type { TutorialStep } from './types';
 import { isTutorialClickAllowed } from './tutorialClickGuard';
+import TutorialVoiceCommandBridge from './TutorialVoiceCommandBridge';
 
-const SPOTLIGHT_BACKDROP = { backgroundColor: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(12px)' };
-const ACTION_BACKDROP = { backgroundColor: 'rgba(0,0,0,0.02)', backdropFilter: 'blur(0px)' };
+const SPOTLIGHT_BACKDROP_COLOR = 'rgba(0,0,0,0.12)';
+const ACTION_BACKDROP_COLOR = 'rgba(0,0,0,0.02)';
 const ACTION_BACKDROP_FILL = 'rgba(0,0,0,0.02)';
+
+function backdropMotionForStep(step: TutorialStep) {
+  const blurPx = backdropBlurForStep(step);
+  const isAction = step.kind === 'action';
+  return {
+    backgroundColor: isAction ? ACTION_BACKDROP_COLOR : SPOTLIGHT_BACKDROP_COLOR,
+    backdropFilter: blurPx > 0 ? `blur(${blurPx}px)` : 'blur(0px)',
+  };
+}
 
 function useTargetRect(targetKey: string | null) {
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -54,8 +65,8 @@ function Backdrop({ step }: { step: TutorialStep }) {
   const reduceMotion = useReducedMotion();
   const rect = useTargetRect(step.kind === 'action' ? step.targetKey : null);
   const transition = reduceMotion ? { duration: 0 } : TUTORIAL_MORPH_TRANSITION;
-  const isSpotlight = step.kind === 'spotlight';
   const showActionCutout = step.kind === 'action' && rect !== null;
+  const backdropMotion = backdropMotionForStep(step);
 
   const pad = 8;
   const cutout = rect
@@ -73,10 +84,10 @@ function Backdrop({ step }: { step: TutorialStep }) {
         aria-hidden
         className="fixed inset-0 z-[9998] cursor-default pointer-events-none"
         initial={false}
-        animate={isSpotlight ? SPOTLIGHT_BACKDROP : ACTION_BACKDROP}
+        animate={backdropMotion}
         transition={transition}
         style={{
-          WebkitBackdropFilter: isSpotlight ? SPOTLIGHT_BACKDROP.backdropFilter : ACTION_BACKDROP.backdropFilter,
+          WebkitBackdropFilter: backdropMotion.backdropFilter,
         }}
       />
       {cutout ? (
@@ -291,6 +302,14 @@ function TutorialOverlayInner() {
     return null;
   }
 
+  if (step.id === 'introduce_yourself') {
+    return (
+      <div className="fixed inset-0 z-[9999] pointer-events-none">
+        <TutorialClickGuard step={step} />
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-[9999] pointer-events-none">
       <TutorialClickGuard step={step} />
@@ -384,6 +403,7 @@ export function TutorialOverlayContent() {
   return (
     <>
       <TutorialNotificationsBridge />
+      <TutorialVoiceCommandBridge />
       <TutorialOverlayInner />
     </>
   );

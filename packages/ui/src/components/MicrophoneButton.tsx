@@ -147,11 +147,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
       stopSessionOnly();
       return;
     }
-    const wasOff = !isServiceEnabled;
     await toggleService();
-    if (tutorial?.step.id === 'enable_service' && wasOff) {
-      tutorial.markActionFired('service-enabled');
-    }
   };
 
   const emitRing = useCallback((tone: keyof typeof RIPPLE_COLORS) => {

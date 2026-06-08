@@ -162,14 +162,6 @@ export function useInteractionPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable keys derived from query *data*, not the queries array identity
   }, [conversationDataKey, apiConversationIdsKey, tutorial?.tutorialConversations]);
 
-  useEffect(() => {
-    if (tutorial?.step.id !== 'passive_demo') return;
-    const realCount = interactions.filter(i => !isTutorialTestId(i.id)).length;
-    if (realCount >= (tutorial.step.requiredInteractions ?? 2)) {
-      tutorial.markActionFired('interactions-logged');
-    }
-  }, [interactions, tutorial]);
-
   const [conversationGroups, setConversationGroups] = useState<ConversationGroupState[]>([]);
   const loading = interactionsLoading;
 

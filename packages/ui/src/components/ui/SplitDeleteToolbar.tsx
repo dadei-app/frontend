@@ -80,8 +80,9 @@ export default function SplitDeleteToolbar({
                 onConfirm();
               }}
               className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-emerald-400/95 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300 disabled:cursor-not-allowed disabled:opacity-45',
-                confirmButtonClassName
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-emerald-400/95 transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+                !disabled && 'hover:bg-emerald-500/15 hover:text-emerald-300',
+                confirmButtonClassName,
               )}
             >
               <Check className={iconClassName} strokeWidth={2.5} />
@@ -96,8 +97,9 @@ export default function SplitDeleteToolbar({
                 onDisarm();
               }}
               className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-rose-400/90 transition-colors hover:bg-rose-950/65 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-45',
-                cancelButtonClassName
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-rose-400/90 transition-colors disabled:cursor-not-allowed disabled:opacity-45',
+                !disabled && 'hover:bg-rose-950/65 hover:text-rose-100',
+                cancelButtonClassName,
               )}
             >
               <X className={iconClassName} strokeWidth={2.5} />
@@ -119,9 +121,10 @@ export default function SplitDeleteToolbar({
               onArm();
             }}
             className={cn(
-              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/90 opacity-0 transition-[opacity,background-color,color] duration-150 hover:bg-rose-950/70 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-45',
+              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/90 opacity-0 transition-[opacity,background-color,color] duration-150 disabled:cursor-not-allowed disabled:opacity-45',
+              !disabled && 'hover:bg-rose-950/70 hover:text-rose-700',
               idleVisibleClassName,
-              idleButtonClassName
+              idleButtonClassName,
             )}
           >
             <Trash2 className={iconClassName} strokeWidth={2.2} />

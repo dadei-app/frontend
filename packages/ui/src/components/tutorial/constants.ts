@@ -1,6 +1,7 @@
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
 import type { TutorialStep } from './types';
 import { detectPlatform } from './permissionsRegistry';
+import { TUTORIAL_INTERACTION_TARGET_KEYS } from './testData';
 
 const SETTINGS_SECTIONS: { id: string; title: string; body: string }[] = [
   {
@@ -83,7 +84,7 @@ const CORE_STEPS: TutorialStep[] = [
     cardAnchorKey: 'interaction-panel-root',
     cardPlacement: 'left',
     actionTrigger: 'delete-interaction',
-    allowedClickTargets: ['tutorial-test-interaction-1'],
+    allowedClickTargets: [...TUTORIAL_INTERACTION_TARGET_KEYS],
   },
   {
     id: 'layout_tour',
@@ -114,37 +115,39 @@ const CORE_STEPS: TutorialStep[] = [
     targetKey: 'settings-panel-root',
   },
   {
-    id: 'enable_service',
-    kind: 'action',
-    title: 'Turn on Dadei',
-    body: 'Click the microphone to enable passive listening.',
+    id: 'how_dadei_works',
+    kind: 'spotlight',
+    title: 'How does Dadei work?',
+    body: 'When you enable Dadei, listening turns on across every device on your network. Say "hey Dadei" anytime to start a conversation.',
     targetKey: 'mic-button',
-    actionTrigger: 'service-enabled',
-    allowedClickTargets: ['mic-button'],
+    cardAnchorKey: 'mic-button',
+    cardPlacement: 'below',
+    backdropBlurPx: 4,
   },
   {
-    id: 'passive_demo',
+    id: 'introduce_yourself',
     kind: 'action',
-    title: 'Try talking',
-    body: 'Say a few things. Watch them appear in the interactions panel.',
-    targetKey: 'interaction-panel-root',
-    actionTrigger: 'interactions-logged',
-    requiredInteractions: 2,
-    allowedClickTargets: ['interaction-panel-root', 'mic-button'],
-  },
-  {
-    id: 'wake_word_demo',
-    kind: 'action',
-    title: 'Now say "hey Dadei"',
-    body: 'Wake Dadei up and have a quick chat. Dadei will end the conversation when ready.',
+    title: 'Introduce yourself',
+    body: 'Dadei is listening — say hello and share your name. This is how Dadei learns who you are and recognizes your voice.',
     targetKey: 'mic-button',
+    cardAnchorKey: 'mic-button',
+    cardPlacement: 'below',
     actionTrigger: 'wake-session-ended',
+    backdropBlurPx: 0,
     allowedClickTargets: ['mic-button'],
   },
 ];
 
 export function isSettingsTutorialStep(stepId: string): boolean {
   return stepId === 'settings_intro' || stepId.startsWith('settings_');
+}
+
+export const DEFAULT_SPOTLIGHT_BACKDROP_BLUR = 12;
+export const DEFAULT_ACTION_BACKDROP_BLUR = 0;
+
+export function backdropBlurForStep(step: TutorialStep): number {
+  if (step.backdropBlurPx !== undefined) return step.backdropBlurPx;
+  return step.kind === 'action' ? DEFAULT_ACTION_BACKDROP_BLUR : DEFAULT_SPOTLIGHT_BACKDROP_BLUR;
 }
 
 function settingsSubSteps(): TutorialStep[] {
@@ -178,11 +181,11 @@ export const STEPS = buildTutorialSteps();
 
 export const TUTORIAL_PLATFORM = detectPlatform();
 
-/** Step index where mic becomes interactive (enable_service). */
-export const MIC_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'enable_service');
+/** Step index where mic becomes interactive (introduce_yourself). */
+export const MIC_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'introduce_yourself');
 
-/** Step index where wake-word detection is enabled (wake_word_demo). */
-export const WAKE_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'wake_word_demo');
+/** Step index where voice command / introduction mode is enabled (introduce_yourself). */
+export const WAKE_UNLOCK_STEP_INDEX = STEPS.findIndex(s => s.id === 'introduce_yourself');
 
 export const TUTORIAL_STEP_EVENT = 'tutorial-step';
 

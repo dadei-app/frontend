@@ -5,6 +5,15 @@ import { formatForUser } from '@dadei/ui/utils/time';
 export const TUTORIAL_TEST_PERSON_ID = 'tutorial-test-person';
 export const TUTORIAL_TEST_CONVERSATION_ID = 'tutorial-test-conversation';
 
+export const TUTORIAL_INTERACTION_TARGET_KEYS = [
+  'tutorial-test-interaction-1',
+  'tutorial-test-interaction-2',
+  'tutorial-test-interaction-3',
+  'tutorial-test-interaction-4',
+] as const;
+
+export const TUTORIAL_INTERACTION_COUNT = TUTORIAL_INTERACTION_TARGET_KEYS.length;
+
 export interface TutorialFixtures {
   person: Person;
   conversation: Conversation;

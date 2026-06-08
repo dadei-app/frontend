@@ -249,10 +249,9 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   const micInteractive = currentStepIndex >= MIC_UNLOCK_STEP_INDEX;
   const wakeWordEnabled = currentStepIndex >= WAKE_UNLOCK_STEP_INDEX;
-  const tutorialCommandMode =
-    wakeWordEnabled && step.id === 'wake_word_demo' && !wakeSessionEnded;
+  const tutorialCommandMode = step.id === 'introduce_yourself' && !wakeSessionEnded;
   const showTestNotifications = step.id === 'layout_tour';
-  const wakeHintVisible = step.id === 'wake_word_demo';
+  const wakeHintVisible = step.id === 'introduce_yourself';
 
   const value = useMemo<TutorialContextValue>(
     () => ({

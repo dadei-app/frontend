@@ -37,6 +37,7 @@ export function useTutorial() {
     (trigger: ActionTrigger) => {
       ctx.markActionFired(trigger);
       if (trigger === 'wake-session-ended') {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
         void completeTutorial();
       }
     },

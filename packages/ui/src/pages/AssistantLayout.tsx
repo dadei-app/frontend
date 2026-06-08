@@ -7,9 +7,8 @@ import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { TutorialOverlayContent, TutorialProvider } from '@dadei/ui/components/tutorial';
 import { isSettingsTutorialStep } from '@dadei/ui/components/tutorial/constants';
 import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
-import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
+import { CommandBubbleStackHost } from '@dadei/ui/contexts/CommandContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import { useService } from '@dadei/ui/contexts/ServiceContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
@@ -22,36 +21,6 @@ import { Mic } from 'lucide-react';
 
 const ASSISTANT_HINT_ROW =
   'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
-
-function SpokenWakeWord({
-  children,
-  variant,
-}: {
-  children: string;
-  variant: 'dadei' | 'assistant';
-}) {
-  const quoteClass =
-    variant === 'dadei' ? 'text-emerald-400/55' : 'text-sky-400/55';
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-0.5 rounded-lg border px-2.5 py-1 font-primary text-[15px] font-semibold tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
-        variant === 'dadei'
-          ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-50'
-          : 'border-sky-400/25 bg-sky-500/10 text-sky-50',
-      )}
-    >
-      <span className={cn('select-none text-[13px] font-normal leading-none', quoteClass)} aria-hidden>
-        {'\u201c'}
-      </span>
-      {children}
-      <span className={cn('select-none text-[13px] font-normal leading-none', quoteClass)} aria-hidden>
-        {'\u201d'}
-      </span>
-    </span>
-  );
-}
 
 /**
  * Authenticated assistant shell: layout, theme tokens, overlays (settings), and realtime hooks.
@@ -97,12 +66,9 @@ function TutorialPersonsBridge({
 function AssistantLayoutShell() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isBootstrapReady, formatHotkey } = useSystem();
-  const { isConnected, isServiceEnabled } = useService();
-  const { state } = useCommand();
   const tutorial = useTutorialContext();
   const elevateNotifications = tutorial?.step.id === 'layout_tour';
-  const showWakeHint =
-    state === 'idle' && isServiceEnabled && (!tutorial || tutorial.wakeWordEnabled);
+  const showTalkHint = tutorial?.step.id === 'introduce_yourself';
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
@@ -201,20 +167,16 @@ function AssistantLayoutShell() {
                 className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pb-8 pt-3 text-sm text-zinc-500 font-secondary"
               >
                 <AnimatePresence initial={false}>
-                  {showWakeHint ? (
+                  {showTalkHint ? (
                     <motion.p
-                      key="wake-hint"
+                      key="talk-hint"
                       initial={{ opacity: 0, y: 4 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: 4 }}
                       transition={{ duration: 0.2 }}
                       className={ASSISTANT_HINT_ROW}
                     >
-                      <span>Say</span>
-                      <SpokenWakeWord variant="dadei">Dadei</SpokenWakeWord>
-                      <span>or</span>
-                      <SpokenWakeWord variant="assistant">Assistant</SpokenWakeWord>
-                      <span>to start a command</span>
+                      <span>Dadei is listening — introduce yourself</span>
                     </motion.p>
                   ) : null}
                 </AnimatePresence>

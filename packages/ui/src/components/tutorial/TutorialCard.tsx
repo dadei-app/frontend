@@ -216,9 +216,9 @@ function TutorialCardBody({
       ) : (
         <>
           <p className="mt-2 text-sm leading-relaxed text-zinc-300 font-secondary">{step.body}</p>
-          {showWakeHint && step.id === 'wake_word_demo' ? (
+          {showWakeHint && step.id === 'introduce_yourself' ? (
             <p className="mt-3 text-xs text-zinc-500 font-secondary">
-              Try saying &quot;hey Dadei&quot; clearly.
+              Say hello and share your name when you are ready.
             </p>
           ) : null}
         </>

@@ -1,5 +1,7 @@
 import { useInteractionPanel } from './useInteractionPanel';
 import ConversationCard from './ConversationCard';
+import { useTutorialChromeInteractive } from '@dadei/ui/components/tutorial/tutorialClickGuard';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 export default function InteractionPanel() {
   const {
@@ -20,6 +22,7 @@ export default function InteractionPanel() {
     handleClearAll,
     getPersonDisplay,
   } = useInteractionPanel();
+  const chromeInteractive = useTutorialChromeInteractive();
 
   return (
     <div
@@ -38,8 +41,12 @@ export default function InteractionPanel() {
           onClick={() => {
             void handleClearAll();
           }}
-          disabled={conversationGroups.length === 0 || loading}
-          className="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/6 bg-zinc-800/90 px-3.5 py-2 text-sm font-medium text-zinc-400 transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:border-white/10 hover:bg-zinc-700/90 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={conversationGroups.length === 0 || loading || !chromeInteractive}
+          className={cn(
+            'flex shrink-0 items-center gap-1.5 rounded-lg border border-white/6 bg-zinc-800/90 px-3.5 py-2 text-sm font-medium text-zinc-400 transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] disabled:cursor-not-allowed disabled:opacity-40',
+            chromeInteractive &&
+              'hover:border-white/10 hover:bg-zinc-700/90 hover:text-zinc-200',
+          )}
         >
           <i className="fas fa-trash text-[11px] opacity-80" aria-hidden />
           Clear all

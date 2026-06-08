@@ -45,43 +45,43 @@ export default function TutorialSettingsGuide() {
       className={cn(
         'shrink-0 border-t border-emerald-500/20',
         'bg-gradient-to-t from-zinc-950/95 via-zinc-950/90 to-zinc-950/75',
-        'px-5 py-4 backdrop-blur-xl',
+        'px-4 py-2.5 backdrop-blur-xl',
       )}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="mb-1.5 flex items-center gap-2">
-            <span className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-emerald-400/90">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-emerald-400/90">
               Tutorial
             </span>
-            <span className="text-xs tabular-nums text-zinc-500">
+            <span className="text-[0.65rem] tabular-nums text-zinc-500">
               {progressIndex + 1} / {settingsSteps.length}
             </span>
           </div>
           <motion.div
             key={step.id}
-            initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+            initial={reduceMotion ? false : { opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
             transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: 'easeOut' }}
           >
-            <h3 className="font-primary text-base font-semibold leading-snug text-zinc-50">
+            <h3 className="font-primary text-sm font-semibold leading-snug text-zinc-50">
               {step.title}
             </h3>
-            <p className="mt-1 text-sm leading-relaxed text-zinc-400 font-secondary">{step.body}</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">{step.body}</p>
           </motion.div>
-          <div className="mt-3 flex flex-wrap gap-1.5" aria-hidden>
+          <div className="mt-2 flex flex-wrap gap-1" aria-hidden>
             {settingsSteps.map((s, i) => (
               <span
                 key={s.id}
                 className={cn(
-                  'h-1.5 rounded-full transition-all duration-300',
-                  i === progressIndex ? 'w-6 bg-emerald-400/90' : 'w-1.5 bg-zinc-600/80',
+                  'h-1 rounded-full transition-all duration-300',
+                  i === progressIndex ? 'w-4 bg-emerald-400/90' : 'w-1 bg-zinc-600/80',
                 )}
               />
             ))}
           </div>
         </div>
-        <div className="shrink-0 pt-1">
+        <div className="shrink-0">
           <TutorialCardNav
             canBack={canBack}
             canNext={Boolean(canNext)}

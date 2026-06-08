@@ -1,6 +1,9 @@
 import type { Interaction } from '@dadei/ui/types/models.types';
 import { formatLocalTime } from './conversationUtils';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
+import { isTutorialTestId } from '@dadei/ui/components/tutorial/testData';
+import { useTutorialTargetInteractive } from '@dadei/ui/components/tutorial/tutorialClickGuard';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 export default function InteractionCard({
   interaction,
@@ -19,19 +22,20 @@ export default function InteractionCard({
 }) {
   const person = getPersonDisplay(interaction.person_id);
   const isYou = person.isUser;
+  const tutorialTarget = isTutorialTestId(interaction.id) ? interaction.id : undefined;
+  const interactive = useTutorialTargetInteractive(tutorialTarget);
 
   return (
     <div
-      data-tutorial-target={
-        interaction.id === 'tutorial-test-interaction-1'
-          ? 'tutorial-test-interaction-1'
-          : interaction.id === 'tutorial-test-interaction-2'
-            ? 'tutorial-test-interaction-2'
-            : undefined
-      }
-      className={`group/interaction flex min-w-0 items-center gap-3 border-l-2 pl-3 py-1.5 transition-colors ${
-        interaction.id === 'tutorial-test-interaction-2' ? 'cursor-pointer' : ''
-      } ${isYou ? 'border-emerald-500/40 hover:border-emerald-500/70' : 'border-zinc-700/40 hover:border-zinc-600'}`}
+      data-tutorial-target={tutorialTarget}
+      className={cn(
+        'group/interaction flex min-w-0 items-center gap-3 border-l-2 pl-3 py-1.5 transition-colors',
+        interactive &&
+          (isYou
+            ? 'border-emerald-500/40 hover:border-emerald-500/70'
+            : 'border-zinc-700/40 hover:border-zinc-600'),
+        !interactive && 'border-zinc-700/40',
+      )}
     >
       <div
         className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ring-1 ${isYou ? 'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25' : 'bg-zinc-800 text-zinc-300 ring-white/5'}`}
@@ -57,6 +61,7 @@ export default function InteractionCard({
 
       <SplitDeleteToolbar
         armed={armedInteractionDeleteId === interaction.id}
+        disabled={!interactive}
         onArm={() => {
           setArmedConversationDeleteId(null);
           setArmedInteractionDeleteId(interaction.id);
@@ -67,7 +72,7 @@ export default function InteractionCard({
         }}
         idleTitle="Delete interaction"
         idleAriaLabel="Delete interaction"
-        idleVisibleClassName="group-hover/interaction:opacity-100"
+        idleVisibleClassName={interactive ? 'group-hover/interaction:opacity-100' : undefined}
       />
     </div>
   );

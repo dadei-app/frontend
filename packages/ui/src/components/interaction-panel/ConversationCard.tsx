@@ -5,6 +5,8 @@ import { accordionEase } from './constants';
 import { formatLocalDate, getConversationTitle } from './conversationUtils';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import InteractionCard from './InteractionCard';
+import { useTutorialTargetInteractive } from '@dadei/ui/components/tutorial/tutorialClickGuard';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 function ConversationExpandedSummary({ group }: { group: ConversationGroupView }) {
   const topic = group.conversation?.topic_summary?.trim();
@@ -99,6 +101,7 @@ export default function ConversationCard({
     group.interactions.some(i => i.conversation_id === 'tutorial-test-conversation')
       ? 'tutorial-test-conversation'
       : undefined;
+  const interactive = useTutorialTargetInteractive(tutorialConversationTarget);
 
   return (
     <div
@@ -106,19 +109,30 @@ export default function ConversationCard({
       role="button"
       tabIndex={0}
       aria-expanded={group.isExpanded}
-      onClick={() => toggleConversation(groupIndex)}
+      onClick={() => {
+        if (!interactive) return;
+        toggleConversation(groupIndex);
+      }}
       onKeyDown={e => {
+        if (!interactive) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           toggleConversation(groupIndex);
         }
       }}
-      className="group/conv w-full min-w-0 max-w-full cursor-pointer overflow-hidden rounded-xl border border-white/6 bg-zinc-950/50 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] translate-y-0 transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-0.5 hover:border-white/10 hover:shadow-[0_10px_32px_-12px_rgba(0,0,0,0.65)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/15 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950"
+      className={cn(
+        'group/conv w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-white/6 bg-zinc-950/50 shadow-[0_1px_0_rgba(255,255,255,0.03)_inset] translate-y-0 transition duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/15 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950',
+        interactive &&
+          'cursor-pointer hover:-translate-y-0.5 hover:border-white/10 hover:shadow-[0_10px_32px_-12px_rgba(0,0,0,0.65)]',
+      )}
     >
       <div className="flex w-full min-w-0 items-center gap-3 border-b border-white/6 bg-zinc-950/95 p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span
-            className="flex h-5 w-5 shrink-0 items-center justify-center text-zinc-600 transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/conv:text-zinc-400"
+            className={cn(
+              'flex h-5 w-5 shrink-0 items-center justify-center text-zinc-600 transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]',
+              interactive && 'group-hover/conv:text-zinc-400',
+            )}
             aria-hidden
           >
             <i
@@ -155,6 +169,7 @@ export default function ConversationCard({
         {conversationIdForActions ? (
           <SplitDeleteToolbar
             armed={armedConversationDeleteId === conversationIdForActions}
+            disabled={!interactive}
             onArm={() => {
               setArmedInteractionDeleteId(null);
               setArmedConversationDeleteId(conversationIdForActions);
@@ -165,7 +180,7 @@ export default function ConversationCard({
             }}
             idleTitle="Delete conversation"
             idleAriaLabel="Delete conversation"
-            idleVisibleClassName="group-hover/conv:opacity-100"
+            idleVisibleClassName={interactive ? 'group-hover/conv:opacity-100' : undefined}
           />
         ) : null}
       </div>
