@@ -72,6 +72,7 @@ const CORE_STEPS: TutorialStep[] = [
     targetKey: 'tutorial-test-conversation',
     actionTrigger: 'expand-conversation',
     autoAdvanceOnAction: true,
+    allowedClickTargets: ['tutorial-test-conversation'],
   },
   {
     id: 'delete_interaction',
@@ -82,14 +83,16 @@ const CORE_STEPS: TutorialStep[] = [
     cardAnchorKey: 'interaction-panel-root',
     cardPlacement: 'left',
     actionTrigger: 'delete-interaction',
+    allowedClickTargets: ['tutorial-test-interaction-1'],
   },
   {
     id: 'layout_tour',
     kind: 'action',
     title: 'Your space',
-    body: 'Dismiss the toast. The banner proposes deleting the sample conversation — Cancel keeps it, or let the countdown finish to remove it.',
+    body: 'Dismiss the toast. The banner proposes deleting the test conversation — Cancel keeps it, or let the countdown finish to remove it.',
     targetKey: 'assistant-layout-shell',
     actionTrigger: 'notifications-dismissed',
+    allowedClickTargets: ['tutorial-test-toast', 'tutorial-delete-conversation-banner'],
   },
   {
     id: 'delete_person',
@@ -101,6 +104,7 @@ const CORE_STEPS: TutorialStep[] = [
     cardPlacement: 'left',
     actionTrigger: 'delete-person',
     openPersonsPanel: true,
+    allowedClickTargets: ['tutorial-test-person'],
   },
   {
     id: 'settings_walkthrough',
@@ -116,6 +120,7 @@ const CORE_STEPS: TutorialStep[] = [
     body: 'Click the microphone to enable passive listening.',
     targetKey: 'mic-button',
     actionTrigger: 'service-enabled',
+    allowedClickTargets: ['mic-button'],
   },
   {
     id: 'passive_demo',
@@ -125,6 +130,7 @@ const CORE_STEPS: TutorialStep[] = [
     targetKey: 'interaction-panel-root',
     actionTrigger: 'interactions-logged',
     requiredInteractions: 2,
+    allowedClickTargets: ['interaction-panel-root', 'mic-button'],
   },
   {
     id: 'wake_word_demo',
@@ -133,6 +139,7 @@ const CORE_STEPS: TutorialStep[] = [
     body: 'Wake Dadei up and have a quick chat. Dadei will end the conversation when ready.',
     targetKey: 'mic-button',
     actionTrigger: 'wake-session-ended',
+    allowedClickTargets: ['mic-button'],
   },
 ];
 
@@ -178,5 +185,5 @@ export const TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS = new Set(['expand_conversa
 export const TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS = new Set(['delete_interaction']);
 
 export const TUTORIAL_TEST_TOAST_MESSAGE = 'Test notification — this is what alerts look like.';
-export const TUTORIAL_TEST_BANNER_TITLE = 'Delete sample conversation';
+export const TUTORIAL_TEST_BANNER_TITLE = 'Delete test conversation';
 export const TUTORIAL_TEST_BANNER_ID = 'tutorial-delete-conversation-banner';

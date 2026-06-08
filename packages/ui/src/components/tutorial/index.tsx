@@ -15,6 +15,7 @@ import { TutorialProvider, useTutorialContext } from './TutorialContext';
 import { TUTORIAL_MORPH_TRANSITION } from './tutorialMotion';
 import { useTutorial } from './useTutorial';
 import type { TutorialStep } from './types';
+import { isTutorialClickAllowed } from './tutorialClickGuard';
 
 const SPOTLIGHT_BACKDROP = { backgroundColor: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(12px)' };
 const ACTION_BACKDROP = { backgroundColor: 'rgba(0,0,0,0.02)', backdropFilter: 'blur(0px)' };
@@ -216,6 +217,27 @@ function PermissionsContent({
   );
 }
 
+function TutorialClickGuard({ step }: { step: TutorialStep }) {
+  useEffect(() => {
+    if (step.kind !== 'action') return;
+
+    const block = (event: Event) => {
+      if (isTutorialClickAllowed(event.target, step)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    document.addEventListener('pointerdown', block, true);
+    document.addEventListener('click', block, true);
+    return () => {
+      document.removeEventListener('pointerdown', block, true);
+      document.removeEventListener('click', block, true);
+    };
+  }, [step]);
+
+  return null;
+}
+
 function TutorialOverlayInner() {
   const cardRef = useRef<HTMLDivElement>(null);
   const {
@@ -266,6 +288,7 @@ function TutorialOverlayInner() {
 
   return (
     <div className="fixed inset-0 z-[9999] pointer-events-none">
+      <TutorialClickGuard step={step} />
       <Backdrop step={step} />
       <ArrowLayer step={step} cardRef={cardRef} />
       <TutorialCard
@@ -291,10 +314,29 @@ function TutorialOverlayInner() {
 export function TutorialNotificationsBridge() {
   const ctx = useTutorialContext();
   const { showToast, showBanner, dismissBanner, toasts, banners } = useNotifications();
+  const toastShownRef = useRef(false);
+  const bannerIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!ctx?.showTestNotifications) return;
+    if (!ctx?.showTestNotifications) {
+      toastShownRef.current = false;
+      return;
+    }
+    if (toastShownRef.current) return;
+    toastShownRef.current = true;
     showToast(TUTORIAL_TEST_TOAST_MESSAGE, 'info');
+  }, [ctx?.showTestNotifications, showToast]);
+
+  useEffect(() => {
+    if (!ctx?.showTestNotifications) {
+      if (bannerIdRef.current) {
+        dismissBanner(bannerIdRef.current);
+        bannerIdRef.current = null;
+      }
+      return;
+    }
+    if (bannerIdRef.current) return;
+
     const bannerId = showBanner({
       id: TUTORIAL_TEST_BANNER_ID,
       operation: 'delete',
@@ -306,13 +348,19 @@ export function TutorialNotificationsBridge() {
       cancelLabel: 'Cancel',
       onCancel: () => {
         dismissBanner(bannerId);
+        bannerIdRef.current = null;
       },
       onAutoDismiss: () => {
         ctx.removeTutorialConversation();
       },
     });
-    return () => dismissBanner(bannerId);
-  }, [ctx?.showTestNotifications, ctx, showToast, showBanner, dismissBanner]);
+    bannerIdRef.current = bannerId;
+
+    return () => {
+      dismissBanner(bannerId);
+      bannerIdRef.current = null;
+    };
+  }, [ctx?.showTestNotifications, showBanner, dismissBanner]);
 
   useEffect(() => {
     if (!ctx?.showTestNotifications || ctx.step.actionTrigger !== 'notifications-dismissed') return;

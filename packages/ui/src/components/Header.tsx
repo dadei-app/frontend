@@ -62,6 +62,7 @@ export default function Header({
 
         <button
           type="button"
+          data-tutorial-allow-logout
           onClick={async () => {
             await logout();
             navigate('/login', { replace: true });

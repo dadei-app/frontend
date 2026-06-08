@@ -29,5 +29,7 @@ export interface TutorialStep {
   autoAdvanceOnAction?: boolean;
   /** Open the persons drawer when this step is active. */
   openPersonsPanel?: boolean;
+  /** data-tutorial-target keys that accept clicks during action steps (defaults to targetKey). */
+  allowedClickTargets?: string[];
   requiredInteractions?: number;
 }

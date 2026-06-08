@@ -2,6 +2,13 @@ import { useMemo, useRef } from 'react';
 import TutorialArrow from './TutorialArrow';
 import type { TutorialStep } from './types';
 
+function tutorialArrowZ(step: TutorialStep): string {
+  if (step.id.startsWith('settings_') || step.id === 'settings_walkthrough') {
+    return 'z-[10049]';
+  }
+  return 'z-[10000]';
+}
+
 export default function ArrowLayer({
   step,
   cardRef,
@@ -21,7 +28,7 @@ export default function ArrowLayer({
   return (
     <svg
       ref={layerRef}
-      className="pointer-events-none fixed inset-0 z-[10000]"
+      className={`pointer-events-none fixed inset-0 ${tutorialArrowZ(step)}`}
       aria-hidden
     >
       <defs>

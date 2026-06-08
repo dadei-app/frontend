@@ -17,6 +17,7 @@ import { actionsApi } from '@dadei/ui/lib/api/actions';
 import { playNotificationPing } from '@dadei/ui/lib/notifications/notificationSound';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { ToastType, type NetworkAction } from '@dadei/ui/types/models.types';
+import { TUTORIAL_TEST_TOAST_MESSAGE } from '@dadei/ui/components/tutorial/constants';
 import {
   networkActionsToBannerItems,
   normalizeNotificationActions,
@@ -170,7 +171,13 @@ export function ToastStackHost({ className = '' }: { className?: string }) {
   return (
     <div className={`pointer-events-none flex max-w-sm flex-col-reverse gap-2 ${className}`} aria-live="polite">
       {toasts.map((toast) => (
-        <div key={toast.id} className="pointer-events-auto">
+        <div
+          key={toast.id}
+          className="pointer-events-auto"
+          {...(toast.message === TUTORIAL_TEST_TOAST_MESSAGE
+            ? { 'data-tutorial-target': 'tutorial-test-toast' }
+            : {})}
+        >
           <Toast
             message={toast.message}
             type={toast.type}

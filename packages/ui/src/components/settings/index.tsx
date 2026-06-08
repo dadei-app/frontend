@@ -24,6 +24,7 @@ import type { SettingsPanelProps } from './layout';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
+import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 import { veilEase } from '@dadei/ui/lib/shared/motion';
 
 type AssistantSettingsModalProps = {
@@ -87,6 +88,10 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
   const prefersReducedMotion = useReducedMotion();
   const { isElectron, preventDialogDismissOnTitleBar } = useSystem();
+  const tutorial = useTutorialContext();
+  const tutorialSettingsStep = Boolean(
+    tutorial?.step.id === 'settings_walkthrough' || tutorial?.step.id.startsWith('settings_'),
+  );
 
   const views = visibleViews();
   const isCenteredPanel = view === 'about' || view === 'subscription';
@@ -116,6 +121,19 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
     setView('integrations');
     setPendingAction(undefined);
   }, [open]);
+
+  useEffect(() => {
+    if (!tutorialSettingsStep || !open) return;
+    const match = tutorial?.step.id.match(/^settings_(.+)$/);
+    if (!match) return;
+    const sectionId = match[1] as SidebarView;
+    if (ALL_VIEWS.some(v => v.id === sectionId)) {
+      if (sectionId === 'startup' && !isElectronDesktop()) return;
+      if (sectionId === 'about' && !isElectronDesktop()) return;
+      setView(sectionId);
+      setPendingAction(undefined);
+    }
+  }, [tutorial?.step.id, tutorialSettingsStep, open]);
 
   const ActivePanel = PANELS[view];
 
@@ -149,12 +167,18 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={overlayTransition}
-                className={dialogOverlayClass(isElectron)}
+                className={cn(
+                  dialogOverlayClass(isElectron),
+                  tutorialSettingsStep && 'z-[10040]',
+                )}
               />
             </Dialog.Overlay>
             <Dialog.Content
               data-tutorial-target="settings-panel-root"
-              className={isElectron ? dialogContentClass : dialogContentClassWeb}
+              className={cn(
+                isElectron ? dialogContentClass : dialogContentClassWeb,
+                tutorialSettingsStep && 'z-[10045]',
+              )}
               onPointerDownOutside={preventDialogDismissOnTitleBar}
               onInteractOutside={preventDialogDismissOnTitleBar}
             >

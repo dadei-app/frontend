@@ -62,6 +62,13 @@ export default function Banner({
   const filterId = `dadei-crumble-${rawId.replace(/:/g, '')}`;
   const displaceRef = useRef<SVGFEDisplacementMapElement>(null);
   const crumbleStartedRef = useRef(false);
+  const countdownFiredRef = useRef(false);
+  const [countdownExpired, setCountdownExpired] = useState(false);
+
+  useEffect(() => {
+    countdownFiredRef.current = false;
+    setCountdownExpired(false);
+  }, [id]);
 
   useEffect(() => {
     // Action approval banners are removed when the server queue updates, not on a local timer.
@@ -70,6 +77,9 @@ export default function Banner({
     const end = countdownEndsAt ? parseApiDateTimeMs(countdownEndsAt) : now + durationMs;
     const delay = Math.max(end - now, 0);
     const t = window.setTimeout(() => {
+      if (countdownFiredRef.current) return;
+      countdownFiredRef.current = true;
+      setCountdownExpired(true);
       void onAutoDismiss?.();
       onDismiss();
     }, delay);
@@ -94,7 +104,7 @@ export default function Banner({
   }, [exitMode]);
 
   const handleCancel = async () => {
-    if (!onCancel || cancelling) return;
+    if (!onCancel || cancelling || countdownFiredRef.current) return;
     setCancelling(true);
     setError(null);
     setExitMode('cancel');
@@ -157,6 +167,7 @@ export default function Banner({
       </svg>
 
       <motion.div
+        data-tutorial-target={id}
         initial={isStackFront ? 'enter' : false}
         animate="visible"
         exit={exitMode}
@@ -228,7 +239,7 @@ export default function Banner({
               <button
                 type="button"
                 onClick={handleCancel}
-                disabled={cancelling}
+                disabled={cancelling || countdownExpired}
                 className="rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
               >
                 {cancelling ? 'Cancelling…' : cancelLabel || 'Cancel'}

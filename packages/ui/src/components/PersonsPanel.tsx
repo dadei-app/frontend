@@ -11,8 +11,9 @@ import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext } from '@dadei/ui/components/tutorial/TutorialContext';
 import { isTutorialTestId } from '@dadei/ui/components/tutorial/testData';
 
-/** Below client tooltip (195); above main chrome. */
-const PEOPLE_DRAWER_Z = 170;
+/** Below client tooltip (195); above main chrome. Raised during tutorial persons step. */
+const PERSONS_DRAWER_Z = 170;
+const PERSONS_DRAWER_TUTORIAL_Z = 10002;
 
 interface PersonsPanelProps {
   isOpen: boolean;
@@ -158,6 +159,9 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
     };
   }, [isOpen, onClose, excludeElement]);
 
+  const drawerZ =
+    tutorial?.step.id === 'delete_person' ? PERSONS_DRAWER_TUTORIAL_Z : PERSONS_DRAWER_Z;
+
   const tree = (
     <>
       <AnimatePresence>
@@ -170,7 +174,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
             transition={{ type: 'tween', duration: 0.34, ease: [0.32, 0.72, 0, 1] }}
             data-tutorial-target="persons-panel-root"
             className="fixed bottom-0 right-0 top-[calc(var(--assistant-titlebar-offset,0px)+var(--assistant-header-h,4.75rem))] flex min-h-0 w-full max-w-md flex-col border-l border-white/10 bg-zinc-950/95 shadow-[-10px_0_40px_rgba(0,0,0,0.4)] backdrop-blur-xl will-change-transform sm:w-1/3"
-            style={{ zIndex: PEOPLE_DRAWER_Z }}
+            style={{ zIndex: drawerZ }}
           >
             {/* Header */}
             <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">

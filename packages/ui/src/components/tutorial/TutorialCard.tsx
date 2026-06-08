@@ -8,12 +8,20 @@ import {
 } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { cn } from '@dadei/ui/lib/shared/cn';
 import TutorialStepCardFrame from './TutorialStepCardFrame';
 import {
   TUTORIAL_MORPH_MS,
   TUTORIAL_MORPH_TRANSITION,
 } from './tutorialMotion';
 import type { TutorialStep } from './types';
+
+function tutorialChromeZ(step: TutorialStep): string {
+  if (step.id.startsWith('settings_') || step.id === 'settings_walkthrough') {
+    return 'z-[10050]';
+  }
+  return 'z-[10001]';
+}
 
 const KNOB_CLASS =
   'flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-zinc-900/90 text-zinc-400 shadow-sm transition hover:border-emerald-500/25 hover:bg-zinc-800 hover:text-emerald-200 disabled:pointer-events-none disabled:opacity-30';
@@ -429,9 +437,13 @@ export default function TutorialCard({
 
       <motion.div
         ref={shellRef}
+        data-tutorial-card
         role="dialog"
         aria-labelledby="tutorial-card-title"
-        className="pointer-events-auto fixed z-[10001] overflow-visible -translate-x-1/2 -translate-y-1/2"
+        className={cn(
+          'pointer-events-auto fixed overflow-visible -translate-x-1/2 -translate-y-1/2',
+          tutorialChromeZ(displayedStep),
+        )}
         initial={false}
         animate={{
           top: center.top,
