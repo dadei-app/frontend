@@ -17,6 +17,15 @@
   .font-display {
     font-family: "Space Grotesk", system-ui, sans-serif;
   }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Tailwind v4: register sources (config `content` is not used by @tailwindcss/postcss). */

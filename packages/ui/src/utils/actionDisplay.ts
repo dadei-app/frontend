@@ -3,22 +3,11 @@ import { formatForUser } from '@dadei/ui/utils/time';
 import type { ActionOperation, NetworkAction } from '@dadei/ui/types/models.types';
 
 /** Domains that surface approval notification banners. */
-export const NOTIFICATION_ACTION_TYPES = new Set([
-  'calendar_event',
-  'calendar',
-  'task',
-  'todo',
-  'email',
-  'message',
-]);
+export const NOTIFICATION_ACTION_TYPES = new Set(['calendar', 'email']);
 
 const DOMAIN_LABELS: Record<string, string> = {
   calendar: 'Calendar',
-  calendar_event: 'Calendar',
-  todo: 'Task',
-  task: 'Task',
   email: 'Email',
-  message: 'Email',
 };
 
 const OPERATION_LABELS: Record<ActionOperation, string> = {
@@ -117,6 +106,48 @@ export const NEUTRAL_BANNER_THEME: OperationBannerTheme = {
 
 export function isNotificationAction(action: Pick<NetworkAction, 'action_type'>): boolean {
   return NOTIFICATION_ACTION_TYPES.has(action.action_type);
+}
+
+type ProposedToolPayload = {
+  proposed?: boolean;
+  kind?: string;
+  operation?: string;
+  title?: string;
+};
+
+/** True when a command tool_result summary is the structured proposed-action payload. */
+export function isProposedToolSummary(parsed: Record<string, unknown>): boolean {
+  if (parsed.proposed === true) return true;
+  const message = parsed.message;
+  if (typeof message !== 'string' || !message.trim().startsWith('{')) return false;
+  try {
+    const inner = JSON.parse(message) as Record<string, unknown>;
+    return inner.proposed === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Human line for a proposed-action payload (mirrors backend action_metadata). */
+export function proposedActionHumanLine(payload: ProposedToolPayload): string | null {
+  if (payload.proposed !== true) return null;
+  const kind = (payload.kind ?? 'action').trim().toLowerCase();
+  const title = (payload.title ?? '').trim();
+  const operation = (payload.operation ?? 'create').trim().toLowerCase();
+  if (kind === 'email') {
+    if (operation === 'delete') return 'Prepared to delete an email.';
+    if (title) return `Drafted an email: ${title}.`;
+    return 'Drafted an email.';
+  }
+  if (kind === 'calendar') {
+    if (operation === 'delete') {
+      return title ? `Prepared to cancel ${title}.` : 'Prepared to cancel a calendar event.';
+    }
+    if (title) return `Scheduled ${title}.`;
+    return 'Scheduled a calendar event.';
+  }
+  if (title) return `Prepared ${title}.`;
+  return null;
 }
 
 export function actionDomainLabel(actionType: string): string {

@@ -5,7 +5,7 @@ import type { NetworkAction } from '@dadei/ui/types/models.types';
 function action(partial: Partial<NetworkAction> & { id: string }): NetworkAction {
   return {
     network_id: 'net-1',
-    action_type: 'calendar_event',
+    action_type: 'calendar',
     status: 'proposed',
     title: 'Test',
     scheduled_at: null,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock3, CloudSun, Globe, Map as MapIcon } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
@@ -87,6 +87,11 @@ export function IntegrationsPanel() {
   const integrationsStatus = integrationsStatusQuery.data;
   const googleConnected =
     integrationsStatus?.google_connected ?? Boolean(me?.google_connected);
+
+  useEffect(() => {
+    if (settingsTourActive) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
+  }, [queryClient, settingsTourActive]);
 
   const integrationCards = useMemo(() => {
     const byId = new Map(

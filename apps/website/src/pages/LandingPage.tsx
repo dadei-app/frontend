@@ -2,22 +2,18 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ArrowDown,
   Brain,
-  CalendarDays,
-  Check,
-  Globe,
   Inbox,
-  Mail,
   Mic,
   Monitor,
-  PhoneCall,
   Terminal,
   WandSparkles,
   Waves,
   type LucideIcon,
 } from 'lucide-react';
-import FloatingAppMockup from '@/components/FloatingAppMockup';
+import FloatingAppMockup from '@/components/landing/FloatingAppMockup';
+import IntegrationsShowcase from '@/components/landing/IntegrationsShowcase';
+import LaunchConversationIntro from '@/components/landing/LaunchConversationIntro';
 
 function SectionHeading({
   eyebrow,
@@ -38,220 +34,6 @@ function SectionHeading({
       </h2>
       <p className="mt-5 text-base leading-relaxed text-zinc-300 sm:text-lg font-secondary">{body}</p>
     </div>
-  );
-}
-
-function LaunchConversationIntro() {
-  const [isScrollHovered, setIsScrollHovered] = useState(false);
-  const launchMessages = [
-    { side: 'left', text: 'i missed my class!', appearAt: 0.2, readFor: 1.4 },
-    {
-      side: 'left',
-      text: 'omg same, yesterday i forgot to wish my mom happy bday!',
-      appearAt: 1.6,
-      readFor: 2.4,
-    },
-    {
-      side: 'left',
-      text: 'i\'m too lazy to even update my reminders.',
-      appearAt: 4.0,
-      readFor: 1.9,
-    },
-    { side: 'right', text: 'you guys should try dadei', appearAt: 5.9, readFor: 1.5 },
-  ] as const;
-  const finalMessage = launchMessages[launchMessages.length - 1];
-  const arrowRevealDelay = finalMessage.appearAt + finalMessage.readFor;
-
-  const scrollToMeet = () => {
-    document.getElementById('meet')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  };
-
-  return (
-    <section className="relative flex min-h-screen items-center justify-center overflow-hidden bg-black px-5 sm:px-8">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_20%,rgba(16,185,129,0.15),transparent_55%)]" />
-        <div className="absolute left-1/2 top-1/2 h-[460px] w-[460px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-emerald-500/10 blur-3xl" />
-      </div>
-
-      <div className="relative z-10 w-full max-w-3xl space-y-4">
-        {launchMessages.map((message) => (
-          <motion.div
-            key={message.text}
-            initial={{
-              opacity: 0,
-              y: -120,
-              scale: 1.08,
-              rotate: message.side === 'left' ? -1 : 1,
-            }}
-            animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
-            transition={{
-              delay: message.appearAt,
-              type: 'spring',
-              stiffness: 520,
-              damping: 20,
-              mass: 0.68,
-            }}
-            className={`flex ${message.side === 'left' ? 'justify-start' : 'justify-end'}`}
-          >
-            <div
-              className={`max-w-132 rounded-[1.35rem] border px-5 py-3 text-base leading-relaxed shadow-2xl backdrop-blur-xl font-secondary sm:text-lg ${
-                message.side === 'left'
-                  ? 'border-zinc-400/30 bg-zinc-800/58 text-zinc-100'
-                  : 'border-emerald-200/40 bg-linear-to-r from-emerald-400/56 to-teal-400/52 text-white'
-              }`}
-            >
-              {message.text}
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      <motion.button
-        type="button"
-        onClick={scrollToMeet}
-        onHoverStart={() => setIsScrollHovered(true)}
-        onHoverEnd={() => setIsScrollHovered(false)}
-        initial={{ opacity: 0, y: 18, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ delay: arrowRevealDelay, duration: 0.45, ease: 'easeOut' }}
-        className="group absolute bottom-10 left-1/2 z-20 -translate-x-1/2 rounded-full border border-emerald-200/60 bg-emerald-300/20 px-6 py-3 text-sm tracking-[0.16em] text-emerald-50 shadow-[0_0_0_1px_rgba(167,243,208,0.3)_inset,0_18px_50px_-18px_rgba(16,185,129,0.95)] backdrop-blur-md transition hover:scale-[1.03] hover:bg-emerald-300/30"
-        aria-label="scroll to meet dadei"
-      >
-        <motion.span
-          aria-hidden
-          className="pointer-events-none absolute inset-0 rounded-full border border-emerald-200/45"
-          animate={
-            isScrollHovered
-              ? { scale: [1, 1.12, 1], opacity: [0.85, 0.25, 0.85] }
-              : { scale: 1, opacity: 0 }
-          }
-          transition={{ duration: 1.8, repeat: isScrollHovered ? Infinity : 0, ease: 'easeInOut' }}
-        />
-        <span className="relative flex items-center gap-2 font-secondary">
-          <span>scroll down</span>
-          <motion.span animate={{ y: [-1, 3, -1] }} transition={{ duration: 1.25, repeat: Infinity, ease: 'easeInOut' }}>
-            <ArrowDown className="h-4 w-4" aria-hidden />
-          </motion.span>
-        </span>
-      </motion.button>
-    </section>
-  );
-}
-
-function PluginShowcase() {
-  const plugins = [
-    {
-      icon: Globe,
-      name: 'google workspace',
-      short: 'calendar + gmail + contacts sync',
-      command: 'dadei, pull last conversation context with andrew and prep follow-up.',
-      output: ['contact context loaded', 'last thread summarized', 'next-step draft prepared'],
-    },
-    {
-      icon: CalendarDays,
-      name: 'google calendar',
-      short: 'events + availability + reminders',
-      command: 'dadei, schedule 30 min with john tomorrow afternoon and remind me 20 min before.',
-      output: ['best slot selected', 'calendar event created', 'reminder queued'],
-    },
-    {
-      icon: Mail,
-      name: 'gmail',
-      short: 'drafts + triage + follow-through',
-      command: 'dadei, draft a short check-in email about next steps from today.',
-      output: ['tone matched to prior thread', 'draft generated', 'ready to review/send'],
-    },
-    {
-      icon: PhoneCall,
-      name: 'voice assistant mode',
-      short: 'hands-free trigger layer',
-      command: 'dadei, log this and remind me to follow up tomorrow morning.',
-      output: ['moment captured', 'follow-up reminder created', 'task timeline updated'],
-    },
-  ];
-  const [activePlugin, setActivePlugin] = useState(0);
-  const selected = plugins[activePlugin];
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-30px' }}
-      transition={{ duration: 0.5 }}
-      className="relative mt-10 overflow-hidden rounded-4xl border border-emerald-300/20 bg-zinc-950/82 p-5 sm:p-8"
-    >
-      <p className="max-w-2xl text-sm leading-relaxed text-zinc-300 font-secondary">
-        each plugin gives dadei a new superpower. pick one, issue a natural command, and watch follow-through
-        happen.
-      </p>
-
-      <div className="relative mt-7 grid gap-4 lg:grid-cols-[0.9fr_1.2fr_1fr]">
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/65 p-3">
-          <p className="mb-2 text-[11px] tracking-[0.18em] text-zinc-400 font-secondary">plugin dock</p>
-          <div className="space-y-2">
-            {plugins.map((plugin, i) => (
-              <button
-                key={plugin.name}
-                type="button"
-                onClick={() => setActivePlugin(i)}
-                className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
-                  i === activePlugin
-                    ? 'border-emerald-200/55 bg-emerald-400/26'
-                    : 'border-white/10 bg-zinc-900/75 hover:border-emerald-200/30 hover:bg-zinc-800/75'
-                }`}
-              >
-                <span className="inline-flex items-center gap-2 text-xs text-zinc-100 font-secondary">
-                  <plugin.icon className="h-3.5 w-3.5" aria-hidden />
-                  {plugin.name}
-                </span>
-                <p className="mt-1 text-[11px] text-zinc-300/90 font-secondary">{plugin.short}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-emerald-200/25 bg-zinc-900/60 p-4">
-          <p className="text-[11px] tracking-[0.18em] text-zinc-400 font-secondary">live command surface</p>
-          <div className="mt-3 rounded-xl border border-white/10 bg-zinc-950/75 p-3">
-            <p className="text-[11px] text-zinc-500 font-secondary">active plugin</p>
-            <p className="mt-1 inline-flex items-center gap-2 text-sm text-zinc-100 font-secondary">
-              <selected.icon className="h-4 w-4" aria-hidden />
-              {selected.name}
-            </p>
-            <p className="mt-3 rounded-lg border border-white/10 bg-zinc-900/70 px-3 py-2 text-sm leading-relaxed text-zinc-200 font-secondary">
-              "{selected.command}"
-            </p>
-          </div>
-          <div className="mt-3 flex items-center gap-2 text-xs text-emerald-200/90 font-secondary">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-70" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-300" />
-            </span>
-            running plugin workflow
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/65 p-3">
-          <p className="mb-2 text-[11px] tracking-[0.18em] text-zinc-400 font-secondary">automation queue</p>
-          <div className="space-y-2">
-            {selected.output.map((item, i) => (
-              <motion.div
-                key={item}
-                initial={{ opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.28, delay: i * 0.08 }}
-                className="rounded-lg border border-emerald-200/30 bg-emerald-400/18 px-3 py-2 text-xs text-zinc-100 font-secondary"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <Check className="h-3 w-3" aria-hidden />
-                  {item}
-                </span>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </motion.div>
   );
 }
 
@@ -418,7 +200,7 @@ export default function LandingPage() {
             title="dadei plugins turn integrations into action."
             body="connect once, then let dadei use your tools to help with reminders, recall, planning, and follow-through."
           />
-          <PluginShowcase />
+          <IntegrationsShowcase />
         </section>
 
         <section className="mx-auto w-full max-w-[1240px] px-5 pt-14 sm:px-8">

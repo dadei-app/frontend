@@ -206,6 +206,7 @@ export default function Banner({
   const [error, setError] = useState<string | null>(null);
   const [exitMode, setExitMode] = useState<LocalExitMode>('idle');
   const [dissolveMask, setDissolveMask] = useState<{ image: string; layers: number } | null>(null);
+  const isExiting = exitMode !== 'idle';
 
   const theme = operation ? OPERATION_BANNER_THEME[operation] : NEUTRAL_BANNER_THEME;
   const showActions = isStackFront && !isExiting;
@@ -319,7 +320,6 @@ export default function Banner({
     });
   };
 
-  const isExiting = exitMode !== 'idle';
   const isDissolving = exitMode === 'cancel' && dissolveMask !== null;
   const dissolveMaskStyle = isDissolving
     ? maskLayerStyle(dissolveMask.layers, dissolveMask.layers > ACID_SPOT_COUNT)

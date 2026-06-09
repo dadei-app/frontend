@@ -30,6 +30,7 @@ import {
   formatWsTranscriptError,
   getUserErrorMessage,
 } from '@dadei/ui/lib/errors/userMessage';
+import { isProposedToolSummary, proposedActionHumanLine } from '@dadei/ui/utils/actionDisplay';
 import {
   isInstructionalTranscriptBleed,
   sanitizeCommandTranscript,
@@ -120,6 +121,24 @@ function formatToolSummarySnippet(summary: string, ok: boolean): string {
       const err = parsed.error;
       return typeof err === 'string' && err.trim() ? err.trim() : 'Something went wrong.';
     }
+    if (isProposedToolSummary(parsed)) {
+      return '';
+    }
+    const message = parsed.message;
+    if (typeof message === 'string' && message.trim()) {
+      const trimmed = message.trim();
+      if (trimmed.startsWith('{')) {
+        try {
+          const inner = JSON.parse(trimmed) as Record<string, unknown>;
+          const proposedLine = proposedActionHumanLine(inner as Parameters<typeof proposedActionHumanLine>[0]);
+          if (proposedLine) return proposedLine;
+        } catch {
+          /* fall through */
+        }
+      } else {
+        return trimmed;
+      }
+    }
     const data =
       parsed.data && typeof parsed.data === 'object'
         ? (parsed.data as Record<string, unknown>)
@@ -136,8 +155,6 @@ function formatToolSummarySnippet(summary: string, ok: boolean): string {
       const temp = `About ${c}°C (${f}°F)`;
       return cond ? `${temp}, ${cond}.` : `${temp} right now.`;
     }
-    const message = parsed.message;
-    if (typeof message === 'string' && message.trim()) return message.trim();
     const items = Array.isArray(data.items) ? data.items : [];
     if (items.length > 0) {
       const first = items[0] as Record<string, unknown>;

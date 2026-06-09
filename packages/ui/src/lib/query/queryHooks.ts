@@ -108,7 +108,7 @@ export function useIntegrationsStatusQuery(enabled = true) {
     queryKey: queryKeys.integrationsStatus,
     queryFn: (): Promise<IntegrationsStatusResponse> => serviceApi.integrationsStatus(),
     enabled,
-    staleTime: Infinity,
-    refetchOnMount: false,
+    staleTime: 60_000,
+    refetchOnMount: true,
   });
 }

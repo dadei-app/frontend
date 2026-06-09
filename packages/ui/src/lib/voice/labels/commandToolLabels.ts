@@ -24,11 +24,11 @@ const TOOL_LABELS: Record<string, string> = {
   maps_distance_matrix: 'Simulating a trip',
 
   // Calendar
-  calendar_create_event: 'Creating an event',
-  calendar_list_events: 'Checking the calendar',
-  calendar_get_event: 'Loading an event',
-  calendar_update_event: 'Updating an event',
-  calendar_delete_event: 'Deleting an event',
+  calendar_create: 'Creating a calendar event',
+  calendar_list: 'Checking the calendar',
+  calendar_get: 'Loading a calendar event',
+  calendar_update: 'Updating a calendar event',
+  calendar_delete: 'Deleting a calendar event',
 
   // Gmail
   gmail_send: 'Sending an email',
@@ -114,11 +114,11 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
     modify_labels: 'Updating email labels',
   },
   calendar_: {
-    list_events: 'Checking my calendar',
-    create_event: 'Adding to my calendar',
-    get_event: 'Looking at that event',
-    update_event: 'Updating my calendar',
-    delete_event: 'Removing from my calendar',
+    list: 'Checking my calendar',
+    create: 'Adding a calendar event',
+    get: 'Looking at that calendar event',
+    update: 'Updating a calendar event',
+    delete: 'Removing a calendar event',
   },
   tasks_: {
     list: 'Checking my tasks',
