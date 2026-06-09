@@ -99,7 +99,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     toggleService,
     isTogglingService,
     registrationConflict,
-    isAssistantMode,
+    isCommandMode,
   } = useService();
   const { state, cancel } = useCommand();
   const tutorialActive = useTutorialEngaged();
@@ -109,7 +109,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
       deriveMicAppearance({
         state,
         isServiceEnabled,
-        isAssistantMode,
+        isCommandMode,
         isTogglingService,
         registrationConflict,
         tutorialActive,
@@ -117,7 +117,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     [
       state,
       isServiceEnabled,
-      isAssistantMode,
+      isCommandMode,
       isTogglingService,
       registrationConflict,
       tutorialActive,

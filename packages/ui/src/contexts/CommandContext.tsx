@@ -300,10 +300,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const {
     isServiceEnabled,
     isConnected,
-    isAssistantMode,
-    isAssistantOwner,
-    assistantModeExpiresAt,
-    syncAssistantModeFromClaim,
+    isCommandMode,
+    isCommandOwner,
+    commandModeExpiresAt,
+    syncCommandModeFromClaim,
   } = useService();
   const [introductionModeActive, setIntroductionModeActive] = useState(false);
   const introductionModeActiveRef = useRef(false);
@@ -417,11 +417,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const releaseAssistantMode = useCallback(async (): Promise<boolean> => {
+  const releaseCommandMode = useCallback(async (): Promise<boolean> => {
     const sessionToken = getRealtimeSessionToken();
     if (!sessionToken) return false;
     try {
-      await serviceApi.releaseAssistantMode(sessionToken);
+      await serviceApi.releaseCommandMode(sessionToken);
       localClaimRef.current = false;
       return true;
     } catch (error) {
@@ -452,6 +452,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const notifyAssistantRevealStarted = useCallback(() => {
     if (responseRevealStartedRef.current) return;
     responseRevealStartedRef.current = true;
+    // Introduction: keep mic sealed while the canned opener types out — opening on
+    // the first character was buffering ambient audio to the 20s decode cap.
+    if (introductionModeActiveRef.current) return;
     setState('follow_up');
   }, []);
 
@@ -550,7 +553,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     abortActiveStream();
     void (async () => {
       if (localClaimRef.current) {
-        await releaseAssistantMode();
+        await releaseCommandMode();
       }
       goIdle();
     })();
@@ -560,7 +563,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearWakeTimeout,
     goIdle,
     endIntroductionMode,
-    releaseAssistantMode,
+    releaseCommandMode,
   ]);
 
   const cancel = useCallback(() => {
@@ -570,7 +573,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       clearWakeTimeout();
       abortActiveStream();
       if (localClaimRef.current) {
-        await releaseAssistantMode();
+        await releaseCommandMode();
       }
       goIdle();
     })();
@@ -580,15 +583,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearWakeTimeout,
     goIdle,
     endIntroductionMode,
-    releaseAssistantMode,
+    releaseCommandMode,
   ]);
 
-  const claimAssistantMode = useCallback(async (): Promise<boolean> => {
+  const claimCommandMode = useCallback(async (): Promise<boolean> => {
     const sessionToken = getRealtimeSessionToken();
     if (!sessionToken) return false;
     try {
-      const claimed = await serviceApi.claimAssistantMode(sessionToken, CLAIM_HOLD_SECONDS);
-      syncAssistantModeFromClaim(claimed);
+      const claimed = await serviceApi.claimCommandMode(sessionToken, CLAIM_HOLD_SECONDS);
+      syncCommandModeFromClaim(claimed);
       localClaimRef.current = true;
       return true;
     } catch (e) {
@@ -600,7 +603,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       console.warn('[Command] claim failed', e);
       return false;
     }
-  }, [resetLiveBubbles, syncAssistantModeFromClaim]);
+  }, [resetLiveBubbles, syncCommandModeFromClaim]);
 
   const scheduleWakeFalsePositiveRelease = useCallback(() => {
     clearWakeTimeout();
@@ -608,11 +611,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       if (stateRef.current !== 'listening') return;
       void (async () => {
         endIntroductionMode();
-        await releaseAssistantMode();
+        await releaseCommandMode();
         goIdle();
       })();
     }, WAKE_FALSE_POSITIVE_MS);
-  }, [clearWakeTimeout, endIntroductionMode, goIdle, releaseAssistantMode]);
+  }, [clearWakeTimeout, endIntroductionMode, goIdle, releaseCommandMode]);
 
   const clearWakeFalsePositiveIfCommandInProgress = useCallback((text: string) => {
     const cleaned = cleanTranscript(text);
@@ -628,22 +631,22 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     followUpTimerRef.current = setTimeout(() => {
       void (async () => {
         endIntroductionMode();
-        await releaseAssistantMode();
+        await releaseCommandMode();
         goIdle();
       })();
     }, ms);
-  }, [clearFollowUpTimer, endIntroductionMode, goIdle, releaseAssistantMode]);
+  }, [clearFollowUpTimer, endIntroductionMode, goIdle, releaseCommandMode]);
 
   const scheduleFollowUpAfterTypewriter = useCallback(() => {
     clearFollowUpTimer();
     followUpTimerRef.current = setTimeout(() => {
       void (async () => {
         endIntroductionMode();
-        await releaseAssistantMode();
+        await releaseCommandMode();
         goIdle();
       })();
     }, FOLLOW_UP_MIN_MS);
-  }, [clearFollowUpTimer, endIntroductionMode, goIdle, releaseAssistantMode]);
+  }, [clearFollowUpTimer, endIntroductionMode, goIdle, releaseCommandMode]);
 
   const revealCompleteHandledRef = useRef(false);
 
@@ -661,14 +664,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setAssistantStatusLine(null);
     responseRevealStartedRef.current = false;
     followUpCaptureRef.current = false;
-    void claimAssistantMode();
+    void claimCommandMode();
     if (introductionModeActiveRef.current) {
+      setState('follow_up');
       scheduleFollowUpExpiry(assistant.length);
     } else {
       scheduleFollowUpAfterTypewriter();
     }
   }, [
-    claimAssistantMode,
+    claimCommandMode,
     commitLiveTurnToHistory,
     scheduleFollowUpAfterTypewriter,
     scheduleFollowUpExpiry,
@@ -692,14 +696,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setAssistantBubbleStatus('pending');
     setAssistantStatusLine(null);
 
-    const claimed = await claimAssistantMode();
+    const claimed = await claimCommandMode();
     if (!claimed) return false;
 
     setState('listening');
     scheduleWakeFalsePositiveRelease();
     return true;
   }, [
-    claimAssistantMode,
+    claimCommandMode,
     clearFollowUpTimer,
     clearWakeTimeout,
     scheduleWakeFalsePositiveRelease,
@@ -774,6 +778,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           followUpCaptureRef.current = false;
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
+          if (
+            introductionModeActiveRef.current &&
+            assistantBubbleTextRef.current.trim()
+          ) {
+            setAssistantBubbleStatus('done');
+            setStateSynced((s) => (s === 'thinking' ? 'responding' : s));
+            queueMicrotask(() => notifyAssistantRevealComplete());
+            break;
+          }
           if (!assistantBubbleTextRef.current.trim()) {
             if (streamHadOutputRef.current) {
               setAssistantBubbleStatus('revealing');
@@ -795,7 +808,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [claimAssistantMode, commitLiveTurnToHistory, endSession, setAssistantBubbleTextSynced, setStateSynced],
+    [
+      claimCommandMode,
+      commitLiveTurnToHistory,
+      endSession,
+      notifyAssistantRevealComplete,
+      setAssistantBubbleTextSynced,
+      setStateSynced,
+    ],
   );
 
   const submitVisibleCommandText = useCallback(
@@ -854,10 +874,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setState('thinking');
 
       void (async () => {
-        const claimed = await claimAssistantMode();
+        const claimed = await claimCommandMode();
         if (!claimed) {
           const msg = fromFollowUp
-            ? ERROR_CODES.assistant_mode_not_owner
+            ? ERROR_CODES.command_mode_not_owner
             : ERROR_CODES.invalid_session;
           setAssistantBubbleTextSynced(msg);
           setAssistantBubbleStatus('revealing');
@@ -930,14 +950,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     [
       abortActiveStream,
       assignLiveTurnId,
-      claimAssistantMode,
+      claimCommandMode,
       clearFollowUpTimer,
       endSession,
       getAccessToken,
       goIdle,
       handleStreamEvent,
       isConnected,
-      releaseAssistantMode,
+      releaseCommandMode,
       resetInterimCaptionState,
       scheduleFollowUpExpiry,
       setAssistantBubbleTextSynced,
@@ -984,7 +1004,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     };
 
     try {
-      const claimed = await claimAssistantMode();
+      const claimed = await claimCommandMode();
       if (!claimed) {
         return failIntroduction(ERROR_CODES.invalid_session);
       }
@@ -1042,7 +1062,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [
     abortActiveStream,
     assignLiveTurnId,
-    claimAssistantMode,
+    claimCommandMode,
     clearFollowUpTimer,
     clearWakeTimeout,
     getAccessToken,
@@ -1190,7 +1210,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     goIdle,
     onFollowUpSpeechActivity,
     resetInterimCaptionState,
-    releaseAssistantMode,
+    releaseCommandMode,
     scheduleWakeFalsePositiveRelease,
     stableInterimCaption,
     submitVisibleCommandText,
@@ -1200,8 +1220,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isServiceEnabled) return;
-    // Passive service is intentionally off while assistant mode (or introduction) is active.
-    if (isAssistantMode || introductionModeActiveRef.current) return;
+    // Passive service is intentionally off while command mode (or introduction) is active.
+    if (isCommandMode || introductionModeActiveRef.current) return;
     const current = stateRef.current;
     if (current === 'idle' || current === 'locked') return;
     clearFollowUpTimer();
@@ -1217,24 +1237,24 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer,
     clearWakeTimeout,
     introductionModeActive,
-    isAssistantMode,
+    isCommandMode,
     isServiceEnabled,
     resetInterimCaptionState,
     resetLiveBubbles,
   ]);
 
   useEffect(() => {
-    if (isAssistantMode && !isAssistantOwner) {
+    if (isCommandMode && !isCommandOwner) {
       abortActiveStream();
       clearFollowUpTimer();
       clearWakeTimeout();
       setState('locked');
       setBubbleHistory([]);
       resetLiveBubbles();
-      showToast(ERROR_CODES.assistant_mode_not_owner, 'error');
+      showToast(ERROR_CODES.command_mode_not_owner, 'error');
       return;
     }
-    if (stateRef.current === 'locked' && (!isAssistantMode || isAssistantOwner)) {
+    if (stateRef.current === 'locked' && (!isCommandMode || isCommandOwner)) {
       goIdle();
     }
   }, [
@@ -1242,14 +1262,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer,
     clearWakeTimeout,
     goIdle,
-    isAssistantMode,
-    isAssistantOwner,
+    isCommandMode,
+    isCommandOwner,
     resetLiveBubbles,
     showToast,
   ]);
 
   useEffect(() => {
-    if (!localClaimRef.current || !assistantModeExpiresAt) return;
+    if (!localClaimRef.current || !commandModeExpiresAt) return;
     const statesWithClaim: CommandState[] = [
       'listening',
       'transcribing',
@@ -1260,18 +1280,18 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!statesWithClaim.includes(state)) return;
 
     const tick = () => {
-      const expiresAtMs = Date.parse(assistantModeExpiresAt);
+      const expiresAtMs = Date.parse(commandModeExpiresAt);
       if (!Number.isFinite(expiresAtMs)) return;
       const remaining = expiresAtMs - Date.now();
       if (remaining > 0 && remaining < CLAIM_RENEW_BEFORE_EXPIRE_MS) {
-        void claimAssistantMode();
+        void claimCommandMode();
       }
     };
 
     tick();
     const id = setInterval(tick, 500);
     return () => clearInterval(id);
-  }, [assistantModeExpiresAt, claimAssistantMode, state]);
+  }, [commandModeExpiresAt, claimCommandMode, state]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {

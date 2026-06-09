@@ -17,7 +17,7 @@ import { memoriesApi } from '@dadei/ui/lib/api/memories';
 import { personsApi } from '@dadei/ui/lib/api/persons';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { interactionsApi } from '@dadei/ui/lib/api/interactions';
-import { serviceApi, type AssistantModeState } from '@dadei/ui/lib/api/service';
+import { serviceApi, type CommandModeState } from '@dadei/ui/lib/api/service';
 import {
   startRealtimeClient,
   stopRealtimeClient,
@@ -92,13 +92,13 @@ interface ServiceContextType {
   clientName: string;
   toggleService: () => Promise<void>;
   isTogglingService: boolean;
-  isAssistantMode: boolean;
-  isAssistantOwner: boolean;
-  assistantOwnerSessionId: string | null;
-  assistantModeExpiresAt: string | null;
-  assistantModeRemainingMs: number;
-  /** Apply claim HTTP response immediately (do not wait for the assistant_mode webhook). */
-  syncAssistantModeFromClaim: (state: AssistantModeState) => void;
+  isCommandMode: boolean;
+  isCommandOwner: boolean;
+  commandOwnerSessionId: string | null;
+  commandModeExpiresAt: string | null;
+  commandModeRemainingMs: number;
+  /** Apply claim HTTP response immediately (do not wait for the command_mode webhook). */
+  syncCommandModeFromClaim: (state: CommandModeState) => void;
 
   memories: EpisodicMemory[];
   memoriesLoading: boolean;
@@ -146,9 +146,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const [clientName, setClientName] = useState('');
   const [isTogglingService, setIsTogglingService] = useState(false);
   const [registrationConflict, setRegistrationConflict] = useState(false);
-  const [isAssistantMode, setIsAssistantMode] = useState(false);
-  const [assistantOwnerSessionId, setAssistantOwnerSessionId] = useState<string | null>(null);
-  const [assistantModeExpiresAt, setAssistantModeExpiresAt] = useState<string | null>(null);
+  const [isCommandMode, setIsCommandMode] = useState(false);
+  const [commandOwnerSessionId, setCommandOwnerSessionId] = useState<string | null>(null);
+  const [commandModeExpiresAt, setCommandModeExpiresAt] = useState<string | null>(null);
 
   const [extraBootstrapConversationIds, setExtraBootstrapConversationIds] = useState<string[]>([]);
   const [actions, setActions] = useState<NetworkAction[]>([]);
@@ -317,10 +317,10 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     setIsTogglingService(false);
   }, []);
 
-  const syncAssistantModeFromClaim = useCallback((state: AssistantModeState) => {
-    setIsAssistantMode(state.active);
-    setAssistantOwnerSessionId(state.owner_session_id);
-    setAssistantModeExpiresAt(state.expires_at);
+  const syncCommandModeFromClaim = useCallback((state: CommandModeState) => {
+    setIsCommandMode(state.active);
+    setCommandOwnerSessionId(state.owner_session_id);
+    setCommandModeExpiresAt(state.expires_at);
   }, []);
 
   useEffect(() => {
@@ -348,9 +348,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       stopRealtimeClient();
       setIsConnected(false);
       setRegistrationConflict(false);
-      setIsAssistantMode(false);
-      setAssistantOwnerSessionId(null);
-      setAssistantModeExpiresAt(null);
+      setIsCommandMode(false);
+      setCommandOwnerSessionId(null);
+      setCommandModeExpiresAt(null);
       setExtraBootstrapConversationIds([]);
       clearAssistantSessionCaches(queryClient);
     }
@@ -401,14 +401,14 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       console.log('[Service] Status event:', status.enabled ? 'ENABLED' : 'DISABLED');
       applyServiceStatus(status.enabled);
     };
-    const handleAssistantModeChanged = (payload: {
+    const handleCommandModeChanged = (payload: {
       active: boolean;
       ownerSessionId: string | null;
       expiresAt: string | null;
     }) => {
-      setIsAssistantMode(payload.active);
-      setAssistantOwnerSessionId(payload.ownerSessionId);
-      setAssistantModeExpiresAt(payload.expiresAt);
+      setIsCommandMode(payload.active);
+      setCommandOwnerSessionId(payload.ownerSessionId);
+      setCommandModeExpiresAt(payload.expiresAt);
     };
 
     function handleInteraction(data: unknown) {
@@ -559,12 +559,12 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           if (typeof msg.enabled !== 'boolean') return;
           handleServiceStatusChanged({ enabled: msg.enabled });
           break;
-        case 'assistant_mode': {
+        case 'command_mode': {
           const active = typeof msg.active === 'boolean' ? msg.active : false;
           const ownerSessionId =
             typeof msg.owner_session_id === 'string' ? msg.owner_session_id : null;
           const expiresAt = typeof msg.expires_at === 'string' ? msg.expires_at : null;
-          handleAssistantModeChanged({ active, ownerSessionId, expiresAt });
+          handleCommandModeChanged({ active, ownerSessionId, expiresAt });
           break;
         }
         default:
@@ -681,11 +681,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, [bootstrapInteractionsQuery, personsQuery, recentConversationsQuery]);
 
   const realtimeSessionId = getRealtimeSessionId();
-  const isAssistantOwner =
-    isAssistantMode && !!realtimeSessionId && assistantOwnerSessionId === realtimeSessionId;
-  const assistantModeRemainingMs = (() => {
-    if (!assistantModeExpiresAt) return 0;
-    const expiresAtMs = Date.parse(assistantModeExpiresAt);
+  const isCommandOwner =
+    isCommandMode && !!realtimeSessionId && commandOwnerSessionId === realtimeSessionId;
+  const commandModeRemainingMs = (() => {
+    if (!commandModeExpiresAt) return 0;
+    const expiresAtMs = Date.parse(commandModeExpiresAt);
     if (!Number.isFinite(expiresAtMs)) return 0;
     return Math.max(0, expiresAtMs - Date.now());
   })();
@@ -703,12 +703,12 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         clientName,
         toggleService,
         isTogglingService,
-        isAssistantMode,
-        isAssistantOwner,
-        assistantOwnerSessionId,
-        assistantModeExpiresAt,
-        assistantModeRemainingMs,
-        syncAssistantModeFromClaim,
+        isCommandMode,
+        isCommandOwner,
+        commandOwnerSessionId,
+        commandModeExpiresAt,
+        commandModeRemainingMs,
+        syncCommandModeFromClaim,
 
         memories: memoriesQuery.data ?? [],
         memoriesLoading: memoriesQuery.isLoading,

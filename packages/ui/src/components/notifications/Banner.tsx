@@ -10,7 +10,6 @@ import { flushSync } from 'react-dom';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
-import { cn } from '@dadei/ui/lib/shared/cn';
 import type { ActionOperation } from '@dadei/ui/types/models.types';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import BannerBody from '@dadei/ui/components/notifications/BannerBody';
@@ -361,70 +360,67 @@ export default function Banner({
         />
       ) : null}
 
-      <div className="relative px-4 pt-3 pb-2.5">
-        {showActions ? (
-          onCancel ? (
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={cancelling}
-              className="absolute right-3 top-3 z-20 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
-            >
-              {cancelling ? 'Cancelling…' : cancelLabel || 'Cancel'}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onDismiss}
-              className="absolute right-3 top-3 z-20 rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
-              aria-label="Dismiss"
-            >
-              <X className="h-4 w-4" strokeWidth={2} />
-            </button>
-          )
-        ) : null}
-
-        <div
-          className={cn(
-            'min-w-0',
-            showActions && (onCancel ? 'pr-28' : 'pr-10'),
-          )}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
-            {operation ? (
-              <>
-                <span className={theme.operationTextClass}>
-                  {actionOperationLabel(operation)}
-                </span>
-                <span className="text-zinc-500/80"> · </span>
-              </>
-            ) : null}
-            <span className="text-zinc-400/90">{category || 'Notification'}</span>
-          </p>
-          {actionType ? (
-            <BannerBody
-              actionType={actionType}
-              operation={operation}
-              title={title}
-              body={body}
-              toolArgs={toolArgs}
-              startTime={startTime}
-              endTime={endTime}
-            />
-          ) : (
-            <>
-              <p className="mt-1 text-sm font-semibold leading-snug text-zinc-100">
-                {title}
-              </p>
-              {body ? (
-                <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">
-                  {body}
-                </p>
+      <div className="px-4 pt-3 pb-2.5">
+        <div className="flex items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
+              {operation ? (
+                <>
+                  <span className={theme.operationTextClass}>
+                    {actionOperationLabel(operation)}
+                  </span>
+                  <span className="text-zinc-500/80"> · </span>
+                </>
               ) : null}
-            </>
-          )}
-          {error ? (
-            <p className="mt-1 text-xs text-red-400/90 font-secondary">{error}</p>
+              <span className="text-zinc-400/90">{category || 'Notification'}</span>
+            </p>
+            {actionType ? (
+              <BannerBody
+                actionType={actionType}
+                operation={operation}
+                title={title}
+                body={body}
+                toolArgs={toolArgs}
+                startTime={startTime}
+                endTime={endTime}
+              />
+            ) : (
+              <>
+                <p className="mt-1 text-sm font-semibold leading-snug text-zinc-100">
+                  {title}
+                </p>
+                {body ? (
+                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">
+                    {body}
+                  </p>
+                ) : null}
+              </>
+            )}
+            {error ? (
+              <p className="mt-1 text-xs text-red-400/90 font-secondary">{error}</p>
+            ) : null}
+          </div>
+
+          {showActions ? (
+            onCancel ? (
+              <button
+                type="button"
+                onClick={handleCancel}
+                disabled={cancelling}
+                className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+              >
+                {cancelling ? 'Cancelling…' : cancelLabel || 'Cancel'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="shrink-0 rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
+                aria-label="Dismiss"
+              >
+                <X className="h-4 w-4" strokeWidth={2} />
+              </button>
+            )
           ) : null}
         </div>
       </div>

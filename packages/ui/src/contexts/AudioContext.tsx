@@ -139,7 +139,7 @@ function buildAudioConstraints(prefs: AudioSettings): MediaTrackConstraints {
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { audioSettings } = useSystem();
-  const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
+  const { isServiceEnabled, registrationConflict, isConnected, isCommandMode, isCommandOwner } =
     useService();
   const { state, startListening, notifyCommandUtteranceEnded, introductionModeActive } =
     useCommand();
@@ -184,7 +184,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     commandStreamReadyRef.current = false;
     lastCommandStartAttemptMsRef.current = 0;
     commandAudioEndSentRef.current = false;
-    sendRealtimeMessage({ type: 'command_audio_cancel' });
+    // Discard any half-open utterance and re-tag the stream — cancel tore down
+    // the session and caused stale 20s buffers on the canned opener.
+    sendRealtimeMessage({ type: 'command_audio_discard' });
+    sendRealtimeMessage({
+      type: 'command_audio_start',
+      sample_rate: audioSettingsRef.current.sampleRate,
+      introduction_mode: true,
+    });
   }, [introductionModeActive]);
 
   const setMicLevelPreview = useCallback((active: boolean) => {
@@ -521,11 +528,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const shouldListen =
-      (isServiceEnabled || (isAssistantMode && isAssistantOwner)) &&
+      (isServiceEnabled || (isCommandMode && isCommandOwner)) &&
       !registrationConflict &&
       isConnected;
     setIsAudioPipelineReady(shouldListen);
-  }, [isServiceEnabled, isAssistantMode, isAssistantOwner, registrationConflict, isConnected]);
+  }, [isServiceEnabled, isCommandMode, isCommandOwner, registrationConflict, isConnected]);
 
   useEffect(() => {
     const off = subscribeRealtimeMessages(msg => {
@@ -538,7 +545,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const shouldListen =
-      (isServiceEnabled || (isAssistantMode && isAssistantOwner)) &&
+      (isServiceEnabled || (isCommandMode && isCommandOwner)) &&
       !registrationConflict &&
       isConnected;
     const shouldStream = shouldListen && state !== 'locked';
@@ -552,8 +559,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [
     isServiceEnabled,
-    isAssistantMode,
-    isAssistantOwner,
+    isCommandMode,
+    isCommandOwner,
     registrationConflict,
     isConnected,
     state,

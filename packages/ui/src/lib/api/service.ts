@@ -14,7 +14,7 @@ export interface ClientResponse {
   metadata?: Record<string, unknown>;
 }
 
-export interface AssistantModeState {
+export interface CommandModeState {
   active: boolean;
   owner_session_id: string | null;
   expires_at: string | null;
@@ -79,32 +79,32 @@ export const serviceApi = {
   },
 
   /**
-   * Attempt to claim assistant mode ownership for a short conversational window.
-   * PATCH /api/v1/service/network/assistant-mode/claim
+   * Attempt to claim command mode ownership for a short conversational window.
+   * PATCH /api/v1/service/network/command-mode/claim
    */
-  async claimAssistantMode(sessionToken: string, holdSeconds = 5): Promise<AssistantModeState> {
-    const { data } = await api.patch<AssistantModeState>(
-      ENDPOINTS.SERVICE_ASSISTANT_MODE_CLAIM,
+  async claimCommandMode(sessionToken: string, holdSeconds = 5): Promise<CommandModeState> {
+    const { data } = await api.patch<CommandModeState>(
+      ENDPOINTS.SERVICE_COMMAND_MODE_CLAIM,
       {
         session_token: sessionToken,
         hold_seconds: holdSeconds,
       },
-      { timeout: API_CONFIG.TIMEOUTS.ASSISTANT_MODE },
+      { timeout: API_CONFIG.TIMEOUTS.COMMAND_MODE },
     );
     return data;
   },
 
   /**
-   * Release assistant mode ownership.
-   * PATCH /api/v1/service/network/assistant-mode/release
+   * Release command mode ownership.
+   * PATCH /api/v1/service/network/command-mode/release
    */
-  async releaseAssistantMode(sessionToken: string): Promise<void> {
+  async releaseCommandMode(sessionToken: string): Promise<void> {
     await api.patch(
-      ENDPOINTS.SERVICE_ASSISTANT_MODE_RELEASE,
+      ENDPOINTS.SERVICE_COMMAND_MODE_RELEASE,
       {
         session_token: sessionToken,
       },
-      { timeout: API_CONFIG.TIMEOUTS.ASSISTANT_MODE },
+      { timeout: API_CONFIG.TIMEOUTS.COMMAND_MODE },
     );
   },
 

@@ -26,8 +26,8 @@ const PROCESSING_STATES: ReadonlySet<CommandState> = new Set([
 
 const CAPTURE_STATES: ReadonlySet<CommandState> = new Set(['listening', 'follow_up']);
 
-function isCommandMode(state: CommandState, isAssistantMode: boolean): boolean {
-  return state !== 'idle' || isAssistantMode;
+function isCommandModeActive(state: CommandState, isCommandMode: boolean): boolean {
+  return state !== 'idle' || isCommandMode;
 }
 
 /**
@@ -39,7 +39,7 @@ function isCommandMode(state: CommandState, isAssistantMode: boolean): boolean {
 export function deriveMicAppearance(input: {
   state: CommandState;
   isServiceEnabled: boolean;
-  isAssistantMode: boolean;
+  isCommandMode: boolean;
   isTogglingService: boolean;
   registrationConflict: boolean;
   tutorialActive: boolean;
@@ -47,7 +47,7 @@ export function deriveMicAppearance(input: {
   const {
     state,
     isServiceEnabled,
-    isAssistantMode,
+    isCommandMode,
     isTogglingService,
     registrationConflict,
     tutorialActive,
@@ -86,7 +86,7 @@ export function deriveMicAppearance(input: {
     };
   }
 
-  const commandMode = isCommandMode(state, isAssistantMode);
+  const commandMode = isCommandModeActive(state, isCommandMode);
   const processing = PROCESSING_STATES.has(state);
   const capturing = CAPTURE_STATES.has(state);
 

@@ -14,10 +14,10 @@ describe('userMessage', () => {
 
   it('parses structured API detail', () => {
     const { code, message } = parseApiDetail({
-      code: 'assistant_mode_not_owner',
+      code: 'command_mode_not_owner',
       message: 'This session does not own assistant mode',
     });
-    expect(code).toBe('assistant_mode_not_owner');
+    expect(code).toBe('command_mode_not_owner');
     expect(message).toMatch(/another device/i);
   });
 
@@ -27,7 +27,7 @@ describe('userMessage', () => {
 
   it('formats websocket transcript errors', () => {
     expect(
-      formatWsTranscriptError({ code: 'assistant_mode_not_owner', message: 'x' }),
+      formatWsTranscriptError({ code: 'command_mode_not_owner', message: 'x' }),
     ).toMatch(/another device/i);
   });
 

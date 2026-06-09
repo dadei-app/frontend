@@ -6,8 +6,8 @@ import { isAxiosError } from 'axios';
 
 export const ERROR_CODES = {
   invalid_session: 'Connect to the assistant service and try again.',
-  assistant_mode_not_owner: 'Another device is using the assistant right now.',
-  assistant_mode_owned: 'Assistant mode is already active on another session.',
+  command_mode_not_owner: 'Another device is using command mode right now.',
+  command_mode_owned: 'Command mode is already active on another session.',
   service_disabled: 'Turn on the assistant service in settings, then try again.',
   network_not_found: 'Your workspace could not be found. Sign in again.',
   validation_error: 'That request was not valid. Check your input and try again.',
@@ -101,7 +101,7 @@ export function parseHttpResponseBody(body: unknown, status?: number): string {
   if (status === 401) return 'You are not signed in. Sign in and try again.';
   if (status === 403) return 'You do not have permission to do that.';
   if (status === 404) return ERROR_CODES.network_not_found;
-  if (status === 409) return ERROR_CODES.assistant_mode_not_owner;
+  if (status === 409) return ERROR_CODES.command_mode_not_owner;
   if (status === 422) return ERROR_CODES.validation_error;
   if (status === 429) return ERROR_CODES.rate_limited;
   if (status && status >= 500) return ERROR_CODES.internal_error;
