@@ -39,7 +39,7 @@ export const COMMAND_UTTERANCE_END_SILENCE_MS = 2_000;
  */
 export const INTRODUCTION_COMMAND_SPEECH_RMS = 0.065;
 export const INTRODUCTION_FOLLOW_UP_SPEECH_RMS = 0.07;
-/** Allow ~1s+ pauses while the user thinks or spells without finalizing the utterance. */
+/** Longer than command (2s) so the user can pause while recalling / spelling. */
 export const INTRODUCTION_UTTERANCE_END_SILENCE_MS = 4_000;
 /** Analyser level multiplier while capturing a command (mic aura only). */
 export const COMMAND_MIC_LEVEL_GAIN = 2.45;

@@ -630,6 +630,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const ms = computeFollowUpMs(responseChars);
     followUpTimerRef.current = setTimeout(() => {
       void (async () => {
+        if (introductionModeActiveRef.current) return;
         endIntroductionMode();
         await releaseCommandMode();
         goIdle();
@@ -666,8 +667,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     followUpCaptureRef.current = false;
     void claimCommandMode();
     if (introductionModeActiveRef.current) {
+      // Introduction stays active until inference ends the session — no follow-up idle timer.
       setState('follow_up');
-      scheduleFollowUpExpiry(assistant.length);
     } else {
       scheduleFollowUpAfterTypewriter();
     }
@@ -675,7 +676,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     claimCommandMode,
     commitLiveTurnToHistory,
     scheduleFollowUpAfterTypewriter,
-    scheduleFollowUpExpiry,
     setAssistantBubbleTextSynced,
   ]);
 
@@ -742,6 +742,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
         }
         case 'tool_result':
+          if (ev.tool === 'assign_person_name' && ev.ok) {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
+          }
           if (ev.summary) {
             streamHadOutputRef.current = true;
             const snippet = formatToolSummarySnippet(ev.summary, ev.ok);
@@ -813,6 +816,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       commitLiveTurnToHistory,
       endSession,
       notifyAssistantRevealComplete,
+      queryClient,
       setAssistantBubbleTextSynced,
       setStateSynced,
     ],
@@ -1118,6 +1122,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           introductionModeActiveRef.current &&
           (current === 'thinking' || current === 'responding')
         ) {
+          return;
+        }
+        // Final decode finished with no command_transcript_final (empty ASR).
+        if (current === 'transcribing' && awaitingTranscriptRef.current) {
+          const fromFollowUp = transcribeFromFollowUpRef.current;
+          utteranceEndNotifiedRef.current = false;
+          awaitingTranscriptRef.current = false;
+          transcribeFromFollowUpRef.current = false;
+          setAssistantStatusLine(null);
+          setState(fromFollowUp ? 'follow_up' : 'listening');
           return;
         }
         if (

@@ -5,6 +5,7 @@ import {
   formatActionWhen,
   formatConfidence,
   formatMetaLine,
+  resolveMemoryConfidence,
 } from '@dadei/ui/utils/actionDisplay';
 
 type MemorySettingsRowProps = {
@@ -24,7 +25,12 @@ export function MemorySettingsRow({
   onDisarm,
   onConfirm,
 }: MemorySettingsRowProps) {
-  const evidence = firstEvidenceQuote(memory.provenance);
+  const evidence =
+    firstEvidenceQuote(memory.provenance) ??
+    firstEvidenceQuote(
+      Array.isArray(memory.evidence_quotes) ? { evidence_quotes: memory.evidence_quotes } : null,
+    );
+  const confidence = resolveMemoryConfidence(memory);
 
   return (
     <li className="group/memory rounded-lg border border-white/8 bg-zinc-900/55 p-3">
@@ -40,7 +46,7 @@ export function MemorySettingsRow({
             {formatMetaLine([
               memory.memory_type,
               memory.status,
-              formatConfidence(memory.confidence),
+              formatConfidence(confidence),
               memory.expires_at ? `Expires ${formatActionWhen(memory.expires_at)}` : null,
               evidence ? `"${evidence}"` : null,
             ])}

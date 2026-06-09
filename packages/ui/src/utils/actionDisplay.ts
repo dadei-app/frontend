@@ -209,9 +209,45 @@ export function actionBannerMeta(action: NetworkAction): string | undefined {
   return timeRange ?? undefined;
 }
 
+function normalizeConfidenceValue(raw: number): number | null {
+  if (Number.isNaN(raw)) return null;
+  let value = raw;
+  if (value > 1) {
+    if (value <= 100 && Number.isInteger(value)) {
+      value = value / 100;
+    } else {
+      value = Math.min(1, value);
+    }
+  }
+  if (value < 0 || value > 1 || Number.isNaN(value)) return null;
+  return value;
+}
+
+/** Resolve stored confidence from API fields (0–1 scale). */
+export function resolveMemoryConfidence(memory: {
+  confidence?: number | string | null;
+  details?: Record<string, unknown> | null;
+}): number | null {
+  const candidates: Array<number | string | null | undefined> = [memory.confidence];
+  const detailsConfidence = memory.details?.confidence;
+  if (typeof detailsConfidence === 'number' || typeof detailsConfidence === 'string') {
+    candidates.push(detailsConfidence);
+  }
+
+  for (const candidate of candidates) {
+    if (candidate == null || candidate === '') continue;
+    const parsed = typeof candidate === 'number' ? candidate : Number(candidate);
+    const normalized = normalizeConfidenceValue(parsed);
+    if (normalized != null) return normalized;
+  }
+  return null;
+}
+
 export function formatConfidence(confidence: number | null | undefined): string | null {
-  if (confidence == null || Number.isNaN(confidence)) return null;
-  return `${Math.round(confidence * 100)}% confidence`;
+  if (confidence == null) return null;
+  const normalized = normalizeConfidenceValue(confidence);
+  if (normalized == null) return null;
+  return `${Math.round(normalized * 100)}% confidence`;
 }
 
 export function firstEvidenceQuote(

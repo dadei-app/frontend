@@ -34,6 +34,7 @@ export interface EpisodicMemory {
   participant_person_ids: unknown;
   expires_at: string | null;
   confidence: number | null;
+  evidence_quotes?: string[] | null;
   provenance: EpisodicMemoryProvenance | null;
   details: Record<string, unknown> | null;
   created_at: string;

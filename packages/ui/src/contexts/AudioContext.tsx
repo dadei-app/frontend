@@ -177,22 +177,19 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
   const introductionModeRef = useRef(false);
+  introductionModeRef.current = introductionModeActive;
 
-  useEffect(() => {
-    introductionModeRef.current = introductionModeActive;
-    if (!introductionModeActive || !commandStreamActiveRef.current) return;
-    commandStreamReadyRef.current = false;
-    lastCommandStartAttemptMsRef.current = 0;
+  const rearmIntroductionCapture = useCallback(() => {
+    if (!introductionModeRef.current || !commandStreamActiveRef.current) return;
     commandAudioEndSentRef.current = false;
-    // Discard any half-open utterance and re-tag the stream — cancel tore down
-    // the session and caused stale 20s buffers on the canned opener.
+    commandStreamReadyRef.current = false;
     sendRealtimeMessage({ type: 'command_audio_discard' });
     sendRealtimeMessage({
       type: 'command_audio_start',
       sample_rate: audioSettingsRef.current.sampleRate,
       introduction_mode: true,
     });
-  }, [introductionModeActive]);
+  }, []);
 
   const setMicLevelPreview = useCallback((active: boolean) => {
     micPreviewRequestsRef.current = Math.max(
@@ -266,7 +263,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       commitCommandCapture();
     } else if (
       (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
-      (state === 'follow_up' && ASSISTANT_BUSY_STATES.includes(prev))
+      (state === 'follow_up' &&
+        ASSISTANT_BUSY_STATES.includes(prev) &&
+        !introductionModeRef.current)
     ) {
       sendRealtimeMessage({ type: 'command_audio_discard' });
     } else if (
@@ -277,8 +276,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       commandStreamReadyRef.current = false;
       lastCommandStartAttemptMsRef.current = 0;
     }
+    if (state === 'follow_up' && prev !== 'follow_up' && introductionModeRef.current) {
+      rearmIntroductionCapture();
+    }
     prevStateRef.current = state;
-  }, [state, commitCommandCapture]);
+  }, [state, commitCommandCapture, rearmIntroductionCapture]);
 
   useEffect(() => {
     if (state === 'listening' || state === 'follow_up') {

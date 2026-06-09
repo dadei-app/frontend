@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   actionDomainLabel,
   actionOperationLabel,
+  formatConfidence,
   isNotificationAction,
   operationForToolName,
   resolveActionOperation,
+  resolveMemoryConfidence,
 } from './actionDisplay';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 
@@ -78,5 +80,21 @@ describe('actionDomainLabel', () => {
   it('humanizes known action types', () => {
     expect(actionDomainLabel('calendar')).toBe('Calendar');
     expect(actionDomainLabel('email')).toBe('Email');
+  });
+});
+
+describe('resolveMemoryConfidence', () => {
+  it('reads top-level confidence on 0–1 scale', () => {
+    expect(resolveMemoryConfidence({ confidence: 0.82 })).toBe(0.82);
+  });
+
+  it('falls back to details.confidence', () => {
+    expect(resolveMemoryConfidence({ confidence: null, details: { confidence: 0.55 } })).toBe(0.55);
+  });
+
+  it('normalizes percent-scale values', () => {
+    expect(resolveMemoryConfidence({ confidence: 65 })).toBe(0.65);
+    expect(formatConfidence(0.9)).toBe('90% confidence');
+    expect(formatConfidence(65)).toBe('65% confidence');
   });
 });
