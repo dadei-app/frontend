@@ -97,6 +97,8 @@ type NotificationsContextValue = {
 
 const NotificationsContext = createContext<NotificationsContextValue | undefined>(undefined);
 
+const EMPTY_ACTIONS: NetworkAction[] = [];
+
 function newId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -118,7 +120,7 @@ function useProposedActionsFromCache(): NetworkAction[] {
     [queryClient],
   );
   const getSnapshot = useCallback(
-    () => queryClient.getQueryData<NetworkAction[]>(queryKeys.actions) ?? [],
+    () => queryClient.getQueryData<NetworkAction[]>(queryKeys.actions) ?? EMPTY_ACTIONS,
     [queryClient],
   );
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);

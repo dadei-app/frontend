@@ -80,13 +80,19 @@ export function IntegrationsPanel() {
   const { user: me, refreshUser, saveTokens } = useAuth();
   const { isElectron } = useSystem();
   const settingsTourActive = useTutorialSettingsTourActive();
-  const integrationsStatusQuery = useIntegrationsStatusQuery(!settingsTourActive);
+  const integrationsStatusQuery = useIntegrationsStatusQuery();
   const [googleConnectError, setGoogleConnectError] = useState('');
   const [connectingGoogle, setConnectingGoogle] = useState(false);
 
   const integrationsStatus = integrationsStatusQuery.data;
+  const integrationsLoaded = integrationsStatusQuery.isSuccess && integrationsStatus != null;
   const googleConnected =
     integrationsStatus?.google_connected ?? Boolean(me?.google_connected);
+  const googleScopesStale = integrationsStatus?.google_scopes_stale === true;
+  const needsGoogleReauth =
+    googleConnected &&
+    (googleScopesStale ||
+      (integrationsStatus?.integrations ?? []).some(i => i.status === 'needs_reauth'));
 
   useEffect(() => {
     if (settingsTourActive) return;
@@ -156,11 +162,26 @@ export function IntegrationsPanel() {
               label={connectingGoogle ? 'Connecting…' : 'Connect Google'}
             />
           </SegmentedShell>
+        ) : needsGoogleReauth ? (
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
+            <p className="text-sm text-amber-200/90 font-secondary">
+              Some Google permissions are missing — re-authorize to turn on Calendar and other
+              integrations.
+            </p>
+            <SegmentedShell layout="row" className="w-full shrink-0 sm:w-auto">
+              <SegmentedOption
+                selected={false}
+                disabled={connectingGoogle}
+                onSelect={() => void handleGoogleConnect()}
+                label={connectingGoogle ? 'Re-authorizing…' : 'Re-authorize Google'}
+              />
+            </SegmentedShell>
+          </div>
         ) : null}
         {googleConnectError ? (
           <p className="shrink-0 text-sm text-rose-300/90 font-secondary">{googleConnectError}</p>
         ) : null}
-        {integrationsStatusQuery.isLoading ? (
+        {!integrationsLoaded && !integrationsStatusQuery.isError ? (
           <p className="text-sm text-zinc-500 font-secondary">Loading integrations…</p>
         ) : integrationsStatusQuery.isError ? (
           <p className="text-sm text-rose-300/90 font-secondary">
