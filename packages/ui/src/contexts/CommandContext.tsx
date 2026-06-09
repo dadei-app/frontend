@@ -737,7 +737,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamHadOutputRef.current = true;
           setState((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('pending');
-          pendingNewResponseRef.current = false;
           const label = commandToolStatusLabel(ev.tool);
           setAssistantStatusLine(formatAssistantStatusLine(label || ASSISTANT_STATUS_THINKING));
           break;
@@ -751,7 +750,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
               setAssistantStatusLine(null);
               setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
               setAssistantBubbleStatus('revealing');
-            } else if (snippet) {
+              pendingNewResponseRef.current = false;
+            } else if (snippet && !pendingNewResponseRef.current) {
               setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
               setAssistantBubbleStatus('streaming');
             } else {
