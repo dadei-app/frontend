@@ -13,6 +13,7 @@ import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import type { ActionOperation } from '@dadei/ui/types/models.types';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import BannerBody from '@dadei/ui/components/notifications/BannerBody';
 import {
   actionOperationLabel,
   NEUTRAL_BANNER_THEME,
@@ -25,8 +26,12 @@ export interface BannerProps {
   id: string;
   category?: string;
   operation?: ActionOperation;
+  actionType?: string;
   title: string;
   body?: string;
+  toolArgs?: Record<string, unknown>;
+  startTime?: string | null;
+  endTime?: string | null;
   durationMs: number;
   showCountdown?: boolean;
   countdownEndsAt?: string;
@@ -177,8 +182,12 @@ export default function Banner({
   id,
   category,
   operation,
+  actionType,
   title,
   body,
+  toolArgs,
+  startTime,
+  endTime,
   durationMs,
   showCountdown,
   countdownEndsAt,
@@ -199,7 +208,7 @@ export default function Banner({
   const [dissolveMask, setDissolveMask] = useState<{ image: string; layers: number } | null>(null);
 
   const theme = operation ? OPERATION_BANNER_THEME[operation] : NEUTRAL_BANNER_THEME;
-  const buried = !isStackFront && stackDepth > 0;
+  const showActions = isStackFront && !isExiting;
   const acidSpots = useMemo(() => seedAcidSpots(id), [id]);
   const noiseSeed = acidSpots[0]?.seed ?? 7;
 
@@ -352,8 +361,8 @@ export default function Banner({
         />
       ) : null}
 
-      <div className="relative px-4 pt-3 pb-1.5">
-        {!buried && isStackFront && !isExiting ? (
+      <div className="relative px-4 pt-3 pb-2.5">
+        {showActions ? (
           onCancel ? (
             <button
               type="button"
@@ -378,7 +387,7 @@ export default function Banner({
         <div
           className={cn(
             'min-w-0',
-            !buried && isStackFront && !isExiting && (onCancel ? 'pr-28' : 'pr-10'),
+            showActions && (onCancel ? 'pr-28' : 'pr-10'),
           )}
         >
           <p className="text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
@@ -392,22 +401,32 @@ export default function Banner({
             ) : null}
             <span className="text-zinc-400/90">{category || 'Notification'}</span>
           </p>
-          {!buried ? (
+          {actionType ? (
+            <BannerBody
+              actionType={actionType}
+              operation={operation}
+              title={title}
+              body={body}
+              toolArgs={toolArgs}
+              startTime={startTime}
+              endTime={endTime}
+            />
+          ) : (
             <>
               <p className="mt-1 text-sm font-semibold leading-snug text-zinc-100">
                 {title}
               </p>
-              {error ? (
-                <p className="mt-1 text-xs text-red-400/90 font-secondary">{error}</p>
+              {body ? (
+                <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">
+                  {body}
+                </p>
               ) : null}
             </>
+          )}
+          {error ? (
+            <p className="mt-1 text-xs text-red-400/90 font-secondary">{error}</p>
           ) : null}
         </div>
-        {!buried && body ? (
-          <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">
-            {body}
-          </p>
-        ) : null}
       </div>
     </div>
   );

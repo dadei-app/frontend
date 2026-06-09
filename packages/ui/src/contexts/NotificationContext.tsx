@@ -6,6 +6,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useSyncExternalStore,
   useState,
   type ReactNode,
 } from 'react';
@@ -20,6 +21,7 @@ import {
   BANNER_ENTER_SPRING,
   BANNER_PUSH_SPRING,
   BANNER_STACK_STAGGER_MS,
+  BANNER_ACTIVE_ENTER_TRAVEL_PX,
   bannerPouchTravelPx,
   buildStackBanners,
   stackContainerHeight,
@@ -36,6 +38,7 @@ import {
 
 const DEFAULT_BANNER_DURATION_MS = 10_000;
 const STACK_OPACITY_EASE = [0.22, 1, 0.36, 1] as const;
+const ACTIVE_ENTER_OPACITY_MS = 0.18;
 const MOTION_SETTLE_MS = 650;
 const EXITING_Z_INDEX = 10_000;
 
@@ -59,8 +62,12 @@ export type BannerItem = {
   id: string;
   category?: string;
   operation?: 'create' | 'update' | 'delete';
+  actionType?: string;
   title: string;
   body?: string;
+  toolArgs?: Record<string, unknown>;
+  startTime?: string | null;
+  endTime?: string | null;
   durationMs: number;
   showCountdown?: boolean;
   countdownEndsAt?: string;
@@ -97,57 +104,29 @@ function newId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-/** Push-only mirror of `queryKeys.actions` (filled by ServiceContext realtime handlers). */
-function useNotificationActionsFromCache() {
+/** Read proposed actions from the React Query cache on every cache notify (no useEffect hop). */
+function useProposedActionsFromCache(): NetworkAction[] {
   const queryClient = useQueryClient();
-  const [actions, setActions] = useState<NetworkAction[]>(
-    () => queryClient.getQueryData<NetworkAction[]>(queryKeys.actions) ?? [],
+  const subscribe = useCallback(
+    (onStoreChange: () => void) =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (event?.query?.queryKey?.[0] !== queryKeys.actions[0]) return;
+        if (event.type === 'updated' || event.type === 'added') {
+          onStoreChange();
+        }
+      }),
+    [queryClient],
   );
-
-  useEffect(() => {
-    const key = queryKeys.actions;
-    const sync = () => {
-      setActions(queryClient.getQueryData<NetworkAction[]>(key) ?? []);
-    };
-    sync();
-    return queryClient.getQueryCache().subscribe(event => {
-      if (event?.query?.queryKey?.[0] !== key[0]) return;
-      if (event.type === 'updated' || event.type === 'added') {
-        sync();
-      }
-    });
-  }, [queryClient]);
-
-  return { data: actions };
+  const getSnapshot = useCallback(
+    () => queryClient.getQueryData<NetworkAction[]>(queryKeys.actions) ?? [],
+    [queryClient],
+  );
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
-/** Replaces action banners from the actions query (single source of truth, no duplicates). */
-function useActionBannerSync(
-  enabled: boolean,
-  setActionBanners: (items: BannerItem[]) => void,
-) {
+function useSyncedActionBanners(enabled: boolean): BannerItem[] {
   const queryClient = useQueryClient();
-  const { data: actions } = useNotificationActionsFromCache();
-
-  const notificationActions = useMemo(
-    () => normalizeNotificationActions(actions ?? []),
-    [actions],
-  );
-
-  const seenActionIdsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const current = new Set(notificationActions.map((a) => a.id));
-    let hasNew = false;
-    for (const id of current) {
-      if (!seenActionIdsRef.current.has(id)) {
-        hasNew = true;
-        break;
-      }
-    }
-    seenActionIdsRef.current = current;
-    if (hasNew) playNotificationPing();
-  }, [notificationActions]);
+  const actions = useProposedActionsFromCache();
 
   const rejectAction = useCallback(
     async (actionId: string) => {
@@ -159,21 +138,12 @@ function useActionBannerSync(
     [queryClient],
   );
 
-  useEffect(() => {
-    if (!enabled) {
-      setActionBanners([]);
-      return;
-    }
-    setActionBanners(
-      networkActionsToBannerItems(notificationActions, { onReject: rejectAction }),
-    );
-  }, [enabled, notificationActions, rejectAction, setActionBanners]);
-
-  useEffect(() => {
-    if (!enabled) {
-      queryClient.setQueryData<NetworkAction[]>(queryKeys.actions, []);
-    }
-  }, [enabled, queryClient]);
+  return useMemo(() => {
+    if (!enabled) return [];
+    return networkActionsToBannerItems(normalizeNotificationActions(actions), {
+      onReject: rejectAction,
+    });
+  }, [enabled, actions, rejectAction]);
 }
 
 export function ToastStackHost({ className = '' }: { className?: string }) {
@@ -212,39 +182,40 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
   const prevStackIdsRef = useRef<string[]>([]);
   const lastKnownRef = useRef<Map<string, StackBanner>>(new Map());
   const mountKeyRef = useRef<Map<string, string>>(new Map());
-  const [enteringIds, setEnteringIds] = useState<Map<string, number>>(() => new Map());
-  const [pushedIds, setPushedIds] = useState<Set<string>>(() => new Set());
+  const enteringIdsRef = useRef<Map<string, number>>(new Map());
+  const pushedIdsRef = useRef<Set<string>>(new Set());
+  const [, bumpEnterState] = useState(0);
 
   const [exitingIds, setExitingIds] = useState<Set<string>>(() => new Set());
   const [exitModeById, setExitModeById] = useState<Map<string, BannerExitMode>>(
     () => new Map(),
   );
   const [exitBarrier, setExitBarrier] = useState(false);
+  const pingedEnterRef = useRef<Set<string>>(new Set());
+  const pendingPingIdsRef = useRef<string[]>([]);
 
-  useLayoutEffect(() => {
-    for (const banner of stack) {
-      lastKnownRef.current.set(banner.id, banner);
-    }
-
-    const currentIds = stack.map((b) => b.id);
-    const prevIds = prevStackIdsRef.current;
+  // Apply stack transitions synchronously so the first paint can mount banners immediately.
+  const currentIds = stack.map((b) => b.id);
+  const prevIds = prevStackIdsRef.current;
+  const stackIdsChanged = prevIds.join('|') !== currentIds.join('|');
+  if (stackIdsChanged) {
     const prevIdSet = new Set(prevIds);
     const newIds = currentIds.filter((id) => !prevIdSet.has(id));
-    const stackIdsChanged = prevIds.join('|') !== currentIds.join('|');
-
-    if (!stackIdsChanged) return;
 
     const stampMountKeys = (ids: string[]) => {
       for (const id of ids) {
-        mountKeyRef.current.set(id, `${id}:enter:${mountKeyRef.current.size}`);
+        if (!mountKeyRef.current.has(id)) {
+          mountKeyRef.current.set(id, `${id}:enter:${mountKeyRef.current.size}`);
+        }
       }
     };
 
     if (prevIds.length === 0 && currentIds.length > 0) {
       slotByIdRef.current = new Map(stack.map((b) => [b.id, b.slotFromTop]));
       stampMountKeys(currentIds);
-      setEnteringIds(new Map(stack.map((b, index) => [b.id, index])));
-      setPushedIds(new Set());
+      enteringIdsRef.current = new Map(stack.map((b, index) => [b.id, index]));
+      pushedIdsRef.current = new Set();
+      pendingPingIdsRef.current = [...newIds];
     } else if (newIds.length > 0) {
       const next = new Map(slotByIdRef.current);
       const bump = newIds.length;
@@ -260,23 +231,48 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
       });
       slotByIdRef.current = next;
       stampMountKeys(newIds);
-      setEnteringIds(enterMap);
-      setPushedIds(
-        new Set(currentIds.filter((id) => !newIds.includes(id) && prevIdSet.has(id))),
+      enteringIdsRef.current = enterMap;
+      pushedIdsRef.current = new Set(
+        currentIds.filter((id) => !newIds.includes(id) && prevIdSet.has(id)),
       );
+      pendingPingIdsRef.current = [...newIds];
     }
 
     prevStackIdsRef.current = currentIds;
-  }, [stack]);
+  }
+
+  for (const banner of stack) {
+    lastKnownRef.current.set(banner.id, banner);
+    if (!mountKeyRef.current.has(banner.id)) {
+      mountKeyRef.current.set(banner.id, `${banner.id}:enter:${mountKeyRef.current.size}`);
+    }
+  }
+
+  const enteringIds = enteringIdsRef.current;
+  const pushedIds = pushedIdsRef.current;
+  const stackSignature = currentIds.join('|');
+
+  useLayoutEffect(() => {
+    if (pendingPingIdsRef.current.length === 0) return;
+    const ids = pendingPingIdsRef.current;
+    pendingPingIdsRef.current = [];
+    for (const id of ids) {
+      const key = `${id}:enter`;
+      if (pingedEnterRef.current.has(key)) continue;
+      pingedEnterRef.current.add(key);
+      playNotificationPing();
+    }
+  });
 
   useEffect(() => {
-    if (enteringIds.size === 0 && pushedIds.size === 0) return;
+    if (enteringIdsRef.current.size === 0 && pushedIdsRef.current.size === 0) return;
     const t = window.setTimeout(() => {
-      setEnteringIds(new Map());
-      setPushedIds(new Set());
+      enteringIdsRef.current = new Map();
+      pushedIdsRef.current = new Set();
+      bumpEnterState((n) => n + 1);
     }, MOTION_SETTLE_MS);
     return () => window.clearTimeout(t);
-  }, [enteringIds, pushedIds]);
+  }, [stackSignature]);
 
   const handleExitStart = useCallback((id: string, mode: BannerExitMode) => {
     flushSync(() => {
@@ -307,7 +303,7 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
   if (stack.length === 0 && exitingIds.size === 0) {
     return (
       <div
-        className={`pointer-events-none relative mx-auto w-full max-w-xl overflow-visible ${className}`}
+        className={`pointer-events-none relative mx-auto w-full max-w-2xl overflow-visible ${className}`}
         style={{ minHeight: 0 }}
         aria-live="polite"
       >
@@ -352,7 +348,7 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
 
   return (
     <div
-      className={`pointer-events-none relative mx-auto w-full max-w-xl overflow-visible ${className}`}
+      className={`pointer-events-none relative mx-auto w-full max-w-2xl overflow-visible ${className}`}
       style={{ minHeight: stackContainerHeight(totalLayers) }}
       aria-live="polite"
     >
@@ -364,11 +360,10 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
           const isNewEntrant = !isExiting && enteringIds.has(banner.id);
           const isPushed = !isExiting && !isNewEntrant && pushedIds.has(banner.id);
           const stagger = enterIndex * (BANNER_STACK_STAGGER_MS / 1000);
-          const enterTravel = bannerPouchTravelPx(layout.y);
+          const enterTravel = isActive
+            ? BANNER_ACTIVE_ENTER_TRAVEL_PX
+            : bannerPouchTravelPx(layout.y);
           const motionKey = mountKeyRef.current.get(banner.id) ?? banner.id;
-          if (!isExiting && !mountKeyRef.current.has(banner.id)) {
-            return null;
-          }
 
           const zIndex = isExiting ? EXITING_Z_INDEX : isActive ? 1000 : layout.zIndex;
           const slideUpExit = isExiting && exitModeById.get(banner.id) === 'slide-up';
@@ -416,15 +411,24 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
                       scale: BANNER_ENTER_SPRING,
                     }
                   : isNewEntrant
-                    ? {
-                        opacity: {
-                          duration: 0.32,
-                          ease: STACK_OPACITY_EASE,
-                          delay: stagger,
-                        },
-                        y: { ...BANNER_ENTER_SPRING, delay: stagger },
-                        scale: { ...BANNER_ENTER_SPRING, delay: stagger },
-                      }
+                    ? isActive
+                      ? {
+                          opacity: {
+                            duration: ACTIVE_ENTER_OPACITY_MS,
+                            ease: STACK_OPACITY_EASE,
+                          },
+                          y: { ...BANNER_ENTER_SPRING, stiffness: 620, damping: 34 },
+                          scale: { ...BANNER_ENTER_SPRING, stiffness: 620, damping: 34 },
+                        }
+                      : {
+                          opacity: {
+                            duration: 0.32,
+                            ease: STACK_OPACITY_EASE,
+                            delay: stagger,
+                          },
+                          y: { ...BANNER_ENTER_SPRING, delay: stagger },
+                          scale: { ...BANNER_ENTER_SPRING, delay: stagger },
+                        }
                     : isPushed
                       ? {
                           y: { ...BANNER_PUSH_SPRING, delay: stagger * 0.35 },
@@ -444,8 +448,12 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
                 id={banner.id}
                 category={banner.category}
                 operation={banner.operation}
+                actionType={banner.actionType}
                 title={banner.title}
                 body={banner.body}
+                toolArgs={banner.toolArgs}
+                startTime={banner.startTime}
+                endTime={banner.endTime}
                 durationMs={banner.durationMs}
                 showCountdown={banner.showCountdown}
                 countdownEndsAt={banner.countdownEndsAt}
@@ -474,13 +482,19 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
+  const queryClient = useQueryClient();
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [manualBanners, setManualBanners] = useState<BannerItem[]>([]);
-  const [actionBanners, setActionBanners] = useState<BannerItem[]>([]);
+  const actionBanners = useSyncedActionBanners(isAuthenticated && !isLoading);
   const banners = useMemo(
     () => buildStackBanners(actionBanners, manualBanners),
     [actionBanners, manualBanners],
   );
+
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) return;
+    queryClient.setQueryData<NetworkAction[]>(queryKeys.actions, []);
+  }, [isAuthenticated, isLoading, queryClient]);
 
   const showToast = useCallback((message: string, type: ToastType) => {
     const id = newId();
@@ -492,8 +506,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const dismissBannerById = useCallback((id: string) => {
-    setActionBanners((prev) => prev.filter((b) => b.id !== id));
-    setManualBanners((prev) => prev.filter((b) => b.id !== id));
+    if (!id.startsWith('action:')) {
+      setManualBanners((prev) => prev.filter((b) => b.id !== id));
+    }
   }, []);
 
   const dismissBanner = useCallback(
@@ -535,8 +550,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     });
     return id;
   }, []);
-
-  useActionBannerSync(isAuthenticated && !isLoading, setActionBanners);
 
   const value = useMemo(
     () => ({

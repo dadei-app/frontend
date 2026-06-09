@@ -20,6 +20,7 @@ export interface NetworkAction {
   scheduled_job_id?: string | null;
   /** True when this action owns the network countdown slot. */
   is_active?: boolean;
+  tool_args?: Record<string, unknown> | null;
 }
 
 /** Episodic memory from GET /memories. */

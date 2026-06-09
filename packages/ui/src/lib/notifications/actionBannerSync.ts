@@ -1,4 +1,4 @@
-import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notifications/notificationConstants';
+import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notifications/constants';
 import type { BannerItem } from '@dadei/ui/contexts/NotificationContext';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 import {
@@ -35,8 +35,12 @@ export function networkActionsToBannerItems(
       id: `action:${action.id}`,
       category: actionDomainLabel(action.action_type),
       operation: resolveActionOperation(action),
+      actionType: action.action_type,
       title: actionDisplayTitle(action),
       body: actionBannerMeta(action),
+      toolArgs: action.tool_args ?? undefined,
+      startTime: action.start_time,
+      endTime: action.end_time,
       durationMs: AUTO_FIRE_DELAY_MS,
       showCountdown: isActive && Boolean(action.scheduled_at),
       countdownEndsAt: action.scheduled_at ?? undefined,

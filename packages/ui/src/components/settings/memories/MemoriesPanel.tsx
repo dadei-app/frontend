@@ -7,8 +7,6 @@ import { MemorySettingsRow } from './MemoryRow';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
 
 function MemorySection({
-  title,
-  hint,
   emptyTitle,
   emptyDetail,
   memories,
@@ -18,8 +16,6 @@ function MemorySection({
   onDisarm,
   onConfirmDelete,
 }: {
-  title: string;
-  hint: string;
   emptyTitle: string;
   emptyDetail: string;
   memories: EpisodicMemory[];
@@ -29,35 +25,31 @@ function MemorySection({
   onDisarm: () => void;
   onConfirmDelete: (id: string) => void;
 }) {
-  return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="mb-2 shrink-0">
-        <h3 className="text-sm font-medium text-zinc-100">{title}</h3>
-        <p className="mt-0.5 text-xs text-zinc-500 font-secondary">{hint}</p>
+  if (memories.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-zinc-900/55 px-4 py-6 text-center">
+        <p className="text-sm font-medium text-zinc-400">{emptyTitle}</p>
+        <p className="mt-2 max-w-xs text-xs leading-relaxed text-zinc-500 font-secondary">
+          {emptyDetail}
+        </p>
       </div>
-      {memories.length === 0 ? (
-        <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-zinc-950/40 px-4 py-6 text-center">
-          <p className="text-sm font-medium text-zinc-400">{emptyTitle}</p>
-          <p className="mt-2 max-w-xs text-xs leading-relaxed text-zinc-600 font-secondary">
-            {emptyDetail}
-          </p>
-        </div>
-      ) : (
-        <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto overscroll-none pr-0.5">
-          {memories.map(m => (
-            <MemorySettingsRow
-              key={m.id}
-              memory={m}
-              armed={armedMemoryDeleteId === m.id}
-              disabled={deletePending}
-              onArm={() => onArm(m.id)}
-              onDisarm={onDisarm}
-              onConfirm={() => onConfirmDelete(m.id)}
-            />
-          ))}
-        </ul>
-      )}
-    </div>
+    );
+  }
+
+  return (
+    <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-none">
+      {memories.map(m => (
+        <MemorySettingsRow
+          key={m.id}
+          memory={m}
+          armed={armedMemoryDeleteId === m.id}
+          disabled={deletePending}
+          onArm={() => onArm(m.id)}
+          onDisarm={onDisarm}
+          onConfirm={() => onConfirmDelete(m.id)}
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -65,8 +57,6 @@ export function MemoriesPanel() {
   const { memories, memoriesLoading, deleteMemory, isDeletingMemory } = useService();
   const { showToast } = useNotifications();
   const [armedMemoryDeleteId, setArmedMemoryDeleteId] = useState<string | null>(null);
-
-  const fetchErr = (e: unknown) => getUserErrorMessage(e, 'Something went wrong. Please try again.');
 
   const { facts, proposed } = useMemo(() => {
     const facts: EpisodicMemory[] = [];
@@ -114,10 +104,16 @@ export function MemoriesPanel() {
 
   return (
     <SettingsGrid4 className="min-h-0 flex-1">
-      <GridTile col={1} row={1} colSpan={2} rowSpan={4} className="p-3" bodyClassName="min-h-0">
+      <GridTile
+        title="Memories"
+        hint="Observations and facts the assistant has retained."
+        col={1}
+        row={1}
+        colSpan={2}
+        rowSpan={4}
+        bodyClassName="min-h-0"
+      >
         <MemorySection
-          title="Memories"
-          hint="Observations and facts the assistant has retained."
           emptyTitle="No memories yet"
           emptyDetail="Saved observations from your conversations will appear here once they are processed."
           memories={facts}
@@ -129,10 +125,16 @@ export function MemoriesPanel() {
         />
       </GridTile>
 
-      <GridTile col={3} row={1} colSpan={2} rowSpan={4} className="p-3" bodyClassName="min-h-0">
+      <GridTile
+        title="Proposed"
+        hint="Unfinished thoughts and intents still being shaped."
+        col={3}
+        row={1}
+        colSpan={2}
+        rowSpan={4}
+        bodyClassName="min-h-0"
+      >
         <MemorySection
-          title="Proposed"
-          hint="Unfinished thoughts and intents still being shaped."
           emptyTitle="No proposed memories"
           emptyDetail="This is where unfinished thoughts live — plans and intents that are still accumulating before they become firm memories."
           memories={proposed}

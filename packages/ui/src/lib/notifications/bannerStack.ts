@@ -6,12 +6,14 @@ export const BANNER_LAYER_STEP_PX = 14;
 export const BANNER_LAYER_SCALE_STEP = 0.045;
 /** Stagger between simultaneous arrivals (ms). */
 export const BANNER_STACK_STAGGER_MS = 70;
+/** Short slide for the active (front) card — avoids the full pouch travel delay. */
+export const BANNER_ACTIVE_ENTER_TRAVEL_PX = 36;
 /** How far above the target slot a new card begins its entrance (× layer step). */
 export const BANNER_ENTER_TRAVEL_MULT = 2.5;
 /** Typical rendered card height — used for stack sizing. */
-export const BANNER_CARD_HEIGHT_PX = 72;
+export const BANNER_CARD_HEIGHT_PX = 104;
 /** Generous height for pouch travel so wrapped bodies fully clear the header lip. */
-export const BANNER_HIDE_HEIGHT_PX = 108;
+export const BANNER_HIDE_HEIGHT_PX = 148;
 /** Slide distance so a card fully clears the slot on enter/exit (pouch animation). */
 export const BANNER_POUCH_TRAVEL_PX = BANNER_CARD_HEIGHT_PX + 12;
 /** Distance from header bottom to the banner anchor (`pt-6` + `top-4` in assistant layout). */

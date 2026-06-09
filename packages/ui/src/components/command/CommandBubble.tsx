@@ -19,7 +19,7 @@ import {
   COMMAND_TURN_PAIR_LAYOUT_MS,
   COMMAND_TURN_PAIR_SLIDE_PX,
   VOICE_EASE,
-} from '@dadei/ui/lib/voice/session/voiceConstants';
+} from '@dadei/ui/lib/voice/session/constants';
 
 const STATUS_ELLIPSIS_CYCLE_MS = 480;
 /** Alpha mask fade length at clipped scroll edges (not a visible overlay). */

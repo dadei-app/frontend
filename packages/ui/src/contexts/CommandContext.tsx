@@ -44,7 +44,7 @@ import {
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
   computeFollowUpMs,
   FOLLOW_UP_MIN_MS,
-} from '@dadei/ui/lib/voice/session/voiceConstants';
+} from '@dadei/ui/lib/voice/session/constants';
 import {
   commandToolStatusLabel,
   formatAssistantStatusLine,

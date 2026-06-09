@@ -21,7 +21,7 @@ import {
   INTRODUCTION_COMMAND_SPEECH_RMS,
   INTRODUCTION_FOLLOW_UP_SPEECH_RMS,
   INTRODUCTION_UTTERANCE_END_SILENCE_MS,
-} from '@dadei/ui/lib/voice/session/voiceConstants';
+} from '@dadei/ui/lib/voice/session/constants';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
 import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/audio/audioSettingsEvents';
@@ -367,6 +367,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       ) {
         return;
       }
+      // Anchor capture at post-wake audio so the wake phrase is not transcribed.
+      sendRealtimeMessage({ type: 'command_audio_wake' });
       console.debug('[Voice][Wake] detected — entering listening (server will transcribe)');
       startListening();
     },
