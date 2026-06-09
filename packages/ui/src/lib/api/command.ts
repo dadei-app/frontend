@@ -165,13 +165,13 @@ export async function* streamCommandFromText(
   );
 }
 
-export async function* streamTutorialIntroductionFromText(
+export async function* streamIntroductionFromText(
   text: string,
   accessToken: string,
   options?: { signal?: AbortSignal },
 ): AsyncGenerator<CommandSSEEvent> {
   yield* streamCommandSsePost(
-    ENDPOINTS.TUTORIAL_INTRODUCTION_TEXT,
+    ENDPOINTS.INTRODUCTION_TEXT,
     () => {
       const form = new FormData();
       form.append('text', text);

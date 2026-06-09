@@ -17,7 +17,7 @@ import { memoriesApi } from '@dadei/ui/lib/api/memories';
 import { personsApi } from '@dadei/ui/lib/api/persons';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { interactionsApi } from '@dadei/ui/lib/api/interactions';
-import { serviceApi } from '@dadei/ui/lib/api/service';
+import { serviceApi, type AssistantModeState } from '@dadei/ui/lib/api/service';
 import {
   startRealtimeClient,
   stopRealtimeClient,
@@ -29,6 +29,7 @@ import {
   ASSISTANT_MEMORIES_LIST_LIMIT,
   conversationQueryOptions,
   INTERACTION_PANEL_RECENT_LIMIT,
+  useAuthMeQuery,
 } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import type {
@@ -93,6 +94,8 @@ interface ServiceContextType {
   assistantOwnerSessionId: string | null;
   assistantModeExpiresAt: string | null;
   assistantModeRemainingMs: number;
+  /** Apply claim HTTP response immediately (do not wait for the assistant_mode webhook). */
+  syncAssistantModeFromClaim: (state: AssistantModeState) => void;
 
   memories: EpisodicMemory[];
   memoriesLoading: boolean;
@@ -110,9 +113,6 @@ interface ServiceContextType {
   isRenamingPerson: boolean;
   deletePerson: (personId: string) => Promise<void>;
   isDeletingPerson: boolean;
-  retrainUserVoice: (wavBuffer: ArrayBuffer) => Promise<Person>;
-  isRetrainingUserVoice: boolean;
-
   recentConversations: Conversation[];
   bootstrapInteractions: Interaction[];
   interactionsLoading: boolean;
@@ -131,6 +131,12 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient();
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
+
+  const meQuery = useAuthMeQuery(isAuthenticated && !isAuthLoading);
+  const tutorialIncomplete = Boolean(meQuery.data && !meQuery.data.tutorial_completed);
+  const tutorialIncompleteRef = useRef(tutorialIncomplete);
+  tutorialIncompleteRef.current = tutorialIncomplete;
+  const tutorialServiceDisableAttemptedRef = useRef(false);
 
   const [isServiceEnabled, setIsServiceEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -205,16 +211,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         (prev ?? []).filter(p => p.id !== personId),
       );
       queryClient.removeQueries({ queryKey: queryKeys.personById(personId) });
-    },
-  });
-
-  const retrainUserVoiceMutation = useMutation({
-    mutationFn: (wavBuffer: ArrayBuffer) => personsApi.retrainUserVoice(wavBuffer),
-    onSuccess: updated => {
-      queryClient.setQueryData<Person[]>(queryKeys.persons, prev =>
-        (prev ?? []).map(p => (p.id === updated.id ? updated : p)),
-      );
-      queryClient.setQueryData(queryKeys.personById(updated.id), updated);
     },
   });
 
@@ -306,9 +302,40 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const applyServiceStatus = useCallback((enabled: boolean) => {
+    if (tutorialIncompleteRef.current && enabled) {
+      setIsServiceEnabled(false);
+      setIsTogglingService(false);
+      return;
+    }
     setIsServiceEnabled(enabled);
     setIsTogglingService(false);
   }, []);
+
+  const syncAssistantModeFromClaim = useCallback((state: AssistantModeState) => {
+    setIsAssistantMode(state.active);
+    setAssistantOwnerSessionId(state.owner_session_id);
+    setAssistantModeExpiresAt(state.expires_at);
+  }, []);
+
+  useEffect(() => {
+    if (!tutorialIncomplete) {
+      tutorialServiceDisableAttemptedRef.current = false;
+      return;
+    }
+    if (!isConnected) return;
+    if (tutorialServiceDisableAttemptedRef.current) return;
+    tutorialServiceDisableAttemptedRef.current = true;
+
+    void (async () => {
+      try {
+        await serviceApi.disable();
+        applyServiceStatus(false);
+      } catch (error) {
+        console.error('Failed to disable service for tutorial:', error);
+        tutorialServiceDisableAttemptedRef.current = false;
+      }
+    })();
+  }, [applyServiceStatus, isConnected, tutorialIncomplete]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -357,6 +384,14 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const handleServiceStatusChanged = (status: { enabled: boolean }) => {
+      if (tutorialIncompleteRef.current && status.enabled) {
+        console.log('[Service] Ignoring enabled status during tutorial');
+        void serviceApi.disable().catch(error => {
+          console.error('Failed to disable service for tutorial:', error);
+        });
+        applyServiceStatus(false);
+        return;
+      }
       console.log('[Service] Status event:', status.enabled ? 'ENABLED' : 'DISABLED');
       applyServiceStatus(status.enabled);
     };
@@ -595,6 +630,10 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         await serviceApi.disable();
         setIsTogglingService(false);
       } else {
+        if (tutorialIncomplete) {
+          setIsTogglingService(false);
+          return;
+        }
         await serviceApi.enable();
         applyServiceStatus(true);
       }
@@ -603,7 +642,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       setIsTogglingService(false);
       showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
     }
-  }, [applyServiceStatus, isServiceEnabled, registrationConflict, showToast]);
+  }, [applyServiceStatus, isServiceEnabled, registrationConflict, showToast, tutorialIncomplete]);
 
   const rejectAction = useCallback(
     async (actionId: string) => {
@@ -663,6 +702,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         assistantOwnerSessionId,
         assistantModeExpiresAt,
         assistantModeRemainingMs,
+        syncAssistantModeFromClaim,
 
         memories: memoriesQuery.data ?? [],
         memoriesLoading: memoriesQuery.isLoading,
@@ -684,9 +724,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           await deletePersonMutation.mutateAsync(personId);
         },
         isDeletingPerson: deletePersonMutation.isPending,
-        retrainUserVoice: wavBuffer => retrainUserVoiceMutation.mutateAsync(wavBuffer),
-        isRetrainingUserVoice: retrainUserVoiceMutation.isPending,
-
         recentConversations: recentConversationsQuery.data ?? [],
         bootstrapInteractions: bootstrapInteractionsQuery.data ?? [],
         interactionsLoading,

@@ -15,6 +15,7 @@ import {
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 import {
   TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS,
   TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS,
@@ -106,15 +107,17 @@ export function useInteractionPanel() {
   );
 
   const tutorial = useTutorialContext();
+  const needsTutorial = useNeedsTutorial();
+  const tutorialEngaged = Boolean(needsTutorial && tutorial?.isActive);
   const baseInteractions =
     bootstrapInteractions.length > 0 ? bootstrapInteractions : EMPTY_INTERACTIONS;
 
   const interactions = useMemo(() => {
-    if (!tutorial?.isActive || !tutorial.tutorialInteractions.length) return baseInteractions;
+    if (!tutorialEngaged || !tutorial?.tutorialInteractions.length) return baseInteractions;
     const seen = new Set(baseInteractions.map(i => i.id));
     const injected = tutorial.tutorialInteractions.filter(i => !seen.has(i.id));
     return [...injected, ...baseInteractions];
-  }, [baseInteractions, tutorial?.tutorialInteractions]);
+  }, [baseInteractions, tutorial?.tutorialInteractions, tutorialEngaged, tutorial]);
 
   const conversationIds = useMemo(() => {
     const ids = new Set<string>();
@@ -151,7 +154,7 @@ export function useInteractionPanel() {
 
   const conversationById = useMemo(() => {
     const map = new Map<string, Conversation>();
-    for (const conv of tutorial?.isActive ? tutorial.tutorialConversations : []) {
+    for (const conv of tutorialEngaged ? (tutorial?.tutorialConversations ?? []) : []) {
       map.set(conv.id, conv);
     }
     apiConversationIds.forEach((id, index) => {
@@ -160,18 +163,18 @@ export function useInteractionPanel() {
     });
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable keys derived from query *data*, not the queries array identity
-  }, [conversationDataKey, apiConversationIdsKey, tutorial?.tutorialConversations]);
+  }, [conversationDataKey, apiConversationIdsKey, tutorial?.tutorialConversations, tutorialEngaged, tutorial]);
 
   const [conversationGroups, setConversationGroups] = useState<ConversationGroupState[]>([]);
   const loading = interactionsLoading;
 
   const personsById = useMemo(() => {
     const map = new Map(persons.map(person => [person.id, person]));
-    for (const person of tutorial?.isActive ? tutorial.tutorialPersons : []) {
+    for (const person of tutorialEngaged ? (tutorial?.tutorialPersons ?? []) : []) {
       if (!map.has(person.id)) map.set(person.id, person);
     }
     return map;
-  }, [persons, tutorial?.tutorialPersons]);
+  }, [persons, tutorial?.tutorialPersons, tutorialEngaged, tutorial]);
 
   useEffect(() => {
     if (!isConnected || personsLoading) return;
@@ -247,7 +250,7 @@ export function useInteractionPanel() {
   useEffect(() => {
     setConversationGroups(previous => {
       const groups = buildConversationGroups(interactions, conversationById, previous);
-      if (!tutorial) return groups;
+      if (!tutorialEngaged || !tutorial) return groups;
 
       if (TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS.has(tutorial.step.id)) {
         return groups.map(g => {
@@ -265,22 +268,28 @@ export function useInteractionPanel() {
 
       return groups;
     });
-  }, [interactions, conversationById, tutorial?.step.id]);
+  }, [interactions, conversationById, tutorial?.step.id, tutorialEngaged, tutorial]);
 
   useEffect(() => {
-    if (tutorial?.step.id !== 'expand_conversation') return;
+    if (!tutorialEngaged || tutorial?.step.id !== 'expand_conversation') return;
     const expanded = displayGroups.some(
       g => groupKey(g) === TUTORIAL_TEST_CONVERSATION_ID && g.isExpanded,
     );
     if (expanded) {
       tutorial.markActionFired('expand-conversation');
     }
-  }, [tutorial, displayGroups]);
+  }, [tutorial, displayGroups, tutorialEngaged]);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    if (
+      tutorialEngaged &&
+      (tutorial?.step.id === 'delete_interaction' || tutorial?.step.id === 'layout_tour')
+    ) {
+      return;
+    }
     containerRef.current.scrollTop = containerRef.current.scrollHeight;
-  }, [interactionsScrollSignature]);
+  }, [interactionsScrollSignature, tutorialEngaged, tutorial?.step.id]);
 
   const toggleConversation = (index: number) => {
     setConversationGroups(prev => {
@@ -300,6 +309,7 @@ export function useInteractionPanel() {
 
       if (
         willExpand &&
+        tutorialEngaged &&
         tutorial?.step.id === 'expand_conversation' &&
         groupKey(target) === TUTORIAL_TEST_CONVERSATION_ID
       ) {

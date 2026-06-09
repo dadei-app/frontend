@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import {
@@ -18,6 +18,9 @@ import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
 const KNOB_CLASS =
   'flex h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-zinc-900/90 text-zinc-400 shadow-sm transition hover:border-emerald-500/25 hover:bg-zinc-800 hover:text-emerald-200 disabled:pointer-events-none disabled:opacity-30';
 
+const CONFIRM_KNOB_CLASS =
+  'flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/35 bg-emerald-950/70 text-emerald-200 shadow-sm shadow-emerald-950/40 transition hover:border-emerald-300/50 hover:bg-emerald-900/60 hover:text-emerald-100 disabled:pointer-events-none disabled:opacity-30';
+
 const CARD_MARGIN = 16;
 const CARD_WIDTH_SM = 384;
 const CARD_WIDTH_LG = 512;
@@ -25,7 +28,7 @@ const CARD_WIDTH_LG = 512;
 const MORPH_MS = TUTORIAL_MORPH_MS;
 const MORPH_BOX = TUTORIAL_MORPH_TRANSITION;
 /** Text fades out, brief hold, fades in — swap while fully transparent. */
-const MORPH_TEXT_OPACITY = [1, 0, 0, 1] as const;
+const MORPH_TEXT_OPACITY = [1, 0, 0, 1];
 const MORPH_TEXT_TIMES = [0, 0.32, 0.4, 1] as const;
 const MORPH_TEXT_SWAP_AT = 0.36;
 
@@ -81,11 +84,13 @@ export function CardNav({
   canNext,
   onBack,
   onNext,
+  confirmFinish = false,
 }: {
   canBack: boolean;
   canNext: boolean;
   onBack: () => void;
   onNext: () => void;
+  confirmFinish?: boolean;
 }) {
   return (
     <nav className="flex shrink-0 gap-1" aria-label="Tutorial navigation">
@@ -100,12 +105,16 @@ export function CardNav({
       </button>
       <button
         type="button"
-        className={KNOB_CLASS}
-        aria-label="Next step"
+        className={confirmFinish ? CONFIRM_KNOB_CLASS : KNOB_CLASS}
+        aria-label={confirmFinish ? 'Finish tutorial' : 'Next step'}
         disabled={!canNext}
         onClick={onNext}
       >
-        <ArrowRight className="h-3 w-3" strokeWidth={2} aria-hidden />
+        {confirmFinish ? (
+          <Check className="h-3 w-3" strokeWidth={2} aria-hidden />
+        ) : (
+          <ArrowRight className="h-3 w-3" strokeWidth={2} aria-hidden />
+        )}
       </button>
     </nav>
   );
@@ -271,6 +280,7 @@ function CardContent({
   onNext,
   titleId,
   interactive,
+  confirmFinish,
 }: {
   step: TutorialStep;
   permissionsChildren?: ReactNode;
@@ -280,13 +290,20 @@ function CardContent({
   onNext: () => void;
   titleId: string;
   interactive: boolean;
+  confirmFinish?: boolean;
 }) {
   return (
     <>
       <div
         className={`absolute top-0 right-0 z-20 ${interactive ? 'pointer-events-auto' : 'pointer-events-none'}`}
       >
-        <CardNav canBack={canBack} canNext={canNext} onBack={onBack} onNext={onNext} />
+        <CardNav
+          canBack={canBack}
+          canNext={canNext}
+          onBack={onBack}
+          onNext={onNext}
+          confirmFinish={confirmFinish}
+        />
       </div>
       <h2 id={titleId} className="sr-only">
         {step.title}
@@ -298,7 +315,6 @@ function CardContent({
 
 export default function Card({
   step,
-  showWakeHint,
   canBack,
   canNext,
   onBack,
@@ -306,13 +322,13 @@ export default function Card({
   children,
 }: {
   step: TutorialStep;
-  showWakeHint?: boolean;
   canBack: boolean;
   canNext: boolean;
   onBack: () => void;
   onNext: () => void;
   children?: ReactNode;
 }) {
+  const confirmFinish = Boolean(step.startsIntroduction);
   const reduceMotion = useReducedMotion();
   const shellRef = useRef<HTMLDivElement>(null);
   const hiddenMeasureRef = useRef<HTMLDivElement>(null);
@@ -379,7 +395,7 @@ export default function Card({
     if (phase !== 'idle') return;
     applyLayout(step);
     setReady(true);
-  }, [step, children, phase, showWakeHint, applyLayout]);
+  }, [step, children, phase, applyLayout]);
 
   useLayoutEffect(() => {
     if (phase !== 'idle' || step.id !== 'permissions') return;
@@ -411,6 +427,10 @@ export default function Card({
     if (!anchorKey) return;
     const anchor = document.querySelector(`[data-tutorial-target="${anchorKey}"]`);
     if (!anchor) return;
+    if (anchorKey === 'interaction-panel-root') {
+      applyLayout(displayedStep);
+      return;
+    }
     const onAnchorLayout = () => applyLayout(displayedStep);
     const ro = new ResizeObserver(onAnchorLayout);
     ro.observe(anchor);
@@ -507,6 +527,7 @@ export default function Card({
                 onNext={onNext}
                 titleId="tutorial-card-title"
                 interactive={phase === 'idle'}
+                confirmFinish={confirmFinish}
               />
             </motion.div>
           </div>

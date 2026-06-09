@@ -8,6 +8,22 @@ export const BANNER_LAYER_SCALE_STEP = 0.045;
 export const BANNER_STACK_STAGGER_MS = 70;
 /** How far above the target slot a new card begins its entrance (× layer step). */
 export const BANNER_ENTER_TRAVEL_MULT = 2.5;
+/** Typical rendered card height — used for stack sizing. */
+export const BANNER_CARD_HEIGHT_PX = 72;
+/** Generous height for pouch travel so wrapped bodies fully clear the header lip. */
+export const BANNER_HIDE_HEIGHT_PX = 108;
+/** Slide distance so a card fully clears the slot on enter/exit (pouch animation). */
+export const BANNER_POUCH_TRAVEL_PX = BANNER_CARD_HEIGHT_PX + 12;
+/** Distance from header bottom to the banner anchor (`pt-6` + `top-4` in assistant layout). */
+export const ASSISTANT_BANNER_ANCHOR_OFFSET_PX = 40;
+
+/** Upward travel so the card is entirely above the header bottom (fully hidden under header). */
+export function bannerPouchTravelPx(
+  slotY: number,
+  cardHeightPx = BANNER_HIDE_HEIGHT_PX,
+): number {
+  return ASSISTANT_BANNER_ANCHOR_OFFSET_PX + slotY + cardHeightPx + 4;
+}
 
 /** Lively spring for incoming cards — slight overshoot at settle. */
 export const BANNER_ENTER_SPRING = {
@@ -79,7 +95,7 @@ export function stackLayoutForSlot(slotFromTop: number, total: number) {
   };
 }
 
-export function stackContainerHeight(total: number, cardHeightPx = 72) {
+export function stackContainerHeight(total: number, cardHeightPx = BANNER_CARD_HEIGHT_PX) {
   if (total <= 0) return 0;
   return cardHeightPx + (total - 1) * BANNER_LAYER_STEP_PX;
 }

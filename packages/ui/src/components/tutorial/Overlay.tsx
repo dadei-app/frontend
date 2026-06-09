@@ -7,9 +7,9 @@ import {
   useTutorial,
   useTutorialContext,
 } from '@dadei/ui/contexts/TutorialContext';
+import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import {
   backdropBlurForStep,
-  isMeetDadeiStep,
   isSettingsTutorialStep,
   TUTORIAL_TEST_BANNER_ID,
   TUTORIAL_TEST_BANNER_TITLE,
@@ -24,112 +24,42 @@ import { TUTORIAL_MORPH_TRANSITION } from '@dadei/ui/lib/tutorial/motion';
 import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import Card from './Card';
-import VoiceCommandBridge from './VoiceCommandBridge';
 
-const SPOTLIGHT_BACKDROP_COLOR = 'rgba(0,0,0,0.12)';
-const ACTION_BACKDROP_COLOR = 'rgba(0,0,0,0.02)';
-const ACTION_BACKDROP_FILL = 'rgba(0,0,0,0.02)';
+const BACKDROP_COLOR = 'rgba(0,0,0,0.12)';
 
 function backdropMotionForStep(step: TutorialStep) {
   const blurPx = backdropBlurForStep(step);
-  const isAction = step.kind === 'action';
   return {
-    backgroundColor: isAction ? ACTION_BACKDROP_COLOR : SPOTLIGHT_BACKDROP_COLOR,
+    backgroundColor: BACKDROP_COLOR,
     backdropFilter: blurPx > 0 ? `blur(${blurPx}px)` : 'blur(0px)',
   };
 }
 
-function useTargetRect(targetKey: string | null) {
-  const [rect, setRect] = useState<DOMRect | null>(null);
-
-  useEffect(() => {
-    if (!targetKey) {
-      setRect(null);
-      return;
-    }
-    const measure = () => {
-      const el = document.querySelector(`[data-tutorial-target="${targetKey}"]`);
-      setRect(el ? el.getBoundingClientRect() : null);
-    };
-    measure();
-    const ro = new ResizeObserver(measure);
-    const el = document.querySelector(`[data-tutorial-target="${targetKey}"]`);
-    if (el) ro.observe(el);
-    window.addEventListener('resize', measure);
-    window.addEventListener('scroll', measure, true);
-    return () => {
-      ro.disconnect();
-      window.removeEventListener('resize', measure);
-      window.removeEventListener('scroll', measure, true);
-    };
-  }, [targetKey]);
-
-  return rect;
-}
-
 function Backdrop({ step }: { step: TutorialStep }) {
   const reduceMotion = useReducedMotion();
-  const rect = useTargetRect(step.kind === 'action' ? step.targetKey : null);
   const transition = reduceMotion ? { duration: 0 } : TUTORIAL_MORPH_TRANSITION;
-  const showActionCutout = step.kind === 'action' && rect !== null;
   const backdropMotion = backdropMotionForStep(step);
 
-  const pad = 8;
-  const cutout = rect
-    ? {
-        x: Math.max(0, rect.left - pad),
-        y: Math.max(0, rect.top - pad),
-        w: rect.width + pad * 2,
-        h: rect.height + pad * 2,
-      }
-    : null;
-
   return (
-    <>
-      <motion.div
-        aria-hidden
-        className="fixed inset-0 z-[9998] cursor-default pointer-events-none"
-        initial={false}
-        animate={backdropMotion}
-        transition={transition}
-        style={{
-          WebkitBackdropFilter: backdropMotion.backdropFilter,
-        }}
-      />
-      {cutout ? (
-        <motion.svg
-          className="fixed inset-0 z-[9999] h-full w-full cursor-default pointer-events-none"
-          aria-hidden
-          initial={false}
-          animate={{ opacity: showActionCutout ? 1 : 0 }}
-          transition={transition}
-        >
-          <defs>
-            <mask id="tutorial-spotlight-mask">
-              <rect width="100%" height="100%" fill="white" />
-              <rect x={cutout.x} y={cutout.y} width={cutout.w} height={cutout.h} rx={12} fill="black" />
-            </mask>
-          </defs>
-          <rect
-            width="100%"
-            height="100%"
-            fill={ACTION_BACKDROP_FILL}
-            mask="url(#tutorial-spotlight-mask)"
-          />
-        </motion.svg>
-      ) : null}
-    </>
+    <motion.div
+      aria-hidden
+      className="fixed inset-0 z-[9998] cursor-default pointer-events-none"
+      initial={false}
+      animate={backdropMotion}
+      transition={transition}
+      style={{
+        WebkitBackdropFilter: backdropMotion.backdropFilter,
+      }}
+    />
   );
 }
 
 type PermissionUiStatus = 'idle' | 'pending' | 'granted' | 'denied';
 
 function PermissionsContent({
-  onPermissionsReady,
-  onAdvanceAfterGrant,
+  onAllPermissionsGranted,
 }: {
-  onPermissionsReady: () => void;
-  onAdvanceAfterGrant: () => void;
+  onAllPermissionsGranted: () => void;
 }) {
   const { isElectron, platform } = useSystem();
   const tutorialPlatform = toTutorialPlatform(platform, isElectron);
@@ -162,29 +92,34 @@ function PermissionsContent({
   const allGranted =
     entries.length === 0 || entries.every(entry => statusById[entry.id] === 'granted');
 
+  const completedRef = useRef(false);
+
   useEffect(() => {
-    if (allGranted) onPermissionsReady();
-  }, [allGranted, onPermissionsReady]);
+    if (!allGranted || completedRef.current) return;
+    completedRef.current = true;
+    onAllPermissionsGranted();
+  }, [allGranted, onAllPermissionsGranted]);
 
   const handleAllow = useCallback(
     async (entry: PermissionEntry) => {
-      const wasAllGranted = entries.every(e => statusById[e.id] === 'granted');
       setStatusById(prev => ({ ...prev, [entry.id]: 'pending' }));
       await entry.request();
       const recheck = await entry.check();
       const granted = recheck === 'granted';
-      setStatusById(prev => ({
-        ...prev,
-        [entry.id]: granted ? 'granted' : 'denied',
-      }));
-      if (!wasAllGranted && granted) {
-        const nowAllGranted = entries.every(
-          e => e.id === entry.id || statusById[e.id] === 'granted',
-        );
-        if (nowAllGranted) onAdvanceAfterGrant();
-      }
+      setStatusById(prev => {
+        const next: Record<string, PermissionUiStatus> = {
+          ...prev,
+          [entry.id]: granted ? 'granted' : 'denied',
+        };
+        const nowAllGranted = entries.every(e => next[e.id] === 'granted');
+        if (nowAllGranted && !completedRef.current) {
+          completedRef.current = true;
+          queueMicrotask(() => onAllPermissionsGranted());
+        }
+        return next;
+      });
     },
-    [entries, statusById, onAdvanceAfterGrant],
+    [entries, onAllPermissionsGranted],
   );
 
   const grantedCount = entries.filter(entry => statusById[entry.id] === 'granted').length;
@@ -192,7 +127,7 @@ function PermissionsContent({
   return (
     <div className="max-h-[min(70vh,28rem)] overflow-y-auto [scrollbar-width:thin]">
       <p className="mt-2 text-sm text-zinc-400 font-secondary">
-        Allow each permission below. When everything is allowed, use the forward arrow to continue.
+        Allow each permission below. When everything is allowed, the tour continues automatically.
       </p>
       {entries.length > 0 ? (
         <p className="mt-1 text-xs text-zinc-600 font-secondary">
@@ -242,8 +177,6 @@ function PermissionsContent({
 
 function ClickGuard({ step }: { step: TutorialStep }) {
   useEffect(() => {
-    if (step.kind !== 'action') return;
-
     const block = (event: Event) => {
       if (isTutorialClickAllowed(event.target, step)) return;
       event.preventDefault();
@@ -267,58 +200,78 @@ function OverlayInner() {
     next,
     back,
     acknowledgePermissions,
-    permissionsResolved,
+    markActionFired,
     isCurrentStepActionComplete,
     currentStepIndex,
-    wakeHintVisible,
     isActive,
+    finishTutorial,
+    persistTutorialCompletion,
+    markTutorialCompletedClient,
   } = useTutorial();
-  const canBack = currentStepIndex > 0;
+  const { beginIntroduction } = useCommand();
+  const { showToast } = useNotifications();
+  const [finishing, setFinishing] = useState(false);
+  const canBack = currentStepIndex > 0 && !step.startsIntroduction && !finishing;
   const canNext =
-    step.id === 'permissions'
-      ? permissionsResolved
-      : step.kind === 'spotlight'
-        ? true
-        : step.actionTrigger
-          ? isCurrentStepActionComplete
-          : false;
-  const [wakeHintShown, setWakeHintShown] = useState(false);
+    finishing
+      ? false
+      : step.actionTriggers?.length
+        ? isCurrentStepActionComplete
+        : true;
 
-  useEffect(() => {
-    if (!wakeHintVisible) {
-      setWakeHintShown(false);
+  const handleAllPermissionsGranted = useCallback(() => {
+    acknowledgePermissions();
+    markActionFired('permission-resolved');
+  }, [acknowledgePermissions, markActionFired]);
+
+  const handleNext = useCallback(() => {
+    if (step.startsIntroduction) {
+      setFinishing(true);
+      finishTutorial();
+      void (async () => {
+        try {
+          await persistTutorialCompletion();
+          // Tear down all tutorial UI before the voice introduction handoff.
+          markTutorialCompletedClient();
+          const started = await beginIntroduction();
+          if (!started) {
+            showToast('Could not start introduction. Try again.', 'error');
+          }
+        } catch (error) {
+          console.error('Failed to complete tutorial before introduction:', error);
+          showToast('Could not finish setup. Try again.', 'error');
+        }
+      })();
       return;
     }
-    const t = window.setTimeout(() => setWakeHintShown(true), 60_000);
-    return () => window.clearTimeout(t);
-  }, [wakeHintVisible]);
+    next();
+  }, [
+    step.startsIntroduction,
+    finishTutorial,
+    beginIntroduction,
+    persistTutorialCompletion,
+    markTutorialCompletedClient,
+    next,
+    showToast,
+  ]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowRight' && canNext) {
+      if (e.key === 'ArrowRight' && canNext && !step.startsIntroduction) {
         e.preventDefault();
-        next();
+        handleNext();
       }
-      if (e.key === 'ArrowLeft') {
+      if (e.key === 'ArrowLeft' && canBack) {
         e.preventDefault();
         back();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [canNext, next, back]);
+  }, [canNext, canBack, handleNext, back, step.startsIntroduction]);
 
   if (!isActive || isSettingsTutorialStep(step.id)) {
     return null;
-  }
-
-  if (isMeetDadeiStep(step.id)) {
-    return (
-      <div className="fixed inset-0 z-[9999] pointer-events-none">
-        <ClickGuard step={step} />
-        <Card step={step} canBack={canBack} canNext={canNext} onBack={back} onNext={next} />
-      </div>
-    );
   }
 
   return (
@@ -327,17 +280,13 @@ function OverlayInner() {
       <Backdrop step={step} />
       <Card
         step={step}
-        showWakeHint={wakeHintVisible && wakeHintShown}
         canBack={canBack}
         canNext={canNext}
         onBack={back}
-        onNext={next}
+        onNext={handleNext}
       >
         {step.id === 'permissions' ? (
-          <PermissionsContent
-            onPermissionsReady={acknowledgePermissions}
-            onAdvanceAfterGrant={acknowledgePermissions}
-          />
+          <PermissionsContent onAllPermissionsGranted={handleAllPermissionsGranted} />
         ) : null}
       </Card>
     </div>
@@ -346,13 +295,18 @@ function OverlayInner() {
 
 function NotificationsBridge() {
   const ctx = useTutorialContext();
-  const { showBanner, dismissBanner, banners } = useNotifications();
+  const { showBanner, dismissBanner } = useNotifications();
   const bannerIdRef = useRef<string | null>(null);
+  const ctxRef = useRef(ctx);
+  ctxRef.current = ctx;
+  const dismissRef = useRef(dismissBanner);
+  dismissRef.current = dismissBanner;
 
   useEffect(() => {
-    if (!ctx?.showTestNotifications) {
+    const show = ctx?.showTestNotifications ?? false;
+    if (!show) {
       if (bannerIdRef.current) {
-        dismissBanner(bannerIdRef.current);
+        dismissRef.current(bannerIdRef.current);
         bannerIdRef.current = null;
       }
       return;
@@ -364,33 +318,29 @@ function NotificationsBridge() {
       operation: 'delete',
       category: 'Tutorial',
       title: TUTORIAL_TEST_BANNER_TITLE,
-      body: 'Cancel to keep the conversation, or wait for the countdown to delete it.',
+      body: 'Wait for the countdown to delete the test conversation, or click Cancel and delete it from the panel.',
       showCountdown: true,
       durationMs: 15_000,
+      countdownEndsAt: new Date(Date.now() + 15_000).toISOString(),
       cancelLabel: 'Cancel',
       onCancel: () => {
-        dismissBanner(bannerId);
-        bannerIdRef.current = null;
+        // Corrosion + removal handled by Banner; keep bannerIdRef so we don't respawn mid-step.
       },
       onAutoDismiss: () => {
-        ctx.removeTutorialConversation();
+        ctxRef.current?.removeTutorialConversation();
       },
     });
     bannerIdRef.current = bannerId;
+  }, [ctx?.showTestNotifications, showBanner]);
 
-    return () => {
-      dismissBanner(bannerId);
-      bannerIdRef.current = null;
-    };
-  }, [ctx?.showTestNotifications, showBanner, dismissBanner, ctx]);
-
-  useEffect(() => {
-    if (!ctx?.showTestNotifications || ctx.step.actionTrigger !== 'notifications-dismissed') return;
-    const bannerGone = !banners.some(b => b.id === TUTORIAL_TEST_BANNER_ID);
-    if (bannerGone) {
-      ctx.markActionFired('notifications-dismissed');
-    }
-  }, [ctx, banners]);
+  useEffect(
+    () => () => {
+      if (bannerIdRef.current) {
+        dismissRef.current(bannerIdRef.current);
+      }
+    },
+    [],
+  );
 
   return null;
 }
@@ -400,7 +350,6 @@ export function TutorialOverlayContent() {
   return (
     <>
       <NotificationsBridge />
-      <VoiceCommandBridge />
       <OverlayInner />
     </>
   );

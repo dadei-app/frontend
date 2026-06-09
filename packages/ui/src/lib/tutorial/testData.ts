@@ -97,3 +97,10 @@ export function buildTutorialFixtures(anchorIso: string): TutorialFixtures {
 export function isTutorialTestId(id: string): boolean {
   return id.startsWith('tutorial-test-');
 }
+
+export function isTutorialTestInteractionTarget(el: Element): boolean {
+  for (const key of TUTORIAL_INTERACTION_TARGET_KEYS) {
+    if (el.closest(`[data-tutorial-target="${key}"]`)) return true;
+  }
+  return false;
+}

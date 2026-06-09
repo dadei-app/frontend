@@ -166,6 +166,17 @@ export function permissionsForPlatform(
   return buildPermissionEntries(isElectron).filter(perm => perm.platforms.includes(platform));
 }
 
+/** True when every permission required for this platform is already granted. */
+export async function areAllTutorialPermissionsGranted(
+  platform: TutorialPlatform,
+  isElectron: boolean,
+): Promise<boolean> {
+  const entries = permissionsForPlatform(platform, isElectron);
+  if (entries.length === 0) return true;
+  const results = await Promise.all(entries.map(entry => entry.check()));
+  return results.every(result => result === 'granted');
+}
+
 type SystemPlatform = 'darwin' | 'win32' | 'linux' | 'web';
 
 /** Map SystemContext platform + runtime to tutorial permission scope. */

@@ -52,124 +52,131 @@ function settingsSections(isElectron: boolean): { id: string; title: string; bod
 const CORE_STEPS: TutorialStep[] = [
   {
     id: 'welcome',
-    kind: 'spotlight',
     title: 'Meet dadei',
     body: "I'm an ambient assistant — I listen in the background, remember what matters, and help when you ask. The next couple of minutes will get you set up.",
     targetKey: null,
   },
   {
     id: 'permissions',
-    kind: 'spotlight',
     title: 'A few permissions',
     body: "I need access to your microphone and a couple of system services to actually do my job. Grant what you're comfortable with — anything you skip, you can turn on later in Settings.",
     targetKey: null,
-    actionTrigger: 'permission-resolved',
+    actionTriggers: ['permission-resolved'],
+    autoAdvanceOnAction: true,
   },
   {
     id: 'expand_conversation',
-    kind: 'action',
     title: 'Conversations',
     body: 'Everything I hear gets grouped into conversations. Click the conversation in the panel to open it up.',
     targetKey: 'tutorial-test-conversation',
-    actionTrigger: 'expand-conversation',
+    actionTriggers: ['expand-conversation'],
     autoAdvanceOnAction: true,
-    allowedClickTargets: ['tutorial-test-conversation'],
+    interactables: ['tutorial-test-conversation'],
+    backdropBlurPx: 0,
   },
   {
     id: 'delete_interaction',
-    kind: 'action',
     title: 'Interactions',
-    body: 'I break each conversation into interactions — one sentence, one person at a time. Hover the first one and click the trash icon to delete it.',
+    body: 'Each conversation is composed of singular sentence interactions, hover over them to delete them.',
     targetKey: 'tutorial-test-interaction-1',
     cardAnchorKey: 'interaction-panel-root',
     cardPlacement: 'left',
-    actionTrigger: 'delete-interaction',
-    allowedClickTargets: [...TUTORIAL_INTERACTION_TARGET_KEYS],
+    actionTriggers: ['delete-interaction'],
+    interactables: [...TUTORIAL_INTERACTION_TARGET_KEYS],
+    backdropBlurPx: 0,
   },
   {
     id: 'layout_tour',
-    kind: 'action',
     title: 'Notifications',
-    body: "When I want to do something on your behalf, you'll see it here. Banners have a 10 second dismissal countdown.",
-    targetKey: 'assistant-layout-shell',
-    actionTrigger: 'notifications-dismissed',
-    allowedClickTargets: ['tutorial-delete-conversation-banner'],
+    body: "When I want to do something on your behalf, you'll see it here. Let the banner countdown delete the test conversation — or click Cancel and delete the conversation yourself from the panel.",
+    targetKey: 'tutorial-delete-conversation-banner',
+    cardAnchorKey: 'interaction-panel-root',
+    cardPlacement: 'left',
+    actionTriggers: ['delete-conversation'],
+    interactables: [
+      'tutorial-delete-conversation-banner',
+      'tutorial-test-conversation',
+    ],
+    backdropBlurPx: 0,
   },
   {
     id: 'delete_person',
-    kind: 'action',
     title: 'Persons',
     body: "I learn to recognize voices over time and list everyone I've heard here. Delete me to clean house.",
     targetKey: 'tutorial-test-person',
     cardAnchorKey: 'persons-panel-root',
     cardPlacement: 'left',
-    actionTrigger: 'delete-person',
+    actionTriggers: ['delete-person'],
     openPersonsPanel: true,
-    allowedClickTargets: ['tutorial-test-person'],
+    interactables: ['tutorial-test-person'],
+    backdropBlurPx: 0,
   },
   {
     id: 'settings_walkthrough',
-    kind: 'spotlight',
     title: 'Settings',
     body: "Everything you can tune lives here — integrations, what I remember, your account, audio, and more. Quick tour now so you know where to come back to.",
     targetKey: 'settings-panel-root',
   },
   {
-    id: 'how_dadei_works',
-    kind: 'spotlight',
-    title: 'How dadei works',
-    body: 'Turn me on and every device on your network starts listening together. I run quietly in the background.',
+    id: 'finish_tutorial',
+    title: "You're all set",
+    body: "That's the tour. I'll say hello and ask you to spell your name — listen and follow along.",
     targetKey: 'mic-button',
     cardAnchorKey: 'mic-button',
     cardPlacement: 'above',
-    backdropBlurPx: 4,
-  },
-  {
-    id: 'meet_dadei',
-    kind: 'action',
-    title: 'Say hello',
-    body: "I'll say hello first — when I'm done, tell me about yourself and spell your name out letter by letter.",
-    targetKey: 'mic-button',
-    cardAnchorKey: 'mic-button',
-    cardPlacement: 'above',
-    actionTrigger: 'wake-session-ended',
     backdropBlurPx: 0,
-    allowedClickTargets: ['mic-button'],
+    cardBackdropBlurPx: 0,
+    startsIntroduction: true,
   },
 ];
 
-/** Sent to the tutorial introduction endpoint to start the canned opener turn. */
-export const TUTORIAL_INTRO_KICKOFF_TEXT = '__dadei_tutorial_intro_kickoff__';
+export const TUTORIAL_PERMISSIONS_STEP_ID = 'permissions';
 
-export const TUTORIAL_MEET_DADEI_STEP_ID = 'meet_dadei';
+export const TUTORIAL_FINISH_STEP_ID = 'finish_tutorial';
 
-export function isMeetDadeiStep(stepId: string): boolean {
-  return stepId === TUTORIAL_MEET_DADEI_STEP_ID;
+/** Step index after skipping optional steps (e.g. permissions). */
+export function adjacentTutorialStepIndex(
+  steps: TutorialStep[],
+  index: number,
+  delta: -1 | 1,
+  options?: { skipPermissions?: boolean },
+): number {
+  let next = index + delta;
+  while (
+    options?.skipPermissions &&
+    next >= 0 &&
+    next < steps.length &&
+    steps[next]?.id === TUTORIAL_PERMISSIONS_STEP_ID
+  ) {
+    next += delta;
+  }
+  return Math.max(0, Math.min(next, steps.length - 1));
+}
+
+export function isFinishTutorialStep(stepId: string): boolean {
+  return stepId === TUTORIAL_FINISH_STEP_ID;
 }
 
 export function isSettingsTutorialStep(stepId: string): boolean {
   return stepId === 'settings_intro' || stepId.startsWith('settings_');
 }
 
-export const DEFAULT_SPOTLIGHT_BACKDROP_BLUR = 12;
-export const DEFAULT_ACTION_BACKDROP_BLUR = 0;
+export const DEFAULT_BACKDROP_BLUR = 12;
 
 export function backdropBlurForStep(step: TutorialStep): number {
   if (step.backdropBlurPx !== undefined) return step.backdropBlurPx;
-  return step.kind === 'action' ? DEFAULT_ACTION_BACKDROP_BLUR : DEFAULT_SPOTLIGHT_BACKDROP_BLUR;
+  return DEFAULT_BACKDROP_BLUR;
 }
 
 function settingsSubSteps(isElectron: boolean): TutorialStep[] {
   const intro: TutorialStep = {
     id: 'settings_intro',
-    kind: 'spotlight',
     title: 'Settings',
     body: 'Everything you can configure lives here. Use the arrows to walk through each section.',
     targetKey: 'settings-panel-root',
   };
   const sections = settingsSections(isElectron).map(section => ({
     id: `settings_${section.id}`,
-    kind: 'spotlight' as const,
     title: section.title,
     body: section.body,
     targetKey: `settings-section-${section.id}`,
@@ -186,10 +193,6 @@ export function buildTutorialSteps(isElectron: boolean): TutorialStep[] {
   return [...before, ...settingsSubSteps(isElectron), ...after];
 }
 
-export function meetDadeiStepIndex(steps: TutorialStep[]): number {
-  return steps.findIndex(s => s.id === TUTORIAL_MEET_DADEI_STEP_ID);
-}
-
 export const TUTORIAL_STEP_EVENT = 'tutorial-step';
 
 /** Keep the sample conversation collapsed so the user can expand it. */
@@ -197,6 +200,20 @@ export const TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS = new Set(['expand_conversa
 
 /** Keep the sample conversation open so interactions are reachable. */
 export const TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS = new Set(['delete_interaction']);
+
+/** Tutorial steps where the sample conversation may be deleted from the panel. */
+export const TUTORIAL_CONVERSATION_DELETE_STEP_IDS = new Set(['layout_tour']);
+
+/** Tutorial steps where sample interactions may be deleted from the panel. */
+export const TUTORIAL_INTERACTION_DELETE_STEP_IDS = new Set(['delete_interaction']);
+
+export function isTutorialInteractionDeleteStep(stepId: string): boolean {
+  return TUTORIAL_INTERACTION_DELETE_STEP_IDS.has(stepId);
+}
+
+export function isTutorialConversationDeleteStep(stepId: string): boolean {
+  return TUTORIAL_CONVERSATION_DELETE_STEP_IDS.has(stepId);
+}
 
 export const TUTORIAL_TEST_BANNER_TITLE = 'Delete test conversation';
 export const TUTORIAL_TEST_BANNER_ID = 'tutorial-delete-conversation-banner';

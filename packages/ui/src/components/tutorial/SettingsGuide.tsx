@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { CardNav } from './Card';
@@ -11,15 +12,16 @@ function settingsStepsFrom(steps: { id: string }[]) {
 
 export default function SettingsGuide() {
   const ctx = useTutorialContext();
+  const needsTutorial = useNeedsTutorial();
   const reduceMotion = useReducedMotion();
 
   const step = ctx?.step;
-  const active = Boolean(step && isSettingsTutorialStep(step.id));
+  const active = Boolean(needsTutorial && step && isSettingsTutorialStep(step.id));
 
   const settingsSteps = ctx ? settingsStepsFrom(ctx.steps) : [];
   const progressIndex = step ? settingsSteps.findIndex(s => s.id === step.id) : -1;
   const canBack = (ctx?.currentStepIndex ?? 0) > 0;
-  const canNext = step?.kind === 'spotlight';
+  const canNext = !step?.actionTriggers?.length;
 
   useEffect(() => {
     if (!active || !ctx) return;

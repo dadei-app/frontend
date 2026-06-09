@@ -1,12 +1,12 @@
 import { useLayoutEffect, useState, type CSSProperties } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
+import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
 import { TutorialProvider, useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
-import { isMeetDadeiStep, isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { CommandBubbleStackHost } from '@dadei/ui/contexts/CommandContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
@@ -32,14 +32,19 @@ function TutorialSettingsBridge({
   setSettingsOpen: (open: boolean) => void;
 }) {
   const tutorial = useTutorialContext();
+  const needsTutorial = useNeedsTutorial();
   useLayoutEffect(() => {
-    if (tutorial?.openSettingsForTutorial) {
+    if (needsTutorial && tutorial?.openSettingsForTutorial) {
       setSettingsOpen(true);
     }
-  }, [tutorial?.openSettingsForTutorial, setSettingsOpen]);
+  }, [needsTutorial, tutorial?.openSettingsForTutorial, setSettingsOpen, tutorial]);
 
   useLayoutEffect(() => {
-    if (!tutorial || settingsOpen === false) return;
+    if (!tutorial) {
+      if (settingsOpen) setSettingsOpen(false);
+      return;
+    }
+    if (settingsOpen === false) return;
     if (!isSettingsTutorialStep(tutorial.step.id)) {
       setSettingsOpen(false);
     }
@@ -54,11 +59,22 @@ function TutorialPersonsBridge({
   setIsPeoplePanelOpen: (open: boolean) => void;
 }) {
   const tutorial = useTutorialContext();
+  const needsTutorial = useNeedsTutorial();
   useLayoutEffect(() => {
-    if (tutorial?.step.openPersonsPanel) {
+    if (!needsTutorial || !tutorial) {
+      setIsPeoplePanelOpen(false);
+      return;
+    }
+    if (tutorial.step.openPersonsPanel || tutorial.step.id === 'delete_person') {
       setIsPeoplePanelOpen(true);
     }
-  }, [tutorial?.step.openPersonsPanel, tutorial?.step.id, setIsPeoplePanelOpen]);
+  }, [
+    needsTutorial,
+    tutorial?.step.openPersonsPanel,
+    tutorial?.step.id,
+    setIsPeoplePanelOpen,
+    tutorial,
+  ]);
   return null;
 }
 
@@ -66,8 +82,8 @@ function AssistantLayoutShell() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isBootstrapReady, formatHotkey, viewportFillClass } = useSystem();
   const tutorial = useTutorialContext();
-  const elevateNotifications = tutorial?.step.id === 'layout_tour';
-  const showTalkHint = Boolean(tutorial?.isActive && isMeetDadeiStep(tutorial.step.id));
+  const needsTutorial = useNeedsTutorial();
+  const elevateNotifications = needsTutorial && tutorial?.step.id === 'layout_tour';
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
@@ -165,20 +181,6 @@ function AssistantLayoutShell() {
                 animate={{ opacity: 1 }}
                 className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pb-8 pt-3 text-sm text-zinc-500 font-secondary"
               >
-                <AnimatePresence initial={false}>
-                  {showTalkHint ? (
-                    <motion.p
-                      key="talk-hint"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 4 }}
-                      transition={{ duration: 0.2 }}
-                      className={ASSISTANT_HINT_ROW}
-                    >
-                      <span>dadei will guide you — listen and follow along</span>
-                    </motion.p>
-                  ) : null}
-                </AnimatePresence>
                 <p className={ASSISTANT_HINT_ROW}>
                   <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
                     {formatHotkey()}
@@ -212,7 +214,7 @@ export default function AssistantLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isBootstrapReady } = useSystem();
   const meQuery = useAuthMeQuery(isAuthenticated && isBootstrapReady && !isLoading);
-  const needsTutorial = Boolean(meQuery.data && !meQuery.data.tutorial_completed);
+  const needsTutorial = useNeedsTutorial();
 
   if (!isBootstrapReady || isLoading || (isAuthenticated && meQuery.isLoading)) {
     return (

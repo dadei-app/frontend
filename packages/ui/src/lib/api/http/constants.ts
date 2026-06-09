@@ -26,7 +26,7 @@ export const ENDPOINTS = {
   AUTH_GOOGLE_WEB_LOGIN: '/auth/google/web/login',
   AUTH_ME: '/auth/me',
   TUTORIAL_COMPLETE: '/service/tutorial/complete',
-  TUTORIAL_INTRODUCTION_TEXT: '/service/tutorial/introduction/text',
+  INTRODUCTION_TEXT: '/service/introduction/text',
 
   // Service
   SERVICE_CLIENTS: '/service/clients',
@@ -45,8 +45,6 @@ export const ENDPOINTS = {
   // Persons
   PERSONS: '/persons',
   PERSON_BY_ID: '/persons/:personId',
-  PERSON_RETRAIN_VOICE: '/persons/user/retrain-voice',
-
   // Conversations
   CONVERSATIONS: '/conversations',
   CONVERSATION_BY_ID: '/conversations/:conversationId',

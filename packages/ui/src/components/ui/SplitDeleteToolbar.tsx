@@ -6,6 +6,8 @@ const DEFAULT_EASE = [0.22, 1, 0.36, 1] as const;
 const DEFAULT_IDLE_WIDTH = 36;
 const DEFAULT_ARMED_WIDTH = 76;
 
+const BTN_TRANSITION = 'transition-[color,background-color,box-shadow,opacity] duration-150 ease-out';
+
 type SplitDeleteToolbarProps = {
   armed: boolean;
   disabled?: boolean;
@@ -80,8 +82,10 @@ export default function SplitDeleteToolbar({
                 onConfirm();
               }}
               className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-emerald-400/95 transition-colors disabled:cursor-not-allowed disabled:opacity-45',
-                !disabled && 'hover:bg-emerald-500/15 hover:text-emerald-300',
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-emerald-400/90',
+                BTN_TRANSITION,
+                !disabled &&
+                  'hover:bg-emerald-500/10 hover:text-emerald-300 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.07)]',
                 confirmButtonClassName,
               )}
             >
@@ -97,8 +101,10 @@ export default function SplitDeleteToolbar({
                 onDisarm();
               }}
               className={cn(
-                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-rose-400/90 transition-colors disabled:cursor-not-allowed disabled:opacity-45',
-                !disabled && 'hover:bg-rose-950/65 hover:text-rose-100',
+                'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400/90',
+                BTN_TRANSITION,
+                !disabled &&
+                  'hover:bg-zinc-500/10 hover:text-zinc-200 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
                 cancelButtonClassName,
               )}
             >
@@ -110,8 +116,7 @@ export default function SplitDeleteToolbar({
             key="del-idle"
             type="button"
             disabled={disabled}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
+            initial={false}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.09, ease: 'easeOut' }}
             title={idleTitle}
@@ -121,8 +126,10 @@ export default function SplitDeleteToolbar({
               onArm();
             }}
             className={cn(
-              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/90 opacity-0 transition-[opacity,background-color,color] duration-150 disabled:cursor-not-allowed disabled:opacity-45',
-              !disabled && 'hover:bg-rose-950/70 hover:text-rose-700',
+              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/85 opacity-0',
+              BTN_TRANSITION,
+              !disabled &&
+                'hover:bg-rose-500/8 hover:text-rose-300 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
               idleVisibleClassName,
               idleButtonClassName,
             )}

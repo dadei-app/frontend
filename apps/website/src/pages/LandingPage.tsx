@@ -9,6 +9,7 @@ import {
   Globe,
   Inbox,
   Mail,
+  Mic,
   Monitor,
   PhoneCall,
   Terminal,

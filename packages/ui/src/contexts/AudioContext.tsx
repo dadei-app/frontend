@@ -27,6 +27,7 @@ import type { AudioSettings } from '@dadei/ui/types/electron';
 import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/audio/audioSettingsEvents';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 
 const COMMAND_START_RETRY_MS = 500;
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
@@ -141,8 +142,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { audioSettings } = useSystem();
   const { isServiceEnabled, registrationConflict, isConnected, isAssistantMode, isAssistantOwner } =
     useService();
-  const { state, startListening, notifyCommandUtteranceEnded } = useCommand();
+  const { state, startListening, notifyCommandUtteranceEnded, introductionModeActive } =
+    useCommand();
   const tutorial = useTutorialContext();
+  const needsTutorial = useNeedsTutorial();
+  const tutorialEngaged = Boolean(needsTutorial && tutorial?.isActive);
 
   const [isAudioPipelineReady, setIsAudioPipelineReady] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
@@ -174,17 +178,16 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const commandAudioEndSentRef = useRef(false);
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
-  const tutorialIntroductionModeRef = useRef(false);
+  const introductionModeRef = useRef(false);
 
   useEffect(() => {
-    const intro = Boolean(tutorial?.tutorialCommandMode);
-    tutorialIntroductionModeRef.current = intro;
-    if (!intro || !commandStreamActiveRef.current) return;
+    introductionModeRef.current = introductionModeActive;
+    if (!introductionModeActive || !commandStreamActiveRef.current) return;
     commandStreamReadyRef.current = false;
     lastCommandStartAttemptMsRef.current = 0;
     commandAudioEndSentRef.current = false;
     sendRealtimeMessage({ type: 'command_audio_cancel' });
-  }, [tutorial?.tutorialCommandMode]);
+  }, [introductionModeActive]);
 
   const setMicLevelPreview = useCallback((active: boolean) => {
     micPreviewRequestsRef.current = Math.max(
@@ -303,7 +306,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const inCapture =
           stateRef.current === 'listening' || stateRef.current === 'follow_up';
         if (inCapture) {
-          const introCapture = tutorialIntroductionModeRef.current;
+          const introCapture = introductionModeRef.current;
           const followUpSpeechRms = introCapture
             ? INTRODUCTION_FOLLOW_UP_SPEECH_RMS
             : FOLLOW_UP_SPEECH_RMS;
@@ -355,7 +358,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number) => {
-      if (tutorial && !tutorial.wakeWordEnabled) {
+      if (tutorialEngaged && !tutorial?.wakeWordEnabled) {
         return;
       }
       if (
@@ -369,7 +372,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       console.debug('[Voice][Wake] detected — entering listening (server will transcribe)');
       startListening();
     },
-    [startListening, tutorial],
+    [startListening, tutorial, tutorialEngaged],
   );
 
   const stopCommandAudioStream = useCallback(
@@ -422,7 +425,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     sendRealtimeMessage({
       type: 'command_audio_start',
       sample_rate: audioSettingsRef.current.sampleRate,
-      ...(tutorialIntroductionModeRef.current ? { introduction_mode: true } : {}),
+      ...(introductionModeRef.current ? { introduction_mode: true } : {}),
     });
   }, []);
 

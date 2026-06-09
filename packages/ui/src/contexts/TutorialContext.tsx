@@ -4,7 +4,6 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from 'react';
@@ -13,21 +12,28 @@ import { api } from '@dadei/ui/lib/api/http/client';
 import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import {
+  adjacentTutorialStepIndex,
   buildTutorialSteps,
-  isMeetDadeiStep,
   isSettingsTutorialStep,
-  meetDadeiStepIndex,
+  TUTORIAL_PERMISSIONS_STEP_ID,
   TUTORIAL_STEP_EVENT,
 } from '@dadei/ui/lib/tutorial/constants';
+import { preloadAmbientShader } from '@dadei/ui/components/settings/AmbientShader';
 import { isTutorialTargetInteractive } from '@dadei/ui/lib/tutorial/clickGuard';
+import {
+  areAllTutorialPermissionsGranted,
+  toTutorialPlatform,
+} from '@dadei/ui/lib/tutorial/permissionsRegistry';
 import {
   buildTutorialFixtures,
   isTutorialTestId,
 } from '@dadei/ui/lib/tutorial/testData';
 import type { ActionTrigger, TutorialStep } from '@dadei/ui/types/tutorial.types';
+import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
+import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 
 export interface TutorialContextValue {
   isActive: boolean;
@@ -48,39 +54,35 @@ export interface TutorialContextValue {
   removeTutorialConversation: () => void;
   removeTutorialPerson: () => void;
   recordTutorialInteraction: () => void;
-  micInteractive: boolean;
   wakeWordEnabled: boolean;
-  tutorialCommandMode: boolean;
   openSettingsForTutorial: boolean;
   setOpenSettingsForTutorial: (open: boolean) => void;
   showTestNotifications: boolean;
-  wakeHintVisible: boolean;
-  wakeSessionEnded: boolean;
+  finishTutorial: () => void;
 }
 
 const TutorialContext = createContext<TutorialContextValue | null>(null);
 
-function isStepActionComplete(
-  step: TutorialStep | undefined,
+function isTriggerComplete(
+  trigger: ActionTrigger,
+  step: TutorialStep,
   flags: {
     permissionsResolved: boolean;
     expandConversationDone: boolean;
-    notificationsDismissed: boolean;
     removedInteractionIds: Set<string>;
     personRemoved: boolean;
     serviceEnabledFired: boolean;
     tutorialInteractionCount: number;
-    wakeSessionEnded: boolean;
+    conversationRemoved: boolean;
   },
 ): boolean {
-  if (!step?.actionTrigger) return true;
-  switch (step.actionTrigger) {
+  switch (trigger) {
     case 'permission-resolved':
       return flags.permissionsResolved;
     case 'expand-conversation':
       return flags.expandConversationDone;
-    case 'notifications-dismissed':
-      return flags.notificationsDismissed;
+    case 'delete-conversation':
+      return flags.conversationRemoved;
     case 'delete-interaction':
       return flags.removedInteractionIds.size > 0;
     case 'delete-person':
@@ -89,17 +91,40 @@ function isStepActionComplete(
       return flags.serviceEnabledFired;
     case 'interactions-logged':
       return flags.tutorialInteractionCount >= (step.requiredInteractions ?? 2);
-    case 'wake-session-ended':
-      return flags.wakeSessionEnded;
     default:
       return false;
   }
 }
 
-export function TutorialProvider({ children }: { children: ReactNode }) {
-  const { isElectron } = useSystem();
+function isStepActionComplete(
+  step: TutorialStep | undefined,
+  flags: {
+    permissionsResolved: boolean;
+    expandConversationDone: boolean;
+    removedInteractionIds: Set<string>;
+    personRemoved: boolean;
+    serviceEnabledFired: boolean;
+    tutorialInteractionCount: number;
+    conversationRemoved: boolean;
+  },
+): boolean {
+  const triggers = step?.actionTriggers;
+  if (!triggers?.length) return true;
+  return triggers.every(trigger => isTriggerComplete(trigger, step!, flags));
+}
+
+export function TutorialProvider({
+  children,
+  forceInactive = false,
+}: {
+  children: ReactNode;
+  forceInactive?: boolean;
+}) {
+  const { isElectron, platform } = useSystem();
   const { persons } = useService();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [tutorialFinished, setTutorialFinished] = useState(false);
+  const [skipPermissionsStep, setSkipPermissionsStep] = useState(false);
   const [removedInteractionIds, setRemovedInteractionIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -109,8 +134,6 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const [permissionsResolved, setPermissionsResolved] = useState(false);
   const [expandConversationDone, setExpandConversationDone] = useState(false);
   const [serviceEnabledFired, setServiceEnabledFired] = useState(false);
-  const [wakeSessionEnded, setWakeSessionEnded] = useState(false);
-  const [notificationsDismissed, setNotificationsDismissed] = useState(false);
   const [openSettingsForTutorial, setOpenSettingsForTutorial] = useState(false);
 
   const fixtures = useMemo(() => {
@@ -122,28 +145,25 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   const steps = useMemo(() => buildTutorialSteps(isElectron), [isElectron]);
   const step = steps[currentStepIndex] ?? steps[0];
   const totalSteps = steps.length;
-  const micUnlockStepIndex = useMemo(() => meetDadeiStepIndex(steps), [steps]);
 
   const actionFlags = useMemo(
     () => ({
       permissionsResolved,
       expandConversationDone,
-      notificationsDismissed,
       removedInteractionIds,
       personRemoved,
       serviceEnabledFired,
       tutorialInteractionCount,
-      wakeSessionEnded,
+      conversationRemoved,
     }),
     [
       permissionsResolved,
       expandConversationDone,
-      notificationsDismissed,
       removedInteractionIds,
       personRemoved,
       serviceEnabledFired,
       tutorialInteractionCount,
-      wakeSessionEnded,
+      conversationRemoved,
     ],
   );
 
@@ -159,50 +179,89 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (step.id === 'layout_tour') {
-      setNotificationsDismissed(false);
-    }
-  }, [currentStepIndex, step.id]);
+    preloadAmbientShader();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+    void areAllTutorialPermissionsGranted(tutorialPlatform, isElectron).then(granted => {
+      if (cancelled || !granted) return;
+      setPermissionsResolved(true);
+      setSkipPermissionsStep(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [platform, isElectron]);
+
+  const finishTutorial = useCallback(() => {
+    setTutorialFinished(true);
+  }, []);
 
   const next = useCallback(() => {
     setCurrentStepIndex(prev => {
       const current = steps[prev];
-      if (current?.actionTrigger && !isStepActionComplete(current, actionFlags)) {
+      if (current?.actionTriggers?.length && !isStepActionComplete(current, actionFlags)) {
         return prev;
       }
-      const nextIndex = Math.min(prev + 1, steps.length - 1);
+      const nextIndex = adjacentTutorialStepIndex(steps, prev, 1, {
+        skipPermissions: skipPermissionsStep,
+      });
       publishStep(nextIndex);
       return nextIndex;
     });
-  }, [steps, actionFlags, publishStep]);
+  }, [steps, actionFlags, publishStep, skipPermissionsStep]);
 
   const back = useCallback(() => {
     setCurrentStepIndex(prev => {
-      const nextIndex = Math.max(prev - 1, 0);
+      const nextIndex = adjacentTutorialStepIndex(steps, prev, -1, {
+        skipPermissions: skipPermissionsStep,
+      });
       publishStep(nextIndex);
       return nextIndex;
     });
-  }, [publishStep]);
+  }, [publishStep, skipPermissionsStep, steps]);
 
   const acknowledgePermissions = useCallback(() => {
     setPermissionsResolved(true);
   }, []);
 
+  useEffect(() => {
+    if (!skipPermissionsStep || step.id !== TUTORIAL_PERMISSIONS_STEP_ID) return;
+    setCurrentStepIndex(prev => {
+      const nextIndex = adjacentTutorialStepIndex(steps, prev, 1, {
+        skipPermissions: true,
+      });
+      if (nextIndex === prev) return prev;
+      publishStep(nextIndex);
+      return nextIndex;
+    });
+  }, [skipPermissionsStep, step.id, steps, publishStep]);
+
   const markActionFired = useCallback(
     (trigger: ActionTrigger) => {
+      const current = steps[currentStepIndex];
+      const wasAlreadyComplete = current
+        ? isStepActionComplete(current, actionFlags)
+        : false;
+
       if (trigger === 'permission-resolved') setPermissionsResolved(true);
       if (trigger === 'expand-conversation') setExpandConversationDone(true);
-      if (trigger === 'notifications-dismissed') setNotificationsDismissed(true);
+      if (trigger === 'delete-conversation') setConversationRemoved(true);
       if (trigger === 'service-enabled') setServiceEnabledFired(true);
-      if (trigger === 'wake-session-ended') setWakeSessionEnded(true);
       if (trigger === 'interactions-logged') {
         const required = steps[currentStepIndex]?.requiredInteractions ?? 2;
         setTutorialInteractionCount(required);
       }
 
       setCurrentStepIndex(prev => {
-        const current = steps[prev];
-        if (current?.actionTrigger !== trigger || !current.autoAdvanceOnAction) {
+        const stepAtIndex = steps[prev];
+        if (
+          !stepAtIndex?.actionTriggers?.includes(trigger) ||
+          !stepAtIndex.autoAdvanceOnAction ||
+          wasAlreadyComplete
+        ) {
           return prev;
         }
         const nextIndex = Math.min(prev + 1, steps.length - 1);
@@ -210,7 +269,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         return nextIndex;
       });
     },
-    [steps, currentStepIndex, publishStep],
+    [steps, currentStepIndex, actionFlags, publishStep],
   );
 
   const removeTutorialInteraction = useCallback((id: string) => {
@@ -232,7 +291,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       const current = steps[currentStepIndex];
       const required = current?.requiredInteractions ?? 2;
       if (
-        current?.actionTrigger === 'interactions-logged' &&
+        current?.actionTriggers?.includes('interactions-logged') &&
         nextCount >= required &&
         current.autoAdvanceOnAction
       ) {
@@ -257,15 +316,12 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     return [fixtures.conversation];
   }, [fixtures.conversation, conversationRemoved]);
 
-  const micInteractive = currentStepIndex >= micUnlockStepIndex;
-  const wakeWordEnabled = currentStepIndex >= micUnlockStepIndex;
-  const tutorialCommandMode = isMeetDadeiStep(step.id) && !wakeSessionEnded;
+  const wakeWordEnabled = false;
   const showTestNotifications = step.id === 'layout_tour';
-  const wakeHintVisible = isMeetDadeiStep(step.id) && !wakeSessionEnded;
 
   const value = useMemo<TutorialContextValue>(
     () => ({
-      isActive: !wakeSessionEnded,
+      isActive: !forceInactive && !tutorialFinished,
       steps,
       currentStepIndex,
       step,
@@ -283,16 +339,15 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       removeTutorialConversation,
       removeTutorialPerson,
       recordTutorialInteraction,
-      micInteractive,
       wakeWordEnabled,
-      tutorialCommandMode,
       openSettingsForTutorial,
       setOpenSettingsForTutorial,
       showTestNotifications,
-      wakeHintVisible,
-      wakeSessionEnded,
+      finishTutorial,
     }),
     [
+      forceInactive,
+      tutorialFinished,
       steps,
       currentStepIndex,
       step,
@@ -310,13 +365,9 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       removeTutorialConversation,
       removeTutorialPerson,
       recordTutorialInteraction,
-      micInteractive,
-      wakeWordEnabled,
-      tutorialCommandMode,
       openSettingsForTutorial,
       showTestNotifications,
-      wakeHintVisible,
-      wakeSessionEnded,
+      finishTutorial,
     ],
   );
 
@@ -335,7 +386,6 @@ export function useTutorial() {
   }
 
   const queryClient = useQueryClient();
-  const introCompleteRef = useRef(false);
 
   const scrollTargetIntoView = useCallback((targetKey: string | null) => {
     if (!targetKey) return;
@@ -345,23 +395,20 @@ export function useTutorial() {
     }
   }, []);
 
-  const completeTutorial = useCallback(async () => {
+  const persistTutorialCompletion = useCallback(async () => {
     await api.post(ENDPOINTS.TUTORIAL_COMPLETE);
-    await queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+  }, []);
+
+  const markTutorialCompletedClient = useCallback(() => {
+    queryClient.setQueryData<UserMe | undefined>(queryKeys.authMe, prev =>
+      prev ? { ...prev, tutorial_completed: true } : prev,
+    );
   }, [queryClient]);
 
-  const markActionFired = useCallback(
-    (trigger: ActionTrigger) => {
-      ctx.markActionFired(trigger);
-      if (trigger === 'wake-session-ended') {
-        if (introCompleteRef.current) return;
-        introCompleteRef.current = true;
-        void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
-        void completeTutorial();
-      }
-    },
-    [ctx, completeTutorial, queryClient],
-  );
+  const completeTutorial = useCallback(async () => {
+    await persistTutorialCompletion();
+    markTutorialCompletedClient();
+  }, [markTutorialCompletedClient, persistTutorialCompletion]);
 
   useEffect(() => {
     scrollTargetIntoView(ctx.step.targetKey);
@@ -372,30 +419,17 @@ export function useTutorial() {
     }
   }, [ctx, scrollTargetIntoView]);
 
-  useEffect(() => {
-    const onSessionEnd = () => {
-      markActionFired('wake-session-ended');
-    };
-    window.addEventListener('tutorial-wake-session-ended', onSessionEnd);
-    return () => window.removeEventListener('tutorial-wake-session-ended', onSessionEnd);
-  }, [markActionFired]);
-
   return {
     ...ctx,
-    markActionFired,
     completeTutorial,
+    persistTutorialCompletion,
+    markTutorialCompletedClient,
   };
 }
 
 export function useTutorialTargetInteractive(targetKey: string | null | undefined): boolean {
   const tutorial = useTutorialContext();
-  if (!tutorial?.isActive) return true;
+  const needsTutorial = useNeedsTutorial();
+  if (!needsTutorial || !tutorial?.isActive) return true;
   return isTutorialTargetInteractive(targetKey, tutorial.step);
-}
-
-/** Non-target UI (e.g. panel chrome buttons) during action steps. */
-export function useTutorialChromeInteractive(): boolean {
-  const tutorial = useTutorialContext();
-  if (!tutorial?.isActive) return true;
-  return tutorial.step.kind !== 'action';
 }

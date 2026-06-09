@@ -29,6 +29,5 @@ export {
   TutorialProvider,
   useTutorial,
   useTutorialContext,
-  useTutorialChromeInteractive,
   useTutorialTargetInteractive,
 } from './contexts/TutorialContext';

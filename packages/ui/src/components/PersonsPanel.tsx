@@ -6,9 +6,10 @@ import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
-import { VoiceRetrainDialog } from '@dadei/ui/components/persons/VoiceRetrainDialog';
+import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 import { isTutorialTestId } from '@dadei/ui/lib/tutorial/testData';
 
 /** Below client tooltip (195); above main chrome. Raised during tutorial persons step. */
@@ -27,7 +28,6 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [armedPersonDeleteId, setArmedPersonDeleteId] = useState<string | null>(null);
-  const [retrainOpen, setRetrainOpen] = useState(false);
   const {
     persons,
     personsLoading,
@@ -35,19 +35,20 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
     isRenamingPerson,
     deletePerson,
     isDeletingPerson,
-    retrainUserVoice,
-    isRetrainingUserVoice,
   } = useService();
+  const { beginIntroduction } = useCommand();
   const tutorial = useTutorialContext();
+  const needsTutorial = useNeedsTutorial();
+  const tutorialEngaged = Boolean(needsTutorial && tutorial?.isActive);
   const displayPersons = useMemo(() => {
-    const merged = [...(tutorial?.tutorialPersons ?? []), ...persons];
+    const merged = [...(tutorialEngaged ? (tutorial?.tutorialPersons ?? []) : []), ...persons];
     const seen = new Set<string>();
     return merged.filter(p => {
       if (seen.has(p.id)) return false;
       seen.add(p.id);
       return true;
     });
-  }, [persons, tutorial?.tutorialPersons]);
+  }, [persons, tutorial?.tutorialPersons, tutorialEngaged, tutorial]);
 
   const loading = isOpen && personsLoading;
 
@@ -70,6 +71,14 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
     } catch (error) {
       console.error('Failed to rename person:', error);
       showToast('Failed to rename person', 'error');
+    }
+  };
+
+  const handleRetrainVoice = async () => {
+    onClose();
+    const started = await beginIntroduction();
+    if (!started) {
+      showToast('Could not start voice retraining. Try again.', 'error');
     }
   };
 
@@ -133,6 +142,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
   // Close on outside click (exclude toggle button)
   useEffect(() => {
     if (!isOpen) return;
+    if (tutorialEngaged && tutorial?.step.id === 'delete_person') return;
 
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -157,10 +167,12 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isOpen, onClose, excludeElement]);
+  }, [isOpen, onClose, excludeElement, tutorialEngaged, tutorial?.step.id]);
 
   const drawerZ =
-    tutorial?.step.id === 'delete_person' ? PERSONS_DRAWER_TUTORIAL_Z : PERSONS_DRAWER_Z;
+    tutorialEngaged && tutorial?.step.id === 'delete_person'
+      ? PERSONS_DRAWER_TUTORIAL_Z
+      : PERSONS_DRAWER_Z;
 
   const tree = (
     <>
@@ -288,7 +300,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                 {isYou ? (
                                   <button
                                     type="button"
-                                    onClick={() => setRetrainOpen(true)}
+                                    onClick={() => void handleRetrainVoice()}
                                     className="flex h-7 w-7 items-center justify-center rounded-md text-emerald-400/80 transition-colors hover:bg-emerald-950/40 hover:text-emerald-300"
                                     title="Retrain your voice"
                                     aria-label="Retrain your voice"
@@ -329,12 +341,6 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
         )}
       </AnimatePresence>
 
-      <VoiceRetrainDialog
-        open={retrainOpen}
-        onOpenChange={setRetrainOpen}
-        onSubmit={retrainUserVoice}
-        isSubmitting={isRetrainingUserVoice}
-      />
     </>
   );
 

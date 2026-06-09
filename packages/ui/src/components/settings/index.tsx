@@ -12,7 +12,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react';
-import { AmbientShader } from '@dadei/ui/components/settings/AmbientShader';
+import { AmbientShader, preloadAmbientShader } from '@dadei/ui/components/settings/AmbientShader';
 import { AboutPanel } from './about/AboutPanel';
 import { AccountPanel } from './account/AccountPanel';
 import { AudioPanel } from './audio/AudioPanel';
@@ -25,6 +25,7 @@ import { cn } from '@dadei/ui/lib/shared/cn';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import SettingsGuide from '@dadei/ui/components/tutorial/SettingsGuide';
 import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { veilEase } from '@dadei/ui/lib/shared/motion';
 
@@ -70,9 +71,10 @@ const PANELS: Record<SidebarView, ComponentType<SettingsPanelProps>> = {
   about: AboutPanel,
 };
 
-function dialogOverlayClass(isElectron: boolean) {
+function dialogOverlayClass(isElectron: boolean, tourLite = false) {
   return cn(
-    'fixed inset-0 z-[240] bg-zinc-950/65 backdrop-blur-md',
+    'fixed inset-0 z-[240]',
+    tourLite ? 'bg-zinc-950/90' : 'bg-zinc-950/65 backdrop-blur-md',
     isElectron && 'top-[var(--assistant-titlebar-offset,2rem)]',
   );
 }
@@ -89,7 +91,10 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const prefersReducedMotion = useReducedMotion();
   const { isElectron, preventDialogDismissOnTitleBar } = useSystem();
   const tutorial = useTutorialContext();
-  const tutorialSettingsStep = Boolean(tutorial && isSettingsTutorialStep(tutorial.step.id));
+  const needsTutorial = useNeedsTutorial();
+  const tutorialSettingsStep = Boolean(
+    needsTutorial && tutorial && isSettingsTutorialStep(tutorial.step.id),
+  );
 
   const tutorialSectionId = useMemo(() => {
     if (!tutorialSettingsStep || !tutorial) return null;
@@ -128,6 +133,12 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   }, [open]);
 
   useEffect(() => {
+    if (open && tutorialSettingsStep) {
+      preloadAmbientShader();
+    }
+  }, [open, tutorialSettingsStep]);
+
+  useEffect(() => {
     if (!tutorialSettingsStep || !open) return;
     if (tutorialSectionId && ALL_VIEWS.some(v => v.id === tutorialSectionId)) {
       const sectionId = tutorialSectionId as SidebarView;
@@ -145,24 +156,28 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const ActivePanel = PANELS[view];
 
-  const overlayTransition = prefersReducedMotion
-    ? { duration: 0.12 }
-    : { duration: 0.28, ease: veilEase };
-  const contentTransition = prefersReducedMotion
-    ? { duration: 0.12 }
-    : { duration: 0.32, ease: veilEase };
-  const contentInitial = prefersReducedMotion
-    ? { opacity: 0 }
-    : { opacity: 0, scale: 0.97, y: 10 };
+  const overlayTransition =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { duration: 0.12 }
+      : { duration: 0.28, ease: veilEase };
+  const contentTransition =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { duration: 0.15 }
+      : { duration: 0.32, ease: veilEase };
+  const contentInitial =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { opacity: 0 }
+      : { opacity: 0, scale: 0.97, y: 10 };
   const contentAnimate = { opacity: 1, scale: 1, y: 0 };
-  const contentExit = prefersReducedMotion
-    ? { opacity: 0, transition: { duration: 0.1 } }
-    : {
-        opacity: 0,
-        scale: 0.97,
-        y: 10,
-        transition: { duration: 0.2, ease: veilEase },
-      };
+  const contentExit =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { opacity: 0, transition: { duration: 0.1 } }
+      : {
+          opacity: 0,
+          scale: 0.97,
+          y: 10,
+          transition: { duration: 0.2, ease: veilEase },
+        };
 
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
@@ -175,7 +190,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={overlayTransition}
-                className={dialogOverlayClass(isElectron)}
+                className={dialogOverlayClass(isElectron, tutorialSettingsStep)}
               />
             </Dialog.Overlay>
             <Dialog.Content
@@ -190,7 +205,10 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 exit={contentExit}
                 transition={contentTransition}
                 className={cn(
-                  'glass-panel conic-border relative grid w-full overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]',
+                  tutorialSettingsStep
+                    ? 'glass-panel-tour conic-border-tour'
+                    : 'glass-panel conic-border',
+                  'relative grid w-full overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]',
                   isElectron
                     ? 'h-[min(800px,calc(100vh-var(--assistant-titlebar-offset,2rem)-2rem))]'
                     : 'h-[min(800px,88dvh)]',
@@ -198,7 +216,11 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 )}
               >
                 <div className="relative col-start-1 row-start-1 min-h-0 overflow-hidden rounded-2xl">
-                  <AmbientShader className="h-full w-full" intensity={0.25} />
+                  <AmbientShader
+                    className="h-full w-full"
+                    intensity={0.25}
+                    deferGpu={tutorialSettingsStep}
+                  />
                 </div>
 
                 <div className="relative col-start-1 row-start-1 flex min-h-0 flex-col">

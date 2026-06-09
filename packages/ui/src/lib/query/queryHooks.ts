@@ -4,6 +4,7 @@ import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { authApi } from '@dadei/ui/lib/api/auth';
 import { serviceApi } from '@dadei/ui/lib/api/service';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { Conversation } from '@dadei/ui/types/models.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
@@ -44,6 +45,25 @@ export function useAuthMeQuery(enabled = true) {
     staleTime: AUTH_ME_STALE_MS,
     refetchOnWindowFocus: true,
   });
+}
+
+/** True while the network has not completed onboarding (`tutorial_completed` is false). */
+export function useNeedsTutorial(enabled = true): boolean {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { isBootstrapReady } = useSystem();
+  const meQuery = useAuthMeQuery(
+    enabled && isAuthenticated && isBootstrapReady && !isLoading,
+  );
+  return Boolean(meQuery.data && !meQuery.data.tutorial_completed);
+}
+
+export function useTutorialCompleted(enabled = true): boolean {
+  const { isAuthenticated, isLoading } = useAuth();
+  const { isBootstrapReady } = useSystem();
+  const meQuery = useAuthMeQuery(
+    enabled && isAuthenticated && isBootstrapReady && !isLoading,
+  );
+  return Boolean(meQuery.data?.tutorial_completed);
 }
 
 async function applyPasswordSessionTokens(

@@ -34,7 +34,7 @@ export const COMMAND_SPEECH_RMS = 0.11;
 export const COMMAND_UTTERANCE_END_SILENCE_MS = 2_000;
 
 /**
- * Tutorial introduction capture — quieter speech, longer thinking pauses between phrases.
+ * Introduction capture — quieter speech, longer thinking pauses between phrases.
  * Lower RMS = softer letter-by-letter spelling still counts as active speech.
  */
 export const INTRODUCTION_COMMAND_SPEECH_RMS = 0.065;

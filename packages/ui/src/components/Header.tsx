@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Settings2, LogOut, Users, Mic } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import PersonsPanel from '@dadei/ui/components/PersonsPanel';
-import { useTutorialChromeInteractive } from '@dadei/ui/contexts/TutorialContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 interface HeaderProps {
@@ -20,11 +19,10 @@ export default function Header({
   const { logout } = useAuth();
   const navigate = useNavigate();
   const peopleButtonRef = useRef<HTMLButtonElement>(null);
-  const chromeInteractive = useTutorialChromeInteractive();
 
   return (
     <header
-      className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/8 bg-zinc-950/55 px-6 py-4 backdrop-blur-md"
+      className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/8 bg-zinc-950 px-6 py-4"
       style={{ minHeight: 'var(--assistant-header-h, 4.75rem)' }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-4 text-lg font-semibold tracking-tight text-emerald-400/95">
@@ -40,21 +38,12 @@ export default function Header({
         <button
           ref={peopleButtonRef}
           type="button"
-          onClick={() => {
-            if (!chromeInteractive) return;
-            setIsPeoplePanelOpen(!isPeoplePanelOpen);
-          }}
-          disabled={!chromeInteractive && !isPeoplePanelOpen}
+          onClick={() => setIsPeoplePanelOpen(!isPeoplePanelOpen)}
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-lg border transition-colors duration-200',
             isPeoplePanelOpen
               ? 'border-emerald-500/45 bg-emerald-500/15 text-emerald-300'
-              : cn(
-                  'border-white/10 bg-zinc-900/60 text-zinc-400',
-                  chromeInteractive &&
-                    'hover:border-emerald-500/30 hover:bg-zinc-800/80 hover:text-emerald-300/90',
-                  !chromeInteractive && 'cursor-default opacity-70',
-                ),
+              : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-emerald-500/30 hover:bg-zinc-800/80 hover:text-emerald-300/90',
           )}
           title="Persons"
         >
@@ -64,13 +53,7 @@ export default function Header({
         <button
           type="button"
           onClick={onOpenSettings}
-          disabled={!chromeInteractive}
-          className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-zinc-400 transition-colors',
-            chromeInteractive &&
-              'hover:border-emerald-500/30 hover:text-emerald-300/90',
-            !chromeInteractive && 'cursor-default opacity-70',
-          )}
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-zinc-900/60 text-zinc-400 transition-colors hover:border-emerald-500/30 hover:text-emerald-300/90"
           title="Settings"
         >
           <Settings2 className="h-4 w-4" strokeWidth={2} />

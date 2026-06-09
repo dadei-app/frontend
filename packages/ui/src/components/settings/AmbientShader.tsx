@@ -1,12 +1,21 @@
 import { lazy, Suspense } from 'react';
 
+const shadersImport = () => import('@paper-design/shaders-react');
+
 const MeshGradient = lazy(() =>
-  import('@paper-design/shaders-react').then(m => ({ default: m.MeshGradient })),
+  shadersImport().then(m => ({ default: m.MeshGradient })),
 );
+
+/** Warm the lazy shader chunk before settings opens (e.g. during tutorial). */
+export function preloadAmbientShader(): void {
+  void shadersImport();
+}
 
 interface AmbientShaderProps {
   className?: string;
   intensity?: number;
+  /** Keep the static gradient until the parent clears this (avoids WebGL + open animation at once). */
+  deferGpu?: boolean;
 }
 
 function StaticFallback({ className }: { className?: string }) {
@@ -24,12 +33,16 @@ function StaticFallback({ className }: { className?: string }) {
   );
 }
 
-export function AmbientShader({ className, intensity = 0.3 }: AmbientShaderProps) {
+export function AmbientShader({
+  className,
+  intensity = 0.3,
+  deferGpu = false,
+}: AmbientShaderProps) {
   const prefersReducedMotion =
     typeof window !== 'undefined' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  if (prefersReducedMotion) {
+  if (prefersReducedMotion || deferGpu) {
     return <StaticFallback className={className} />;
   }
 
