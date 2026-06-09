@@ -48,10 +48,22 @@ const BARS = [
 
 const WORDMARK = 'dadei'.split('');
 
-export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string }) {
+export type LoadingScreenProps = {
+  /** Shown below the wordmark instead of bootstrap phase text. */
+  subtitleOverride?: string;
+  /**
+   * When omitted, visibility follows desktop bootstrap (fades out once ready).
+   * Pass `true` for post-bootstrap full-screen waits (auth, OAuth, sign-out).
+   */
+  visible?: boolean;
+};
+
+export function LoadingScreen({ subtitleOverride, visible }: LoadingScreenProps) {
   const { bootstrapState, isBootstrapReady, isElectron } = useSystem();
   const { phase, progress, message, downloadUrl } = bootstrapState;
   const reduceMotion = useReducedMotion();
+
+  const isVisible = visible === true ? true : visible === false ? false : !isBootstrapReady;
 
   const subtitle = useMemo(
     () => statusText(phase, progress, message, subtitleOverride),
@@ -68,9 +80,9 @@ export function LoadingScreen({ subtitleOverride }: { subtitleOverride?: string 
         'z-50 flex flex-col bg-zinc-950',
         isElectron ? 'absolute inset-0' : 'fixed inset-0',
       )}
-      animate={{ opacity: isBootstrapReady ? 0 : 1 }}
+      animate={{ opacity: isVisible ? 1 : 0 }}
       transition={{ duration: 0.25 }}
-      aria-busy={!isBootstrapReady}
+      aria-busy={isVisible}
       aria-live="polite"
     >
       {/* Ambient emerald wash, breathing slowly behind everything */}

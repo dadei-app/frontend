@@ -376,8 +376,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       ) {
         return;
       }
-      // Anchor capture at post-wake audio so the wake phrase is not transcribed.
-      sendRealtimeMessage({ type: 'command_audio_wake' });
+      // armWakeListening sends command_audio_wake before claim.
       console.debug('[Voice][Wake] detected — entering listening (server will transcribe)');
       startListening();
     },

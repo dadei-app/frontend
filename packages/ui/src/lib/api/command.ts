@@ -78,6 +78,7 @@ async function* streamSseFromResponse(
 
   try {
     for (;;) {
+      if (options?.signal?.aborted) return;
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -106,7 +107,6 @@ async function* streamSseFromResponse(
     }
   } catch (e) {
     if (isAbortError(e) || options?.signal?.aborted) {
-      yield { type: 'done' };
       return;
     }
     yield { type: 'error', message: getUserErrorMessage(e, 'Stream read failed') };
@@ -137,7 +137,6 @@ async function* streamCommandSsePost(
     });
   } catch (e) {
     if (isAbortError(e) || options?.signal?.aborted) {
-      yield { type: 'done' };
       return;
     }
     yield { type: 'error', message: getUserErrorMessage(e, 'Network error') };

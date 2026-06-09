@@ -14,6 +14,7 @@ import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
+  isLoggingOut: boolean;
   user: UserMe | null;
   updateNetwork: (payload: NetworkUpdate) => Promise<void>;
   isUpdatingNetwork: boolean;
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [user, setUser] = useState<UserMe | null>(null);
 
   const tokensRef = useRef<AuthTokens | null>(null);
@@ -277,6 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applyTokens, refreshUser]);
 
   const logout = useCallback(async () => {
+    setIsLoggingOut(true);
     try {
       await clearAllStoredTokens();
 
@@ -289,6 +292,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Logged out successfully');
     } catch (error) {
       console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
     }
   }, [applyTokens, queryClient]);
 
@@ -308,6 +313,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         isAuthenticated,
         isLoading,
+        isLoggingOut,
         user,
         updateNetwork,
         isUpdatingNetwork: updateNetworkMutation.isPending,

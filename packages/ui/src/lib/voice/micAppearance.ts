@@ -5,7 +5,17 @@ export type MicTone = 'blue' | 'red' | 'green' | 'none';
 /** Gray chrome variants — both suppress click/hotkey. */
 export type MicGrayChrome = 'none' | 'locked' | 'loading';
 
-export type MicAction = 'none' | 'toggle_service' | 'exit_command_mode';
+export type MicAction =
+  | 'none'
+  | 'toggle_service'
+  | 'exit_command_mode'
+  | 'cancel_processing';
+
+export const COMMAND_PROCESSING_STATES: ReadonlySet<CommandState> = new Set([
+  'transcribing',
+  'thinking',
+  'responding',
+]);
 
 export type MicAppearance = {
   grayChrome: MicGrayChrome;
@@ -17,12 +27,6 @@ export type MicAppearance = {
   showPassiveRipples: boolean;
   action: MicAction;
 };
-
-const PROCESSING_STATES: ReadonlySet<CommandState> = new Set([
-  'transcribing',
-  'thinking',
-  'responding',
-]);
 
 const CAPTURE_STATES: ReadonlySet<CommandState> = new Set(['listening', 'follow_up']);
 
@@ -87,7 +91,7 @@ export function deriveMicAppearance(input: {
   }
 
   const commandMode = isCommandModeActive(state, isCommandMode);
-  const processing = PROCESSING_STATES.has(state);
+  const processing = COMMAND_PROCESSING_STATES.has(state);
   const capturing = CAPTURE_STATES.has(state);
 
   if (commandMode) {
@@ -97,7 +101,7 @@ export function deriveMicAppearance(input: {
       showProcessingSpinner: processing,
       showLiveAura: capturing && !processing,
       showPassiveRipples: false,
-      action: 'exit_command_mode',
+      action: processing ? 'cancel_processing' : 'exit_command_mode',
     };
   }
 

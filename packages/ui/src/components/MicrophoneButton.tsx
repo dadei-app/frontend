@@ -101,7 +101,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     registrationConflict,
     isCommandMode,
   } = useService();
-  const { state, cancel } = useCommand();
+  const { state, cancelCommandMode, cancelProcessing } = useCommand();
   const tutorialActive = useTutorialEngaged();
 
   const appearance = useMemo(
@@ -132,12 +132,16 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
 
   const runMicAction = useCallback(() => {
     if (appearance.action === 'none') return;
+    if (appearance.action === 'cancel_processing') {
+      cancelProcessing();
+      return;
+    }
     if (appearance.action === 'exit_command_mode') {
-      cancel();
+      cancelCommandMode();
       return;
     }
     void toggleService();
-  }, [appearance.action, cancel, toggleService]);
+  }, [appearance.action, cancelCommandMode, cancelProcessing, toggleService]);
 
   useEffect(() => {
     if (disableSpaceToggle) return;

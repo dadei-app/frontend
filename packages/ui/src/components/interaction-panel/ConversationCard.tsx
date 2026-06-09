@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
+import { MessageSquare } from 'lucide-react';
 import type { ConversationGroupView } from './types';
 import { accordionEase } from './constants';
 import { formatLocalDate, getConversationTitle } from './conversationUtils';
@@ -7,6 +8,8 @@ import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import InteractionCard from './InteractionCard';
 import { useTutorialTargetInteractive } from '@dadei/ui/contexts/TutorialContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
+
+const HEADER_META_EASE = 'duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]';
 
 function ConversationExpandedSummary({ group }: { group: ConversationGroupView }) {
   const topic = group.conversation?.topic_summary?.trim();
@@ -102,6 +105,7 @@ export default function ConversationCard({
       ? 'tutorial-test-conversation'
       : undefined;
   const interactive = useTutorialTargetInteractive(tutorialConversationTarget);
+  const isDeleteArmed = armedConversationDeleteId === conversationIdForActions;
 
   return (
     <div
@@ -126,7 +130,7 @@ export default function ConversationCard({
           'cursor-pointer hover:-translate-y-0.5 hover:border-white/10 hover:shadow-[0_10px_32px_-12px_rgba(0,0,0,0.65)]',
       )}
     >
-      <div className="flex w-full min-w-0 items-center gap-3 border-b border-white/6 bg-zinc-950/95 p-4">
+      <div className="flex w-full min-w-0 items-center gap-4 border-b border-white/6 bg-zinc-950/95 p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span
             className={cn(
@@ -154,34 +158,51 @@ export default function ConversationCard({
               </span>
             </h3>
           </div>
+        </div>
 
-          <div className="flex shrink-0 flex-col items-end justify-center gap-0.5 text-sm text-zinc-500 font-secondary sm:flex-row sm:items-center sm:gap-4">
-            <span className="flex items-center gap-1 whitespace-nowrap tabular-nums">
-              <i className="fas fa-comment text-[11px] opacity-80" aria-hidden />
-              {group.interactions.length}
-            </span>
-            <span className="whitespace-nowrap">
-              {formatLocalDate(group.conversation?.started_at || group.interactions[0]?.timestamp)}
-            </span>
-          </div>
+        <div className="flex shrink-0 items-center gap-4 text-sm text-zinc-500 font-secondary">
+          <span
+            className="inline-flex items-center gap-1 rounded-md border border-white/6 bg-white/[0.03] px-1.5 py-0.5 text-xs tabular-nums text-zinc-400"
+            title={`${group.interactions.length} interaction${group.interactions.length === 1 ? '' : 's'}`}
+            aria-label={`${group.interactions.length} interaction${group.interactions.length === 1 ? '' : 's'}`}
+          >
+            <MessageSquare className="h-3 w-3 shrink-0 text-zinc-500" aria-hidden strokeWidth={2} />
+            {group.interactions.length}
+          </span>
+          <span className="whitespace-nowrap">
+            {formatLocalDate(group.conversation?.started_at || group.interactions[0]?.timestamp)}
+          </span>
         </div>
 
         {conversationIdForActions ? (
-          <SplitDeleteToolbar
-            armed={armedConversationDeleteId === conversationIdForActions}
-            disabled={!interactive}
-            onArm={() => {
-              setArmedInteractionDeleteId(null);
-              setArmedConversationDeleteId(conversationIdForActions);
-            }}
-            onDisarm={() => setArmedConversationDeleteId(null)}
-            onConfirm={() => {
-              void handleDeleteConversation(conversationIdForActions);
-            }}
-            idleTitle="Delete conversation"
-            idleAriaLabel="Delete conversation"
-            idleVisibleClassName={interactive ? 'group-hover/conv:opacity-100' : undefined}
-          />
+          <div
+            className={cn(
+              'shrink-0 transition-[opacity,margin] pointer-events-none',
+              HEADER_META_EASE,
+              prefersReducedMotion && '!duration-0',
+              interactive &&
+                !isDeleteArmed &&
+                'max-w-0 overflow-hidden opacity-0 -ml-4 group-hover/conv:ml-0 group-hover/conv:max-w-none group-hover/conv:overflow-visible group-hover/conv:opacity-100 group-hover/conv:pointer-events-auto',
+              isDeleteArmed && 'ml-0 max-w-none overflow-visible opacity-100 pointer-events-auto',
+              !interactive && 'max-w-0 overflow-hidden opacity-0 -ml-4',
+            )}
+          >
+            <SplitDeleteToolbar
+              armed={isDeleteArmed}
+              disabled={!interactive}
+              onArm={() => {
+                setArmedInteractionDeleteId(null);
+                setArmedConversationDeleteId(conversationIdForActions);
+              }}
+              onDisarm={() => setArmedConversationDeleteId(null)}
+              onConfirm={() => {
+                void handleDeleteConversation(conversationIdForActions);
+              }}
+              idleTitle="Delete conversation"
+              idleAriaLabel="Delete conversation"
+              idleVisibleClassName={interactive ? 'group-hover/conv:opacity-100' : undefined}
+            />
+          </div>
         ) : null}
       </div>
 

@@ -80,8 +80,20 @@ function TutorialPersonsBridge({
   return null;
 }
 
+function assistantLoadingSubtitle(
+  isBootstrapReady: boolean,
+  isLoading: boolean,
+  isLoggingOut: boolean,
+  meLoading: boolean,
+): string | undefined {
+  if (isLoggingOut) return 'Signing out…';
+  if (isBootstrapReady && isLoading) return 'Signing in…';
+  if (isBootstrapReady && meLoading) return 'Loading your profile…';
+  return undefined;
+}
+
 function AssistantLayoutShell() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isLoggingOut } = useAuth();
   const { isBootstrapReady, formatHotkey, viewportFillClass } = useSystem();
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
@@ -108,10 +120,15 @@ function AssistantLayoutShell() {
     };
   }, []);
 
+  if (isLoggingOut) {
+    return <LoadingScreen visible subtitleOverride="Signing out…" />;
+  }
+
   if (!isBootstrapReady || isLoading) {
     return (
       <LoadingScreen
-        subtitleOverride={isBootstrapReady && isLoading ? 'Signing in…' : undefined}
+        visible={isBootstrapReady ? true : undefined}
+        subtitleOverride={assistantLoadingSubtitle(isBootstrapReady, isLoading, false, false)}
       />
     );
   }
@@ -218,15 +235,23 @@ function AssistantLayoutShell() {
 }
 
 export default function AssistantLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, isLoggingOut } = useAuth();
   const { isBootstrapReady } = useSystem();
   const meQuery = useAuthMeQuery(isAuthenticated && isBootstrapReady && !isLoading);
   const needsTutorial = useNeedsTutorial();
+  const meLoading = isAuthenticated && meQuery.isLoading;
+  const showLoading = isLoggingOut || !isBootstrapReady || isLoading || meLoading;
 
-  if (!isBootstrapReady || isLoading || (isAuthenticated && meQuery.isLoading)) {
+  if (showLoading) {
     return (
       <LoadingScreen
-        subtitleOverride={isBootstrapReady && isLoading ? 'Signing in…' : undefined}
+        visible={isLoggingOut || isBootstrapReady ? true : undefined}
+        subtitleOverride={assistantLoadingSubtitle(
+          isBootstrapReady,
+          isLoading,
+          isLoggingOut,
+          meLoading,
+        )}
       />
     );
   }

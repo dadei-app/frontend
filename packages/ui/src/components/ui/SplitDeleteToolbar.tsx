@@ -68,7 +68,7 @@ export default function SplitDeleteToolbar({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.09, ease: 'easeOut' }}
             className={cn(
-              'flex h-full w-full items-center justify-end gap-1',
+              'flex h-full w-full items-center justify-start gap-1',
               armedContainerClassName
             )}
           >

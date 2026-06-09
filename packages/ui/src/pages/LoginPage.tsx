@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
+import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
@@ -121,14 +122,10 @@ export default function LoginPage() {
 
   if (isLoading || isAuthenticated) {
     return (
-      <div className={cn('flex flex-col bg-zinc-950', viewportFillClass)}>
-        <div className="flex flex-1 items-center justify-center">
-          <div className="flex flex-col items-center gap-4">
-            <i className="fas fa-microphone-alt text-6xl text-emerald-400/80 animate-pulse" />
-            <p className="text-xl font-medium text-zinc-300 font-secondary">Loading…</p>
-          </div>
-        </div>
-      </div>
+      <LoadingScreen
+        visible
+        subtitleOverride={isAuthenticated ? 'Signing in…' : 'Checking your session…'}
+      />
     );
   }
 
