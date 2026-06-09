@@ -22,6 +22,7 @@ export function isTutorialClickAllowed(target: EventTarget | null, step: Tutoria
   if (!el) return false;
   if (el.closest('[data-tutorial-card]')) return true;
   if (el.closest('[data-tutorial-settings-guide]')) return true;
+  if (el.closest('[data-tutorial-target="settings-panel-root"]')) return true;
   if (isFinishTutorialStep(step.id)) return false;
   if (el.closest('[data-tutorial-allow-logout]')) return true;
   if (

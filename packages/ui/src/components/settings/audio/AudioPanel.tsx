@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { Modifier } from '@dadei/ui/types/electron';
 import { useMicLevelPreview } from '@dadei/ui/contexts/AudioContext';
-import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
 import {
   NoiseSuppressionControl,
@@ -35,11 +33,7 @@ export function AudioPanel() {
     micDevices: devices,
     refreshMicDevices,
   } = useSystem();
-  const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
-  const tutorialSettingsStep = Boolean(
-    needsTutorial && tutorial && isSettingsTutorialStep(tutorial.step.id),
-  );
+  const tutorialSettingsStep = useTutorialSettingsTourActive();
   const [capturing, setCapturing] = useState(false);
   const [deviceError, setDeviceError] = useState<string | null>(null);
   const micLevel = useMicLevelPreview(!tutorialSettingsStep);

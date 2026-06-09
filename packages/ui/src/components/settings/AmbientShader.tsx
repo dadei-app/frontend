@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { cn } from '@dadei/ui/lib/shared/cn';
 
 const shadersImport = () => import('@paper-design/shaders-react');
 
@@ -22,7 +23,7 @@ function StaticFallback({ className }: { className?: string }) {
   return (
     <div
       aria-hidden
-      className={className}
+      className={cn(className, 'pointer-events-none')}
       style={{
         background:
           'radial-gradient(ellipse 60% 40% at 30% 30%, rgba(16,185,129,0.10), transparent 60%), ' +
@@ -49,7 +50,7 @@ export function AmbientShader({
   return (
     <Suspense fallback={<StaticFallback className={className} />}>
       <MeshGradient
-        className={className}
+        className={cn(className, 'pointer-events-none')}
         speed={0.15}
         colors={['#000000', '#0a1f1a', '#0a1814', '#102b22', '#0d4a3a']}
         style={{ opacity: intensity }}

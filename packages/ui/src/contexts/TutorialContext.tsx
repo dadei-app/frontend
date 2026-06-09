@@ -427,9 +427,22 @@ export function useTutorial() {
   };
 }
 
-export function useTutorialTargetInteractive(targetKey: string | null | undefined): boolean {
-  const tutorial = useTutorialContext();
+/** True while onboarding is incomplete and the tutorial overlay is still running. */
+export function useTutorialEngaged(): boolean {
   const needsTutorial = useNeedsTutorial();
-  if (!needsTutorial || !tutorial?.isActive) return true;
-  return isTutorialTargetInteractive(targetKey, tutorial.step);
+  const tutorial = useTutorialContext();
+  return Boolean(needsTutorial && tutorial?.isActive);
+}
+
+/** True during the in-settings guided tour (sidebar locked, SettingsGuide visible). */
+export function useTutorialSettingsTourActive(): boolean {
+  const tutorial = useTutorialContext();
+  const engaged = useTutorialEngaged();
+  return Boolean(engaged && tutorial && isSettingsTutorialStep(tutorial.step.id));
+}
+
+export function useTutorialTargetInteractive(targetKey: string | null | undefined): boolean {
+  if (!useTutorialEngaged()) return true;
+  const tutorial = useTutorialContext();
+  return isTutorialTargetInteractive(targetKey, tutorial?.step);
 }

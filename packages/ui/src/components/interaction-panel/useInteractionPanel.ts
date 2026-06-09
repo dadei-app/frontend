@@ -12,10 +12,10 @@ import {
   INTERACTION_PANEL_RECENT_LIMIT,
   removeAllConversationQueries,
 } from '@dadei/ui/lib/query/queryHooks';
+import { patchInteractionCaches } from '@dadei/ui/lib/query/cacheUtils';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
-import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 import {
   TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS,
   TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS,
@@ -107,8 +107,7 @@ export function useInteractionPanel() {
   );
 
   const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
-  const tutorialEngaged = Boolean(needsTutorial && tutorial?.isActive);
+  const tutorialEngaged = useTutorialEngaged();
   const baseInteractions =
     bootstrapInteractions.length > 0 ? bootstrapInteractions : EMPTY_INTERACTIONS;
 
@@ -320,15 +319,9 @@ export function useInteractionPanel() {
     });
   };
 
-  const patchInteractionCaches = (
+  const updateInteractionCaches = (
     updater: (prev: Interaction[] | undefined) => Interaction[] | undefined
-  ) => {
-    queryClient.setQueriesData<Interaction[]>(
-      { queryKey: [...queryKeys.interactions, 'bootstrap'] },
-      updater
-    );
-    queryClient.setQueryData<Interaction[]>(queryKeys.interactions, updater);
-  };
+  ) => patchInteractionCaches(queryClient, updater);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -370,7 +363,7 @@ export function useInteractionPanel() {
     }
     try {
       await interactionsApi.delete(interactionId);
-      patchInteractionCaches(previous => (previous ?? []).filter(i => i.id !== interactionId));
+      updateInteractionCaches(previous => (previous ?? []).filter(i => i.id !== interactionId));
 
       showToast('Interaction deleted', 'success');
       setArmedInteractionDeleteId(null);
@@ -401,7 +394,7 @@ export function useInteractionPanel() {
       await conversationsApi.delete(conversationId);
       const cid = conversationId.trim();
       pruneExtraBootstrapConversationId(cid);
-      patchInteractionCaches(previous =>
+      updateInteractionCaches(previous =>
         (previous ?? []).filter(i => (i.conversation_id?.trim() ?? '') !== cid)
       );
       queryClient.removeQueries({ queryKey: queryKeys.conversationById(conversationId) });
@@ -435,7 +428,7 @@ export function useInteractionPanel() {
         })
       );
       clearExtraBootstrapConversationIds();
-      patchInteractionCaches(() => []);
+      updateInteractionCaches(() => []);
       removeAllConversationQueries(queryClient);
       queryClient.setQueryData<Conversation[]>(
         queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),

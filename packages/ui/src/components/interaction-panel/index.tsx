@@ -1,6 +1,6 @@
 import { useInteractionPanel } from './useInteractionPanel';
 import ConversationCard from './ConversationCard';
-import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import { useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 export default function InteractionPanel() {
@@ -22,8 +22,8 @@ export default function InteractionPanel() {
     handleClearAll,
     getPersonDisplay,
   } = useInteractionPanel();
-  const tutorial = useTutorialContext();
-  const chromeInteractive = !tutorial?.isActive;
+  const tutorialEngaged = useTutorialEngaged();
+  const chromeInteractive = !tutorialEngaged;
 
   return (
     <div

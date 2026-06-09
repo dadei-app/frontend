@@ -24,8 +24,7 @@ import type { SettingsPanelProps } from './layout';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import SettingsGuide from '@dadei/ui/components/tutorial/SettingsGuide';
-import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { useTutorialContext, useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { veilEase } from '@dadei/ui/lib/shared/motion';
 
@@ -91,10 +90,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
   const prefersReducedMotion = useReducedMotion();
   const { isElectron, preventDialogDismissOnTitleBar } = useSystem();
   const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
-  const tutorialSettingsStep = Boolean(
-    needsTutorial && tutorial && isSettingsTutorialStep(tutorial.step.id),
-  );
+  const tutorialSettingsStep = useTutorialSettingsTourActive();
 
   const tutorialSectionId = useMemo(() => {
     if (!tutorialSettingsStep || !tutorial) return null;
@@ -215,7 +211,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   tutorialSettingsStep && tutorial?.step.id === 'settings_intro' && 'ring-2 ring-emerald-400/35',
                 )}
               >
-                <div className="relative col-start-1 row-start-1 min-h-0 overflow-hidden rounded-2xl">
+                <div className="pointer-events-none relative col-start-1 row-start-1 z-0 min-h-0 overflow-hidden rounded-2xl">
                   <AmbientShader
                     className="h-full w-full"
                     intensity={0.25}
@@ -223,7 +219,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   />
                 </div>
 
-                <div className="relative col-start-1 row-start-1 flex min-h-0 flex-col">
+                <div className="relative z-10 col-start-1 row-start-1 flex min-h-0 flex-col">
                   <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
                     <Dialog.Title className="text-xl font-semibold text-zinc-50">Settings</Dialog.Title>
                     {!tutorialSettingsStep ? (

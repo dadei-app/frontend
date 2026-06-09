@@ -5,7 +5,12 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
 import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
 import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
-import { TutorialProvider, useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
+import {
+  TutorialProvider,
+  useTutorialContext,
+  useTutorialEngaged,
+  useTutorialSettingsTourActive,
+} from '@dadei/ui/contexts/TutorialContext';
 import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
 import { CommandBubbleStackHost } from '@dadei/ui/contexts/CommandContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
@@ -32,18 +37,15 @@ function TutorialSettingsBridge({
   setSettingsOpen: (open: boolean) => void;
 }) {
   const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
+  const settingsTourActive = useTutorialSettingsTourActive();
   useLayoutEffect(() => {
-    if (needsTutorial && tutorial?.openSettingsForTutorial) {
+    if (settingsTourActive && tutorial?.openSettingsForTutorial) {
       setSettingsOpen(true);
     }
-  }, [needsTutorial, tutorial?.openSettingsForTutorial, setSettingsOpen, tutorial]);
+  }, [settingsTourActive, tutorial?.openSettingsForTutorial, setSettingsOpen, tutorial]);
 
   useLayoutEffect(() => {
-    if (!tutorial) {
-      if (settingsOpen) setSettingsOpen(false);
-      return;
-    }
+    if (!tutorial) return;
     if (settingsOpen === false) return;
     if (!isSettingsTutorialStep(tutorial.step.id)) {
       setSettingsOpen(false);
@@ -59,9 +61,9 @@ function TutorialPersonsBridge({
   setIsPeoplePanelOpen: (open: boolean) => void;
 }) {
   const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
+  const tutorialEngaged = useTutorialEngaged();
   useLayoutEffect(() => {
-    if (!needsTutorial || !tutorial) {
+    if (!tutorialEngaged || !tutorial) {
       setIsPeoplePanelOpen(false);
       return;
     }
@@ -69,7 +71,7 @@ function TutorialPersonsBridge({
       setIsPeoplePanelOpen(true);
     }
   }, [
-    needsTutorial,
+    tutorialEngaged,
     tutorial?.step.openPersonsPanel,
     tutorial?.step.id,
     setIsPeoplePanelOpen,
@@ -82,8 +84,9 @@ function AssistantLayoutShell() {
   const { isAuthenticated, isLoading } = useAuth();
   const { isBootstrapReady, formatHotkey, viewportFillClass } = useSystem();
   const tutorial = useTutorialContext();
+  const tutorialEngaged = useTutorialEngaged();
   const needsTutorial = useNeedsTutorial();
-  const elevateNotifications = needsTutorial && tutorial?.step.id === 'layout_tour';
+  const elevateNotifications = tutorialEngaged && tutorial?.step.id === 'layout_tour';
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
@@ -199,8 +202,12 @@ function AssistantLayoutShell() {
         </main>
       </div>
 
-      <TutorialSettingsBridge settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
-      <TutorialPersonsBridge setIsPeoplePanelOpen={setIsPeoplePanelOpen} />
+      {needsTutorial ? (
+        <>
+          <TutorialSettingsBridge settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
+          <TutorialPersonsBridge setIsPeoplePanelOpen={setIsPeoplePanelOpen} />
+        </>
+      ) : null}
       <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
       <ToastStackHost

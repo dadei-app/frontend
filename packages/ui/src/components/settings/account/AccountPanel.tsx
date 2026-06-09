@@ -19,9 +19,7 @@ import {
 } from '@dadei/ui/components/settings/layout';
 import { SegmentedControl } from '@dadei/ui/components/settings/controls';
 import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
-import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import { buildPopularTimezoneOptions } from './timezonePicker';
 import { AccountSessionActions } from './AccountSessionActions';
 import { PasswordDialog } from './PasswordDialog';
@@ -35,11 +33,7 @@ function CenteredField({ children }: { children: React.ReactNode }) {
 export function AccountPanel() {
   const queryClient = useQueryClient();
   const { user: me, updateNetwork, logout, saveTokens, refreshUser } = useAuth();
-  const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
-  const settingsTourActive = Boolean(
-    needsTutorial && tutorial && isSettingsTutorialStep(tutorial.step.id),
-  );
+  const settingsTourActive = useTutorialSettingsTourActive();
   const authMeQuery = useAuthMeQuery(!settingsTourActive);
   const profile = authMeQuery.data ?? me;
   const hasPassword = profile?.has_password === true;

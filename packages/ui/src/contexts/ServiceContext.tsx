@@ -24,7 +24,10 @@ import {
   subscribeRealtimeMessages,
 } from '@dadei/ui/lib/realtime/realtimeClient';
 import { getRealtimeSessionId } from '@dadei/ui/lib/realtime/realtimeClient';
-import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/cacheUtils';
+import {
+  clearAssistantSessionCaches,
+  removePersonFromCaches,
+} from '@dadei/ui/lib/query/cacheUtils';
 import {
   ASSISTANT_MEMORIES_LIST_LIMIT,
   conversationQueryOptions,
@@ -211,6 +214,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         (prev ?? []).filter(p => p.id !== personId),
       );
       queryClient.removeQueries({ queryKey: queryKeys.personById(personId) });
+      removePersonFromCaches(queryClient, personId, cid => {
+        setExtraBootstrapConversationIds(prev => prev.filter(x => x.trim() !== cid));
+      });
     },
   });
 

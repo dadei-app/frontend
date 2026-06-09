@@ -3,9 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Clock3, CloudSun, Globe, Map as MapIcon } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { useIntegrationsStatusQuery } from '@dadei/ui/lib/query/queryHooks';
@@ -81,11 +79,7 @@ export function IntegrationsPanel() {
   const queryClient = useQueryClient();
   const { user: me, refreshUser, saveTokens } = useAuth();
   const { isElectron } = useSystem();
-  const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
-  const settingsTourActive = Boolean(
-    needsTutorial && tutorial && isSettingsTutorialStep(tutorial.step.id),
-  );
+  const settingsTourActive = useTutorialSettingsTourActive();
   const integrationsStatusQuery = useIntegrationsStatusQuery(!settingsTourActive);
   const [googleConnectError, setGoogleConnectError] = useState('');
   const [connectingGoogle, setConnectingGoogle] = useState(false);

@@ -6,8 +6,7 @@ import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
-import { useTutorialContext } from '@dadei/ui/contexts/TutorialContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 import { deriveMicAppearance } from '@dadei/ui/lib/voice/micAppearance';
 
 interface MicrophoneButtonProps {
@@ -103,9 +102,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     isAssistantMode,
   } = useService();
   const { state, cancel } = useCommand();
-  const tutorial = useTutorialContext();
-  const needsTutorial = useNeedsTutorial();
-  const tutorialActive = Boolean(needsTutorial && tutorial?.isActive);
+  const tutorialActive = useTutorialEngaged();
 
   const appearance = useMemo(
     () =>

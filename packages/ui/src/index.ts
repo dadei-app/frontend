@@ -29,5 +29,7 @@ export {
   TutorialProvider,
   useTutorial,
   useTutorialContext,
+  useTutorialEngaged,
+  useTutorialSettingsTourActive,
   useTutorialTargetInteractive,
 } from './contexts/TutorialContext';

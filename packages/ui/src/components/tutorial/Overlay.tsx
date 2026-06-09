@@ -228,11 +228,11 @@ function OverlayInner() {
     if (step.startsIntroduction) {
       setFinishing(true);
       finishTutorial();
+      // Tear down all tutorial UI immediately so nothing blocks settings, persons, etc.
+      markTutorialCompletedClient();
       void (async () => {
         try {
           await persistTutorialCompletion();
-          // Tear down all tutorial UI before the voice introduction handoff.
-          markTutorialCompletedClient();
           const started = await beginIntroduction();
           if (!started) {
             showToast('Could not start introduction. Try again.', 'error');
