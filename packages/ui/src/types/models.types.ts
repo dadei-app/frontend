@@ -20,6 +20,7 @@ export interface NetworkAction {
   scheduled_job_id?: string | null;
   /** True when this action owns the network countdown slot. */
   is_active?: boolean;
+  tool_args?: Record<string, unknown> | null;
 }
 
 /** Episodic memory from GET /memories. */
@@ -33,6 +34,7 @@ export interface EpisodicMemory {
   participant_person_ids: unknown;
   expires_at: string | null;
   confidence: number | null;
+  evidence_quotes?: string[] | null;
   provenance: EpisodicMemoryProvenance | null;
   details: Record<string, unknown> | null;
   created_at: string;
@@ -48,7 +50,7 @@ export interface EpisodicMemoryProvenance {
 export interface Person {
   id: string;
   name: string | null;
-  index: number;
+  is_user: boolean;
   network_id: string;
   created_at: string;
   updated_at: string;

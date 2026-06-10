@@ -1,5 +1,11 @@
 import { api } from '@dadei/ui/lib/api/http/client';
-import { LoginCredentials, RegisterData, AuthResponse, UserMe } from '../../types/auth.types';
+import {
+  LoginCredentials,
+  RegisterData,
+  AuthResponse,
+  TokenResponse,
+  UserMe,
+} from '../../types/auth.types';
 import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
 
 export const authApi = {
@@ -68,5 +74,23 @@ export const authApi = {
 
   deleteMe: async (): Promise<void> => {
     await api.delete(ENDPOINTS.AUTH_ME);
+  },
+
+  setPassword: async (newPassword: string): Promise<TokenResponse> => {
+    const { data } = await api.post<TokenResponse>('/auth/set-password', {
+      new_password: newPassword,
+    });
+    return data;
+  },
+
+  changePassword: async (
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<TokenResponse> => {
+    const { data } = await api.post<TokenResponse>('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
+    return data;
   },
 };

@@ -15,7 +15,6 @@ export const queryKeys = {
     [...queryKeys.interactions, 'bootstrap', conversationIdsKey] as const,
   conversationById: (conversationId: string) =>
     [...queryKeys.conversations, conversationId] as readonly ['conversations', string],
-  serviceClients: ['service', 'clients'] as const,
   authMe: ['auth', 'me'] as const,
   integrationsStatus: ['integrations', 'status'] as const,
 };

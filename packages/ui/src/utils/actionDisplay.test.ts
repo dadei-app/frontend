@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   actionDomainLabel,
   actionOperationLabel,
+  formatConfidence,
   isNotificationAction,
   operationForToolName,
   resolveActionOperation,
+  resolveMemoryConfidence,
 } from './actionDisplay';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 
@@ -12,7 +14,7 @@ function action(overrides: Partial<NetworkAction>): NetworkAction {
   return {
     id: '1',
     network_id: '2',
-    action_type: 'calendar_event',
+    action_type: 'calendar',
     status: 'proposed',
     title: 'Team sync',
     scheduled_at: '2026-06-03T12:00:10Z',
@@ -27,12 +29,8 @@ function action(overrides: Partial<NetworkAction>): NetworkAction {
 }
 
 describe('operationForToolName', () => {
-  it('detects calendar_delete_event as delete', () => {
-    expect(operationForToolName('calendar_delete_event')).toBe('delete');
-  });
-
-  it('detects legacy delete_calendar_event as delete', () => {
-    expect(operationForToolName('delete_calendar_event')).toBe('delete');
+  it('detects calendar_delete as delete', () => {
+    expect(operationForToolName('calendar_delete')).toBe('delete');
   });
 });
 
@@ -41,7 +39,7 @@ describe('resolveActionOperation', () => {
     expect(
       resolveActionOperation({
         operation: 'update',
-        tool_name: 'calendar_delete_event',
+        tool_name: 'calendar_delete',
       }),
     ).toBe('update');
   });
@@ -50,17 +48,18 @@ describe('resolveActionOperation', () => {
     expect(
       resolveActionOperation({
         operation: null,
-        tool_name: 'calendar_delete_event',
+        tool_name: 'calendar_delete',
       }),
     ).toBe('delete');
   });
 });
 
 describe('isNotificationAction', () => {
-  it('includes calendar, task, and email domains', () => {
-    expect(isNotificationAction(action({ action_type: 'calendar_event' }))).toBe(true);
-    expect(isNotificationAction(action({ action_type: 'task' }))).toBe(true);
+  it('includes calendar and email domains only', () => {
+    expect(isNotificationAction(action({ action_type: 'calendar' }))).toBe(true);
     expect(isNotificationAction(action({ action_type: 'email' }))).toBe(true);
+    expect(isNotificationAction(action({ action_type: 'task' }))).toBe(false);
+    expect(isNotificationAction(action({ action_type: 'contact' }))).toBe(false);
   });
 
   it('excludes non-notification domains', () => {
@@ -79,8 +78,23 @@ describe('actionOperationLabel', () => {
 
 describe('actionDomainLabel', () => {
   it('humanizes known action types', () => {
-    expect(actionDomainLabel('calendar_event')).toBe('Calendar');
-    expect(actionDomainLabel('task')).toBe('Task');
+    expect(actionDomainLabel('calendar')).toBe('Calendar');
     expect(actionDomainLabel('email')).toBe('Email');
+  });
+});
+
+describe('resolveMemoryConfidence', () => {
+  it('reads top-level confidence on 0–1 scale', () => {
+    expect(resolveMemoryConfidence({ confidence: 0.82 })).toBe(0.82);
+  });
+
+  it('falls back to details.confidence', () => {
+    expect(resolveMemoryConfidence({ confidence: null, details: { confidence: 0.55 } })).toBe(0.55);
+  });
+
+  it('normalizes percent-scale values', () => {
+    expect(resolveMemoryConfidence({ confidence: 65 })).toBe(0.65);
+    expect(formatConfidence(0.9)).toBe('90% confidence');
+    expect(formatConfidence(65)).toBe('65% confidence');
   });
 });

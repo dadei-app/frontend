@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../../../packages/ui/src/components/settings/glass.css";
 
 @layer utilities {
   .font-primary {
@@ -16,6 +17,15 @@
   .font-display {
     font-family: "Space Grotesk", system-ui, sans-serif;
   }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Tailwind v4: register sources (config `content` is not used by @tailwindcss/postcss). */
@@ -24,6 +34,12 @@
 
 :root {
   --accent-color: #00cc6a;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 html {

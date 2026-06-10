@@ -2,23 +2,38 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { isAxiosError } from 'axios';
 import { useReducedMotion } from 'framer-motion';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
-import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
+import type { Conversation, Interaction } from '@dadei/ui/types/models.types';
 import { interactionsApi } from '@dadei/ui/lib/api/interactions';
 import { conversationsApi } from '@dadei/ui/lib/api/conversations';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
 import {
   conversationQueryOptions,
   INTERACTION_PANEL_RECENT_LIMIT,
   removeAllConversationQueries,
-  useInteractionsBootstrapQuery,
-  usePersonsQuery,
-  useRecentConversationsQuery,
 } from '@dadei/ui/lib/query/queryHooks';
+import { patchInteractionCaches } from '@dadei/ui/lib/query/cacheUtils';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
+import {
+  TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS,
+  TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS,
+} from '@dadei/ui/lib/tutorial/constants';
+import {
+  isTutorialTestId,
+  TUTORIAL_TEST_CONVERSATION_ID,
+} from '@dadei/ui/lib/tutorial/testData';
 import { ORPHAN_KEY } from './constants';
+
+const PERSON_COLOR_SHADES = [
+  'bg-emerald-950/60 text-emerald-300 ring-emerald-500/25',
+  'bg-sky-950/60 text-sky-300 ring-sky-500/25',
+  'bg-violet-950/60 text-violet-300 ring-violet-500/25',
+  'bg-amber-950/60 text-amber-300 ring-amber-500/25',
+  'bg-rose-950/60 text-rose-300 ring-rose-500/25',
+  'bg-cyan-950/60 text-cyan-300 ring-cyan-500/25',
+] as const;
 import { activeConversationKey, groupKey, parseInteractionDate } from './conversationUtils';
 import type { ConversationGroupState, ConversationGroupView } from './types';
 
@@ -68,59 +83,40 @@ function buildConversationGroups(
 }
 
 export function useInteractionPanel() {
-  const { isConnected } = useService();
+  const {
+    isConnected,
+    recentConversations,
+    bootstrapInteractions,
+    interactionsLoading,
+    interactionsError,
+    retryInteractions,
+    persons,
+    personsLoading,
+    refetchPersons,
+    pruneExtraBootstrapConversationId,
+    clearExtraBootstrapConversationIds,
+  } = useService();
   const containerRef = useRef<HTMLDivElement>(null);
   const { showToast } = useNotifications();
   const prefersReducedMotion = useReducedMotion();
   const queryClient = useQueryClient();
 
-  const recentConversationsQuery = useRecentConversationsQuery(
-    isConnected,
-    INTERACTION_PANEL_RECENT_LIMIT
-  );
-
   const recentIds = useMemo(
-    () => (recentConversationsQuery.data ?? []).map(c => c.id),
-    [recentConversationsQuery.data]
+    () => recentConversations.map(c => c.id),
+    [recentConversations],
   );
 
-  /**
-   * Conversation IDs returned by GET /conversations/recent are capped; realtime interactions
-   * can reference an older active conversation. Track those extras so bootstrap refetches include them.
-   */
-  const [extraBootstrapConversationIds, setExtraBootstrapConversationIds] = useState<string[]>([]);
+  const tutorial = useTutorialContext();
+  const tutorialEngaged = useTutorialEngaged();
+  const baseInteractions =
+    bootstrapInteractions.length > 0 ? bootstrapInteractions : EMPTY_INTERACTIONS;
 
-  useEffect(() => {
-    if (!isConnected) {
-      setExtraBootstrapConversationIds([]);
-    }
-  }, [isConnected]);
-
-  const idsForBootstrapFetch = useMemo(() => {
-    const ids = new Set<string>();
-    for (const id of recentIds) {
-      const t = id?.trim();
-      if (t) ids.add(t);
-    }
-    for (const id of extraBootstrapConversationIds) {
-      const t = id?.trim();
-      if (t) ids.add(t);
-    }
-    return Array.from(ids).sort();
-  }, [extraBootstrapConversationIds, recentIds]);
-
-  const interactionsBootstrapKey = useMemo(
-    () => idsForBootstrapFetch.join('\u001f'),
-    [idsForBootstrapFetch]
-  );
-
-  const interactionsBootstrapQuery = useInteractionsBootstrapQuery(
-    idsForBootstrapFetch,
-    isConnected && (recentConversationsQuery.isSuccess || recentConversationsQuery.isError)
-  );
-
-  const personsQuery = usePersonsQuery(isConnected);
-  const interactions = interactionsBootstrapQuery.data ?? EMPTY_INTERACTIONS;
+  const interactions = useMemo(() => {
+    if (!tutorialEngaged || !tutorial?.tutorialInteractions.length) return baseInteractions;
+    const seen = new Set(baseInteractions.map(i => i.id));
+    const injected = tutorial.tutorialInteractions.filter(i => !seen.has(i.id));
+    return [...injected, ...baseInteractions];
+  }, [baseInteractions, tutorial?.tutorialInteractions, tutorialEngaged, tutorial]);
 
   const conversationIds = useMemo(() => {
     const ids = new Set<string>();
@@ -132,16 +128,22 @@ export function useInteractionPanel() {
     return Array.from(ids).sort();
   }, [interactions, recentIds]);
 
+  /** Tutorial fixtures use non-UUID ids; never fetch them from the API. */
+  const apiConversationIds = useMemo(
+    () => conversationIds.filter(id => !isTutorialTestId(id)),
+    [conversationIds],
+  );
+
   const conversationQueries = useQueries({
-    queries: conversationIds.map(id => ({
+    queries: apiConversationIds.map(id => ({
       ...conversationQueryOptions(id),
       enabled: isConnected && Boolean(id),
     })),
   });
 
-  /** `useQueries` returns a new array each render; do not put it in useMemo deps or `conversationById` churns forever. */
   const conversationIdsKey = conversationIds.join('\u001f');
-  const conversationDataKey = conversationIds
+  const apiConversationIdsKey = apiConversationIds.join('\u001f');
+  const conversationDataKey = apiConversationIds
     .map((id, i) => {
       const d = conversationQueries[i]?.data;
       if (!d) return `${id}:`;
@@ -151,48 +153,39 @@ export function useInteractionPanel() {
 
   const conversationById = useMemo(() => {
     const map = new Map<string, Conversation>();
-    conversationIds.forEach((id, index) => {
+    for (const conv of tutorialEngaged ? (tutorial?.tutorialConversations ?? []) : []) {
+      map.set(conv.id, conv);
+    }
+    apiConversationIds.forEach((id, index) => {
       const data = conversationQueries[index]?.data;
       if (data) map.set(id, data);
     });
     return map;
-    // conversationQueries omitted on purpose — see conversationDataKey above.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable keys derived from query *data*, not the queries array identity
-  }, [conversationDataKey, conversationIdsKey]);
+  }, [conversationDataKey, apiConversationIdsKey, tutorial?.tutorialConversations, tutorialEngaged, tutorial]);
 
   const [conversationGroups, setConversationGroups] = useState<ConversationGroupState[]>([]);
-  const loading =
-    recentConversationsQuery.isLoading ||
-    (isConnected &&
-      (recentConversationsQuery.isSuccess || recentConversationsQuery.isError) &&
-      interactionsBootstrapQuery.isLoading);
+  const loading = interactionsLoading;
 
-  const personsById = useMemo(
-    () => new Map((personsQuery.data ?? []).map(person => [person.id, person])),
-    [personsQuery.data]
-  );
-
-  /**
-   * Interactions (bootstrap + realtime) can reference a person created after the last
-   * GET /persons. Without a refetch, getPersonDisplay falls through to "Loading..." forever.
-   */
-  useEffect(() => {
-    if (!isConnected || !personsQuery.isSuccess) return;
-    const known = new Set((personsQuery.data ?? []).map(p => p.id));
-    const hasUnknownPerson = interactions.some(
-      i => Boolean(i.person_id?.trim()) && !known.has(i.person_id.trim())
-    );
-    if (hasUnknownPerson && !personsQuery.isFetching) {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
+  const personsById = useMemo(() => {
+    const map = new Map(persons.map(person => [person.id, person]));
+    for (const person of tutorialEngaged ? (tutorial?.tutorialPersons ?? []) : []) {
+      if (!map.has(person.id)) map.set(person.id, person);
     }
-  }, [
-    isConnected,
-    interactions,
-    personsQuery.data,
-    personsQuery.isFetching,
-    personsQuery.isSuccess,
-    queryClient,
-  ]);
+    return map;
+  }, [persons, tutorial?.tutorialPersons, tutorialEngaged, tutorial]);
+
+  useEffect(() => {
+    if (!isConnected || personsLoading) return;
+    const known = new Set(persons.map(p => p.id));
+    const hasUnknownPerson = interactions.some(i => {
+      const pid = i.person_id?.trim();
+      return Boolean(pid) && !isTutorialTestId(pid) && !known.has(pid);
+    });
+    if (hasUnknownPerson) {
+      refetchPersons();
+    }
+  }, [isConnected, interactions, persons, personsLoading, refetchPersons]);
 
   const displayGroups: ConversationGroupView[] = useMemo(() => {
     const activeKey = activeConversationKey(conversationGroups);
@@ -204,14 +197,13 @@ export function useInteractionPanel() {
     });
   }, [conversationGroups]);
 
-  /** Only changes when interactions are added/removed/reordered — not on expand/collapse. */
   const interactionsScrollSignature = useMemo(
     () =>
       conversationGroups
         .flatMap(g => g.interactions)
         .map(i => i.id)
         .join('\u001f'),
-    [conversationGroups]
+    [conversationGroups],
   );
 
   const [armedInteractionDeleteId, setArmedInteractionDeleteId] = useState<string | null>(null);
@@ -241,153 +233,106 @@ export function useInteractionPanel() {
 
   const panelLoadError = useMemo(() => {
     if (!isConnected) return null;
-    if (recentConversationsQuery.isError) {
+    if (interactionsError) {
       return getUserErrorMessage(
-        recentConversationsQuery.error,
+        interactionsError,
         'Could not load conversations.',
       );
     }
-    if (interactionsBootstrapQuery.isError) {
-      return getUserErrorMessage(
-        interactionsBootstrapQuery.error,
-        'Could not load interactions.',
-      );
-    }
     return null;
-  }, [
-    isConnected,
-    recentConversationsQuery.isError,
-    recentConversationsQuery.error,
-    interactionsBootstrapQuery.isError,
-    interactionsBootstrapQuery.error,
-  ]);
+  }, [isConnected, interactionsError]);
 
   const retryPanelLoad = useCallback(() => {
-    void recentConversationsQuery.refetch();
-    void interactionsBootstrapQuery.refetch();
-    void personsQuery.refetch();
-  }, [interactionsBootstrapQuery, personsQuery, recentConversationsQuery]);
+    retryInteractions();
+  }, [retryInteractions]);
 
   useEffect(() => {
-    setConversationGroups(previous => buildConversationGroups(interactions, conversationById, previous));
-  }, [interactions, conversationById]);
+    setConversationGroups(previous => {
+      const groups = buildConversationGroups(interactions, conversationById, previous);
+      if (!tutorialEngaged || !tutorial) return groups;
 
-  useEffect(() => {
-    if (!isConnected) return;
-
-    const mergeIntoCaches = (interaction: Interaction) => {
-      queryClient.setQueriesData<Interaction[]>(
-        { queryKey: [...queryKeys.interactions, 'bootstrap'] },
-        prev => {
-          if (!prev) return [interaction];
-          if (prev.some(item => item.id === interaction.id)) return prev;
-          return [...prev, interaction];
-        }
-      );
-      queryClient.setQueryData<Interaction[]>(queryKeys.interactions, prev => {
-        if (!prev) return [interaction];
-        if (prev.some(item => item.id === interaction.id)) return prev;
-        return [...prev, interaction];
-      });
-      const convId = interaction.conversation_id?.trim();
-      if (convId) {
-        void queryClient.prefetchQuery(conversationQueryOptions(convId));
-        setExtraBootstrapConversationIds(prev => {
-          if (prev.some(x => x.trim() === convId)) return prev;
-          if (recentIds.some(x => x.trim() === convId)) return prev;
-          return [...prev, convId];
+      if (TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS.has(tutorial.step.id)) {
+        return groups.map(g => {
+          if (groupKey(g) !== TUTORIAL_TEST_CONVERSATION_ID) return g;
+          return { ...g, isExpanded: false };
         });
       }
-    };
 
-    const handleNewInteraction = (payload: { data?: Interaction }) => {
-      const interaction = payload.data;
-      if (!interaction) return;
-      mergeIntoCaches(interaction);
-    };
-
-    const handleConversationUpdate = (payload: { data?: Conversation }) => {
-      const conv = payload.data;
-      if (!conv?.id) return;
-      queryClient.setQueryData<Conversation>(queryKeys.conversationById(conv.id), conv);
-      queryClient.setQueryData<Conversation[]>(
-        queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
-        prev => {
-          if (!prev?.length) return prev;
-          const idx = prev.findIndex(c => c.id === conv.id);
-          if (idx === -1) return prev;
-          const next = [...prev];
-          next[idx] = { ...next[idx], ...conv };
-          return next;
-        }
-      );
-    };
-
-    const offWs = subscribeRealtimeMessages(msg => {
-      if (msg.event === 'interaction') {
-        const data = msg.data;
-        if (!data || typeof data !== 'object') return;
-        handleNewInteraction({ data: data as Interaction });
-        return;
+      if (TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS.has(tutorial.step.id)) {
+        return groups.map(g => {
+          if (groupKey(g) !== TUTORIAL_TEST_CONVERSATION_ID) return g;
+          return { ...g, isExpanded: true };
+        });
       }
-      if (msg.event === 'conversation') {
-        const data = msg.data;
-        if (!data || typeof data !== 'object') return;
-        handleConversationUpdate({ data: data as Conversation });
-      }
+
+      return groups;
     });
+  }, [interactions, conversationById, tutorial?.step.id, tutorialEngaged, tutorial]);
 
-    let offElectron: (() => void) | undefined;
-    if (window.electronAPI?.onNewInteraction) {
-      offElectron = window.electronAPI.onNewInteraction(handleNewInteraction);
+  useEffect(() => {
+    if (!tutorialEngaged || tutorial?.step.id !== 'expand_conversation') return;
+    const expanded = displayGroups.some(
+      g => groupKey(g) === TUTORIAL_TEST_CONVERSATION_ID && g.isExpanded,
+    );
+    if (expanded) {
+      tutorial.markActionFired('expand-conversation');
     }
-
-    return () => {
-      offWs();
-      if (offElectron) offElectron();
-    };
-  }, [isConnected, queryClient, interactionsBootstrapKey, recentIds]);
+  }, [tutorial, displayGroups, tutorialEngaged]);
 
   useEffect(() => {
     if (!containerRef.current) return;
+    if (
+      tutorialEngaged &&
+      (tutorial?.step.id === 'delete_interaction' || tutorial?.step.id === 'layout_tour')
+    ) {
+      return;
+    }
     containerRef.current.scrollTop = containerRef.current.scrollHeight;
-  }, [interactionsScrollSignature]);
+  }, [interactionsScrollSignature, tutorialEngaged, tutorial?.step.id]);
 
   const toggleConversation = (index: number) => {
     setConversationGroups(prev => {
       const activeKey = activeConversationKey(prev);
-      return prev.map((g, i) => {
+      const target = prev[index];
+      if (!target) return prev;
+      const derived =
+        target.isExpanded !== undefined
+          ? target.isExpanded
+          : activeKey !== null && groupKey(target) === activeKey;
+      const willExpand = !derived;
+
+      const next = prev.map((g, i) => {
         if (i !== index) return g;
-        const derived =
-          g.isExpanded !== undefined
-            ? g.isExpanded
-            : activeKey !== null && groupKey(g) === activeKey;
         return { ...g, isExpanded: !derived };
       });
+
+      if (
+        willExpand &&
+        tutorialEngaged &&
+        tutorial?.step.id === 'expand_conversation' &&
+        groupKey(target) === TUTORIAL_TEST_CONVERSATION_ID
+      ) {
+        queueMicrotask(() => tutorial.markActionFired('expand-conversation'));
+      }
+
+      return next;
     });
   };
 
-  const patchInteractionCaches = (
+  const updateInteractionCaches = (
     updater: (prev: Interaction[] | undefined) => Interaction[] | undefined
-  ) => {
-    queryClient.setQueriesData<Interaction[]>(
-      { queryKey: [...queryKeys.interactions, 'bootstrap'] },
-      updater
-    );
-    queryClient.setQueryData<Interaction[]>(queryKeys.interactions, updater);
-  };
+  ) => patchInteractionCaches(queryClient, updater);
 
-  /** Drop cached interactions tied to a conversation row the API no longer has (stale client state). */
   useEffect(() => {
     if (!isConnected) return;
     for (let i = 0; i < conversationQueries.length; i++) {
       const q = conversationQueries[i];
-      const id = conversationIds[i];
+      const id = apiConversationIds[i];
       if (!id?.trim() || !q?.isError) continue;
       const err = q.error;
       if (!isAxiosError(err) || err.response?.status !== 404) continue;
       const cid = id.trim();
-      setExtraBootstrapConversationIds(prev => prev.filter(x => x.trim() !== cid));
+      pruneExtraBootstrapConversationId(cid);
       queryClient.setQueriesData<Interaction[]>(
         { queryKey: [...queryKeys.interactions, 'bootstrap'] },
         prev => (prev ?? []).filter(i => (i.conversation_id?.trim() ?? '') !== cid)
@@ -401,12 +346,24 @@ export function useInteractionPanel() {
       );
       queryClient.removeQueries({ queryKey: queryKeys.conversationById(cid) });
     }
-  }, [isConnected, conversationQueries, conversationIds, queryClient]);
+  }, [
+    isConnected,
+    conversationQueries,
+    apiConversationIds,
+    queryClient,
+    pruneExtraBootstrapConversationId,
+  ]);
 
   const handleDeleteInteraction = async (interactionId: string) => {
+    if (isTutorialTestId(interactionId)) {
+      tutorial?.removeTutorialInteraction(interactionId);
+      showToast('Interaction deleted', 'success');
+      setArmedInteractionDeleteId(null);
+      return;
+    }
     try {
       await interactionsApi.delete(interactionId);
-      patchInteractionCaches(previous => (previous ?? []).filter(i => i.id !== interactionId));
+      updateInteractionCaches(previous => (previous ?? []).filter(i => i.id !== interactionId));
 
       showToast('Interaction deleted', 'success');
       setArmedInteractionDeleteId(null);
@@ -418,6 +375,12 @@ export function useInteractionPanel() {
   };
 
   const handleDeleteConversation = async (conversationId: string) => {
+    if (isTutorialTestId(conversationId)) {
+      tutorial?.removeTutorialConversation();
+      showToast('Conversation deleted', 'success');
+      setArmedConversationDeleteId(null);
+      return;
+    }
     try {
       const group = conversationGroups.find(
         g => g.conversation?.id === conversationId || groupKey(g) === conversationId
@@ -430,8 +393,8 @@ export function useInteractionPanel() {
 
       await conversationsApi.delete(conversationId);
       const cid = conversationId.trim();
-      setExtraBootstrapConversationIds(prev => prev.filter(x => x.trim() !== cid));
-      patchInteractionCaches(previous =>
+      pruneExtraBootstrapConversationId(cid);
+      updateInteractionCaches(previous =>
         (previous ?? []).filter(i => (i.conversation_id?.trim() ?? '') !== cid)
       );
       queryClient.removeQueries({ queryKey: queryKeys.conversationById(conversationId) });
@@ -439,7 +402,7 @@ export function useInteractionPanel() {
         queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
         prev => (prev ?? []).filter(c => c.id !== conversationId)
       );
-      void queryClient.invalidateQueries({ queryKey: queryKeys.interactions });
+      retryInteractions();
 
       showToast('Conversation deleted', 'success');
       setArmedConversationDeleteId(null);
@@ -464,14 +427,14 @@ export function useInteractionPanel() {
           }
         })
       );
-      setExtraBootstrapConversationIds([]);
-      patchInteractionCaches(() => []);
+      clearExtraBootstrapConversationIds();
+      updateInteractionCaches(() => []);
       removeAllConversationQueries(queryClient);
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.interactions });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
+      queryClient.setQueryData<Conversation[]>(
+        queryKeys.conversationsRecent(INTERACTION_PANEL_RECENT_LIMIT),
+        [],
+      );
+      retryInteractions();
       showToast('All interactions cleared', 'success');
     } catch (error) {
       console.error('Failed to clear:', error);
@@ -479,11 +442,37 @@ export function useInteractionPanel() {
     }
   };
 
-  const getPersonDisplay = (personId: string): { label: string; index: number } => {
+  const personsSortedByCreated = useMemo(
+    () =>
+      Array.from(personsById.values()).sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      ),
+    [personsById]
+  );
+
+  const positionByPersonId = useMemo(() => {
+    const m = new Map<string, number>();
+    personsSortedByCreated.forEach((p, i) => m.set(p.id, i + 1));
+    return m;
+  }, [personsSortedByCreated]);
+
+  const getPersonDisplay = (
+    personId: string
+  ): { label: string; position: number; isUser: boolean } => {
     const person = personsById.get(personId);
-    if (person?.name) return { label: person.name, index: person.index };
-    if (person?.index !== undefined) return { label: `Person ${person.index}`, index: person.index };
-    return { label: 'Loading...', index: 1 };
+    const position = positionByPersonId.get(personId) ?? 0;
+    const isUser = person?.is_user ?? false;
+    if (person?.name) return { label: person.name, position, isUser };
+    if (person) return { label: isUser ? 'You' : `Person ${position}`, position, isUser };
+    return { label: 'Loading...', position: 0, isUser: false };
+  };
+
+  const getPersonColor = (personId: string) => {
+    let hash = 0;
+    for (let i = 0; i < personId.length; i++) {
+      hash = (hash * 31 + personId.charCodeAt(i)) | 0;
+    }
+    return PERSON_COLOR_SHADES[Math.abs(hash) % PERSON_COLOR_SHADES.length];
   };
 
   return {
@@ -503,5 +492,6 @@ export function useInteractionPanel() {
     handleDeleteConversation,
     handleClearAll,
     getPersonDisplay,
+    getPersonColor,
   };
 }

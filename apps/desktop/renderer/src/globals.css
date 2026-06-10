@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../../../../packages/ui/src/components/settings/glass.css";
 
 @layer utilities {
   .font-primary {
@@ -25,13 +26,24 @@
   --accent-color: #00cc6a;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 html {
   font-size: 17px;
 }
 
 body {
   font-family: "Space Grotesk", system-ui, sans-serif;
-  overflow-x: hidden;
+  overflow: hidden;
+  background-color: #09090b;
+}
+
+#root {
+  min-height: 0;
 }
 
 ::-webkit-scrollbar {

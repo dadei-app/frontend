@@ -1,18 +1,23 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { isAxiosError } from 'axios';
+import { useMutation } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@dadei/ui/lib/api/http/client';
 import { authApi } from '@dadei/ui/lib/api/auth';
+import { networkApi, type NetworkUpdate } from '@dadei/ui/lib/api/network';
 import { webTokenStore } from '@dadei/ui/lib/auth/webTokenStore';
 import { AuthTokens, LoginCredentials, RegisterData, UserMe } from '@dadei/ui/types/auth.types';
-import { useQueryClient } from '@tanstack/react-query';
-import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/queryHooks';
+import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/cacheUtils';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
+  isLoggingOut: boolean;
   user: UserMe | null;
+  updateNetwork: (payload: NetworkUpdate) => Promise<void>;
+  isUpdatingNetwork: boolean;
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
@@ -61,6 +66,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [user, setUser] = useState<UserMe | null>(null);
 
   const tokensRef = useRef<AuthTokens | null>(null);
@@ -83,6 +89,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
     }
   }, [queryClient]);
+
+  const updateNetworkMutation = useMutation({
+    mutationFn: (payload: NetworkUpdate) => networkApi.update(payload),
+    onSuccess: data => {
+      setUser(prev => (prev ? { ...prev, name: data.name, timezone: data.timezone } : prev));
+      queryClient.setQueryData<UserMe | undefined>(queryKeys.authMe, prev =>
+        prev ? { ...prev, name: data.name, timezone: data.timezone } : prev,
+      );
+    },
+  });
+
+  const updateNetwork = useCallback(
+    async (payload: NetworkUpdate) => {
+      await updateNetworkMutation.mutateAsync(payload);
+    },
+    [updateNetworkMutation],
+  );
 
   // Setup axios interceptors once; read tokens from tokensRef so Authorization is never stale.
   useEffect(() => {
@@ -256,6 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [applyTokens, refreshUser]);
 
   const logout = useCallback(async () => {
+    setIsLoggingOut(true);
     try {
       await clearAllStoredTokens();
 
@@ -268,13 +292,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Logged out successfully');
     } catch (error) {
       console.error('Logout error:', error);
+    } finally {
+      setIsLoggingOut(false);
     }
   }, [applyTokens, queryClient]);
 
   const saveTokens = useCallback(async (newTokens: AuthTokens) => {
-    await persistTokens(newTokens.accessToken, newTokens.refreshToken);
     applyTokens(newTokens);
     setIsAuthenticated(true);
+    await persistTokens(newTokens.accessToken, newTokens.refreshToken);
     await refreshUser();
   }, [applyTokens, refreshUser]);
 
@@ -287,7 +313,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         isAuthenticated,
         isLoading,
+        isLoggingOut,
         user,
+        updateNetwork,
+        isUpdatingNetwork: updateNetworkMutation.isPending,
         login,
         register,
         logout,

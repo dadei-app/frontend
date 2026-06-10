@@ -43,7 +43,7 @@ To swap in a custom wake word, replace the classifier ONNX in `models/` and upda
 After wake (or manual start), PCM16 chunks stream to the backend over the realtime WebSocket. The client does **not** run Silero VAD or any other neural speech-activity model.
 
 - **Streaming:** `AudioContext` downsamples to 16 kHz mono and sends `command_audio_*` messages
-- **End-of-utterance:** RMS threshold on the mic analyser (`COMMAND_SPEECH_RMS` + `COMMAND_UTTERANCE_END_SILENCE_MS` in `packages/ui/src/lib/voice/voiceConstants.ts`)
+- **End-of-utterance:** RMS threshold on the mic analyser (`COMMAND_SPEECH_RMS` + `COMMAND_UTTERANCE_END_SILENCE_MS` in `packages/ui/src/lib/voice/session/constants.ts`)
 - **Follow-up window:** after the assistant responds, a timed follow-up state lets the user continue without saying the wake word again
 
 ### Transcript wake-word fallback

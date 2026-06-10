@@ -1,6 +1,6 @@
 {
   "name": "dadei-desktop",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "author": {
     "name": "Ankur Desai",
     "email": "ardusa05@gmail.com",
@@ -17,13 +17,13 @@
   "dependencies": {
     "@dadei/ui": "*",
     "axios": "^1.13.2",
-    "brightness": "^2.2.0",
     "clsx": "^2.1.1",
     "dotenv": "^17.2.3",
+    "easy-volume": "^1.2.0",
+    "electron-store": "^8.2.0",
     "electron-updater": "^6.8.3",
     "framer-motion": "^12.23.24",
     "keytar": "^7.9.0",
-    "loudness": "^0.4.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-router-dom": "^7.9.5",
@@ -41,15 +41,12 @@
     "@vitejs/plugin-react": "^5.1.1",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
-    "electron": "^39.8.8",
+    "electron": "^39.8.10",
     "electron-builder": "^26.0.12",
     "rimraf": "^6.1.2",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^7.2.2",
     "wait-on": "^9.0.3"
-  },
-  "overrides": {
-    "trim-newlines": "^3.0.1"
   }
 }

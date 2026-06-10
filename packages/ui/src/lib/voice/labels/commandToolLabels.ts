@@ -24,11 +24,11 @@ const TOOL_LABELS: Record<string, string> = {
   maps_distance_matrix: 'Simulating a trip',
 
   // Calendar
-  calendar_create_event: 'Creating an event',
-  calendar_list_events: 'Checking the calendar',
-  calendar_get_event: 'Loading an event',
-  calendar_update_event: 'Updating an event',
-  calendar_delete_event: 'Deleting an event',
+  calendar_create: 'Creating a calendar event',
+  calendar_list: 'Checking the calendar',
+  calendar_get: 'Loading a calendar event',
+  calendar_update: 'Updating a calendar event',
+  calendar_delete: 'Deleting a calendar event',
 
   // Gmail
   gmail_send: 'Sending an email',
@@ -89,9 +89,6 @@ const TOOL_LABELS: Record<string, string> = {
   media_next_track: 'Skipping to the next track',
   media_previous_track: 'Going back a track',
   media_stop: 'Stopping playback',
-  set_device_brightness: 'Adjusting the brightness',
-  device_brightness_up: 'Brightening the screen',
-  device_brightness_down: 'Dimming the screen',
   toggle_dark_mode: 'Toggling dark mode',
   lock_device: 'Locking the device',
   sleep_device: 'Putting the device to sleep',
@@ -100,6 +97,10 @@ const TOOL_LABELS: Record<string, string> = {
   minimize_focused_window: 'Minimizing the window',
   toggle_fullscreen: 'Toggling fullscreen',
   dismiss_notifications: 'Clearing notifications',
+  get_now_playing: 'Checking what is playing',
+  get_device_battery: 'Checking the battery',
+  take_device_screenshot: 'Taking a screenshot',
+  toggle_do_not_disturb: 'Toggling do not disturb',
 };
 
 /** Prefix + action suffix fallbacks when a tool is not in TOOL_LABELS. */
@@ -113,11 +114,11 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
     modify_labels: 'Updating email labels',
   },
   calendar_: {
-    list_events: 'Checking my calendar',
-    create_event: 'Adding to my calendar',
-    get_event: 'Looking at that event',
-    update_event: 'Updating my calendar',
-    delete_event: 'Removing from my calendar',
+    list: 'Checking my calendar',
+    create: 'Adding a calendar event',
+    get: 'Looking at that calendar event',
+    update: 'Updating a calendar event',
+    delete: 'Removing a calendar event',
   },
   tasks_: {
     list: 'Checking my tasks',
@@ -167,8 +168,6 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
     volume_up: 'Turning it up',
     volume_down: 'Turning it down',
     volume_mute: 'Muting the volume',
-    brightness_up: 'Brightening the screen',
-    brightness_down: 'Dimming the screen',
   },
   media_: {
     play_pause: 'Toggling playback',

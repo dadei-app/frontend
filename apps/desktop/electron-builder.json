@@ -5,12 +5,6 @@
   "copyright": "Copyright © 2026 Ankur Desai",
   "artifactName": "dadei-${version}-${os}-${arch}.${ext}",
   "afterSign": "scripts/notarize.cjs",
-  "extraResources": [
-    {
-      "from": "resources/updater.html",
-      "to": "."
-    }
-  ],
   "files": [
     "dist/**/*",
     "renderer/dist/**/*",
@@ -22,6 +16,9 @@
     "output": "release"
   },
   "asar": true,
+  "asarUnpack": [
+    "**/node_modules/easy-volume/**/volume.exe"
+  ],
   "publish": {
     "provider": "github",
     "owner": "dadei-app",
@@ -40,7 +37,12 @@
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "entitlements": "resources/entitlements.mac.plist",
-    "entitlementsInherit": "resources/entitlements.mac.inherit.plist"
+    "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
+    "extendInfo": {
+      "NSLocationWhenInUseUsageDescription": "dadei uses your location for timezone and local assistant context.",
+      "NSMicrophoneUsageDescription": "dadei uses the microphone for voice commands and wake word.",
+      "NSScreenCaptureUsageDescription": "dadei captures the screen when you ask for screenshots or window context."
+    }
   },
   "linux": {
     "target": ["AppImage"],

@@ -3,22 +3,11 @@ import { formatForUser } from '@dadei/ui/utils/time';
 import type { ActionOperation, NetworkAction } from '@dadei/ui/types/models.types';
 
 /** Domains that surface approval notification banners. */
-export const NOTIFICATION_ACTION_TYPES = new Set([
-  'calendar_event',
-  'calendar',
-  'task',
-  'todo',
-  'email',
-  'message',
-]);
+export const NOTIFICATION_ACTION_TYPES = new Set(['calendar', 'email']);
 
 const DOMAIN_LABELS: Record<string, string> = {
   calendar: 'Calendar',
-  calendar_event: 'Calendar',
-  todo: 'Task',
-  task: 'Task',
   email: 'Email',
-  message: 'Email',
 };
 
 const OPERATION_LABELS: Record<ActionOperation, string> = {
@@ -119,6 +108,48 @@ export function isNotificationAction(action: Pick<NetworkAction, 'action_type'>)
   return NOTIFICATION_ACTION_TYPES.has(action.action_type);
 }
 
+type ProposedToolPayload = {
+  proposed?: boolean;
+  kind?: string;
+  operation?: string;
+  title?: string;
+};
+
+/** True when a command tool_result summary is the structured proposed-action payload. */
+export function isProposedToolSummary(parsed: Record<string, unknown>): boolean {
+  if (parsed.proposed === true) return true;
+  const message = parsed.message;
+  if (typeof message !== 'string' || !message.trim().startsWith('{')) return false;
+  try {
+    const inner = JSON.parse(message) as Record<string, unknown>;
+    return inner.proposed === true;
+  } catch {
+    return false;
+  }
+}
+
+/** Human line for a proposed-action payload (mirrors backend action_metadata). */
+export function proposedActionHumanLine(payload: ProposedToolPayload): string | null {
+  if (payload.proposed !== true) return null;
+  const kind = (payload.kind ?? 'action').trim().toLowerCase();
+  const title = (payload.title ?? '').trim();
+  const operation = (payload.operation ?? 'create').trim().toLowerCase();
+  if (kind === 'email') {
+    if (operation === 'delete') return 'Prepared to delete an email.';
+    if (title) return `Drafted an email: ${title}.`;
+    return 'Drafted an email.';
+  }
+  if (kind === 'calendar') {
+    if (operation === 'delete') {
+      return title ? `Prepared to cancel ${title}.` : 'Prepared to cancel a calendar event.';
+    }
+    if (title) return `Scheduled ${title}.`;
+    return 'Scheduled a calendar event.';
+  }
+  if (title) return `Prepared ${title}.`;
+  return null;
+}
+
 export function actionDomainLabel(actionType: string): string {
   return DOMAIN_LABELS[actionType] ?? actionType.replace(/_/g, ' ');
 }
@@ -178,9 +209,45 @@ export function actionBannerMeta(action: NetworkAction): string | undefined {
   return timeRange ?? undefined;
 }
 
+function normalizeConfidenceValue(raw: number): number | null {
+  if (Number.isNaN(raw)) return null;
+  let value = raw;
+  if (value > 1) {
+    if (value <= 100 && Number.isInteger(value)) {
+      value = value / 100;
+    } else {
+      value = Math.min(1, value);
+    }
+  }
+  if (value < 0 || value > 1 || Number.isNaN(value)) return null;
+  return value;
+}
+
+/** Resolve stored confidence from API fields (0–1 scale). */
+export function resolveMemoryConfidence(memory: {
+  confidence?: number | string | null;
+  details?: Record<string, unknown> | null;
+}): number | null {
+  const candidates: Array<number | string | null | undefined> = [memory.confidence];
+  const detailsConfidence = memory.details?.confidence;
+  if (typeof detailsConfidence === 'number' || typeof detailsConfidence === 'string') {
+    candidates.push(detailsConfidence);
+  }
+
+  for (const candidate of candidates) {
+    if (candidate == null || candidate === '') continue;
+    const parsed = typeof candidate === 'number' ? candidate : Number(candidate);
+    const normalized = normalizeConfidenceValue(parsed);
+    if (normalized != null) return normalized;
+  }
+  return null;
+}
+
 export function formatConfidence(confidence: number | null | undefined): string | null {
-  if (confidence == null || Number.isNaN(confidence)) return null;
-  return `${Math.round(confidence * 100)}% confidence`;
+  if (confidence == null) return null;
+  const normalized = normalizeConfidenceValue(confidence);
+  if (normalized == null) return null;
+  return `${Math.round(normalized * 100)}% confidence`;
 }
 
 export function firstEvidenceQuote(

@@ -1,9 +1,8 @@
-
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings2, LogOut, Users, Mic } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import PeoplePanel from '@dadei/ui/components/PeoplePanel';
+import PersonsPanel from '@dadei/ui/components/PersonsPanel';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 interface HeaderProps {
@@ -23,7 +22,7 @@ export default function Header({
 
   return (
     <header
-      className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/8 bg-zinc-950/55 px-6 py-4 backdrop-blur-md"
+      className="relative z-20 flex shrink-0 items-center justify-between border-b border-white/8 bg-zinc-950 px-6 py-4"
       style={{ minHeight: 'var(--assistant-header-h, 4.75rem)' }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-4 text-lg font-semibold tracking-tight text-emerald-400/95">
@@ -44,9 +43,9 @@ export default function Header({
             'flex h-9 w-9 items-center justify-center rounded-lg border transition-colors duration-200',
             isPeoplePanelOpen
               ? 'border-emerald-500/45 bg-emerald-500/15 text-emerald-300'
-              : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-emerald-500/30 hover:bg-zinc-800/80 hover:text-emerald-300/90'
+              : 'border-white/10 bg-zinc-900/60 text-zinc-400 hover:border-emerald-500/30 hover:bg-zinc-800/80 hover:text-emerald-300/90',
           )}
-          title="People"
+          title="Persons"
         >
           <Users className="h-4 w-4" strokeWidth={2} />
         </button>
@@ -62,6 +61,7 @@ export default function Header({
 
         <button
           type="button"
+          data-tutorial-allow-logout
           onClick={async () => {
             await logout();
             navigate('/login', { replace: true });
@@ -73,7 +73,7 @@ export default function Header({
           <LogOut className="ml-2 h-4 w-4" strokeWidth={2} />
         </button>
 
-        <PeoplePanel
+        <PersonsPanel
           isOpen={isPeoplePanelOpen}
           onClose={() => setIsPeoplePanelOpen(false)}
           excludeElement={peopleButtonRef.current}

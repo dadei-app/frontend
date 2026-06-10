@@ -1,5 +1,6 @@
 export { default as AssistantLayout } from './pages/AssistantLayout';
 export { default as LoginPage } from './pages/LoginPage';
+export { default as OAuthCallback } from './pages/OAuthCallback';
 
 export { AuthProvider, AuthContext, useAuth } from './contexts/AuthContext';
 export { ServiceProvider, ServiceContext, useService } from './contexts/ServiceContext';
@@ -17,10 +18,18 @@ export {
 } from './contexts/NotificationContext';
 export type { ShowBannerInput, BannerItem } from './contexts/NotificationContext';
 
-export { default as LoginOverlay } from './components/modals/LoginModal';
 export { default as Header } from './components/Header';
 export { default as MicrophoneButton } from './components/MicrophoneButton';
 export { default as InteractionPanel } from './components/interaction-panel';
-export { default as Banner } from './components/ui/Banner';
-export { default as Toast } from './components/ui/Toast';
-export { default as PeoplePanel } from './components/PeoplePanel';
+export { default as Banner } from './components/notifications/Banner';
+export { default as Toast } from './components/notifications/Toast';
+export { default as PeoplePanel } from './components/PersonsPanel';
+export { TutorialOverlay } from './components/tutorial/Overlay';
+export {
+  TutorialProvider,
+  useTutorial,
+  useTutorialContext,
+  useTutorialEngaged,
+  useTutorialSettingsTourActive,
+  useTutorialTargetInteractive,
+} from './contexts/TutorialContext';

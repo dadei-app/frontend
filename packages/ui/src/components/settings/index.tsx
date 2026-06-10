@@ -1,0 +1,320 @@
+import { useEffect, useMemo, useState, type ComponentType } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
+import * as Dialog from '@radix-ui/react-dialog';
+import {
+  Brain,
+  Info,
+  Mic,
+  Plug,
+  Power,
+  Sparkles,
+  UserCircle2,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
+import { AmbientShader, preloadAmbientShader } from '@dadei/ui/components/settings/AmbientShader';
+import { AboutPanel } from './about/AboutPanel';
+import { AccountPanel } from './account/AccountPanel';
+import { AudioPanel } from './audio/AudioPanel';
+import { IntegrationsPanel } from './integrations/IntegrationsPanel';
+import { MemoriesPanel } from './memories/MemoriesPanel';
+import { StartupPanel } from './startup/StartupPanel';
+import { SubscriptionPanel } from './subscription/SubscriptionPanel';
+import type { SettingsPanelProps } from './layout';
+import { cn } from '@dadei/ui/lib/shared/cn';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
+import SettingsGuide from '@dadei/ui/components/tutorial/SettingsGuide';
+import { useTutorialContext, useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { veilEase } from '@dadei/ui/lib/shared/motion';
+
+type AssistantSettingsModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+};
+
+type SidebarView =
+  | 'integrations'
+  | 'memories'
+  | 'account'
+  | 'audio'
+  | 'startup'
+  | 'subscription'
+  | 'about';
+
+const ALL_VIEWS: { id: SidebarView; label: string; Icon: LucideIcon }[] = [
+  { id: 'integrations', label: 'Integrations', Icon: Plug },
+  { id: 'memories', label: 'Memories', Icon: Brain },
+  { id: 'account', label: 'Account', Icon: UserCircle2 },
+  { id: 'audio', label: 'Audio', Icon: Mic },
+  { id: 'startup', label: 'Startup', Icon: Power },
+  { id: 'subscription', label: 'Subscription', Icon: Sparkles },
+  { id: 'about', label: 'About', Icon: Info },
+];
+
+function visibleViews(isElectron: boolean) {
+  return ALL_VIEWS.filter(v => {
+    if (v.id === 'startup' && !isElectron) return false;
+    if (v.id === 'about' && !isElectron) return false;
+    return true;
+  });
+}
+
+const PANELS: Record<SidebarView, ComponentType<SettingsPanelProps>> = {
+  integrations: IntegrationsPanel,
+  memories: MemoriesPanel,
+  account: AccountPanel,
+  audio: AudioPanel,
+  startup: StartupPanel,
+  subscription: SubscriptionPanel,
+  about: AboutPanel,
+};
+
+function dialogOverlayClass(isElectron: boolean, tourLite = false) {
+  return cn(
+    'fixed inset-0 z-[240]',
+    tourLite ? 'bg-zinc-950/90' : 'bg-zinc-950/65 backdrop-blur-md',
+    isElectron && 'top-[var(--assistant-titlebar-offset,2rem)]',
+  );
+}
+
+const dialogContentClass =
+  'fixed left-1/2 z-[250] flex w-[min(calc(100%-1.5rem),80rem)] max-w-[80rem] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 shadow-none outline-none focus:outline-none top-[calc(50%+var(--assistant-titlebar-offset,2rem)/2)]';
+
+const dialogContentClassWeb =
+  'fixed left-1/2 top-1/2 z-[250] flex w-[min(calc(100%-1.5rem),80rem)] max-w-[80rem] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 shadow-none outline-none focus:outline-none';
+
+export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
+  const [view, setView] = useState<SidebarView>('integrations');
+  const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
+  const prefersReducedMotion = useReducedMotion();
+  const { isElectron, preventDialogDismissOnTitleBar } = useSystem();
+  const tutorial = useTutorialContext();
+  const tutorialSettingsStep = useTutorialSettingsTourActive();
+
+  const tutorialSectionId = useMemo(() => {
+    if (!tutorialSettingsStep || !tutorial) return null;
+    if (tutorial.step.id === 'settings_intro') return null;
+    const match = tutorial.step.id.match(/^settings_(.+)$/);
+    return match?.[1] ?? null;
+  }, [tutorial?.step.id, tutorialSettingsStep, tutorial]);
+
+  const views = useMemo(() => visibleViews(isElectron), [isElectron]);
+  const isCenteredPanel = view === 'about' || view === 'subscription';
+
+  useEffect(() => {
+    if (!window.electronAPI?.onOpenSettingsSection) return;
+    const off = window.electronAPI.onOpenSettingsSection(({ section, action }) => {
+      if (ALL_VIEWS.some(v => v.id === section)) {
+        const target = section as SidebarView;
+        if (target === 'startup' && !isElectron) return;
+        setView(target);
+        setPendingAction(action);
+        onOpenChange(true);
+      }
+    });
+    return off;
+  }, [onOpenChange, isElectron]);
+
+  useEffect(() => {
+    if (!isElectron && (view === 'startup' || view === 'about')) {
+      setView('integrations');
+    }
+  }, [view, isElectron]);
+
+  useEffect(() => {
+    if (open) return;
+    setView('integrations');
+    setPendingAction(undefined);
+  }, [open]);
+
+  useEffect(() => {
+    if (open && tutorialSettingsStep) {
+      preloadAmbientShader();
+    }
+  }, [open, tutorialSettingsStep]);
+
+  useEffect(() => {
+    if (!tutorialSettingsStep || !open) return;
+    if (tutorialSectionId && ALL_VIEWS.some(v => v.id === tutorialSectionId)) {
+      const sectionId = tutorialSectionId as SidebarView;
+      if (sectionId === 'startup' && !isElectron) return;
+      if (sectionId === 'about' && !isElectron) return;
+      setView(sectionId);
+      setPendingAction(undefined);
+    }
+  }, [tutorialSectionId, tutorialSettingsStep, open, isElectron]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && tutorialSettingsStep) return;
+    onOpenChange(nextOpen);
+  };
+
+  const ActivePanel = PANELS[view];
+
+  const overlayTransition =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { duration: 0.12 }
+      : { duration: 0.28, ease: veilEase };
+  const contentTransition =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { duration: 0.15 }
+      : { duration: 0.32, ease: veilEase };
+  const contentInitial =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { opacity: 0 }
+      : { opacity: 0, scale: 0.97, y: 10 };
+  const contentAnimate = { opacity: 1, scale: 1, y: 0 };
+  const contentExit =
+    prefersReducedMotion || tutorialSettingsStep
+      ? { opacity: 0, transition: { duration: 0.1 } }
+      : {
+          opacity: 0,
+          scale: 0.97,
+          y: 10,
+          transition: { duration: 0.2, ease: veilEase },
+        };
+
+  return (
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+      <AnimatePresence>
+        {open ? (
+          <Dialog.Portal forceMount>
+            <Dialog.Overlay asChild>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={overlayTransition}
+                className={dialogOverlayClass(isElectron, tutorialSettingsStep)}
+              />
+            </Dialog.Overlay>
+            <Dialog.Content
+              data-tutorial-target="settings-panel-root"
+              className={isElectron ? dialogContentClass : dialogContentClassWeb}
+              onPointerDownOutside={preventDialogDismissOnTitleBar}
+              onInteractOutside={preventDialogDismissOnTitleBar}
+            >
+              <motion.div
+                initial={contentInitial}
+                animate={contentAnimate}
+                exit={contentExit}
+                transition={contentTransition}
+                className={cn(
+                  tutorialSettingsStep
+                    ? 'glass-panel-tour conic-border-tour'
+                    : 'glass-panel conic-border',
+                  'relative grid w-full overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]',
+                  isElectron
+                    ? 'h-[min(800px,calc(100vh-var(--assistant-titlebar-offset,2rem)-2rem))]'
+                    : 'h-[min(800px,88dvh)]',
+                  tutorialSettingsStep && tutorial?.step.id === 'settings_intro' && 'ring-2 ring-emerald-400/35',
+                )}
+              >
+                <div className="pointer-events-none relative col-start-1 row-start-1 z-0 min-h-0 overflow-hidden rounded-2xl">
+                  <AmbientShader
+                    className="h-full w-full"
+                    intensity={0.25}
+                    deferGpu={tutorialSettingsStep}
+                  />
+                </div>
+
+                <div className="relative z-10 col-start-1 row-start-1 flex min-h-0 flex-col">
+                  <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
+                    <Dialog.Title className="text-xl font-semibold text-zinc-50">Settings</Dialog.Title>
+                    {!tutorialSettingsStep ? (
+                      <Dialog.Close asChild>
+                        <button
+                          type="button"
+                          className="rounded-lg p-2 text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-200"
+                          aria-label="Close settings"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </Dialog.Close>
+                    ) : (
+                      <span className="rounded-md border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200/90">
+                        Guided tour
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex min-h-0 flex-1 flex-col">
+                    <div className="flex min-h-0 flex-1">
+                      <aside
+                        className={cn(
+                          'w-60 shrink-0 border-r border-white/5 bg-zinc-950/30 p-4',
+                          tutorialSettingsStep && 'relative',
+                        )}
+                      >
+                        <nav className="space-y-1">
+                          {views.map(({ id, label, Icon }) => {
+                            const isActiveSection = view === id;
+                            const isTutorialHighlight =
+                              tutorialSettingsStep && tutorialSectionId === id;
+                            return (
+                              <button
+                                key={id}
+                                type="button"
+                                data-tutorial-target={`settings-section-${id}`}
+                                onClick={() => {
+                                  if (tutorialSettingsStep) return;
+                                  setView(id);
+                                  setPendingAction(undefined);
+                                }}
+                                className={cn(
+                                  'emerald-glow relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-base transition',
+                                  isActiveSection
+                                    ? 'bg-emerald-500/10 text-emerald-200'
+                                    : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+                                  tutorialSettingsStep &&
+                                    tutorialSectionId &&
+                                    !isTutorialHighlight &&
+                                    'opacity-45',
+                                  isTutorialHighlight &&
+                                    'bg-emerald-500/15 text-emerald-100 opacity-100 ring-2 ring-emerald-400/45 ring-offset-1 ring-offset-zinc-950/80',
+                                )}
+                              >
+                                {isTutorialHighlight ? (
+                                  <span
+                                    aria-hidden
+                                    className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)]"
+                                  />
+                                ) : null}
+                                <Icon className="h-5 w-5 shrink-0" />
+                                <span>{label}</span>
+                              </button>
+                            );
+                          })}
+                        </nav>
+                      </aside>
+
+                      <main
+                        className={cn(
+                          'flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none p-4 sm:p-5',
+                          isCenteredPanel && 'items-center justify-center',
+                          tutorialSettingsStep &&
+                            tutorialSectionId &&
+                            'ring-1 ring-inset ring-emerald-500/15',
+                        )}
+                      >
+                        <div className="flex min-h-0 w-full flex-1 flex-col">
+                          <ActivePanel
+                            pendingAction={pendingAction}
+                            onActionConsumed={() => setPendingAction(undefined)}
+                          />
+                        </div>
+                      </main>
+                    </div>
+
+                    <SettingsGuide />
+                  </div>
+                </div>
+              </motion.div>
+            </Dialog.Content>
+          </Dialog.Portal>
+        ) : null}
+      </AnimatePresence>
+    </Dialog.Root>
+  );
+}

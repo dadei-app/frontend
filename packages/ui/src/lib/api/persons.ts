@@ -63,4 +63,5 @@ export const personsApi = {
     const endpoint = buildEndpoint(ENDPOINTS.PERSON_BY_ID, { personId });
     await api.delete(endpoint);
   },
+
 };

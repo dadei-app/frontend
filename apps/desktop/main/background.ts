@@ -1,21 +1,39 @@
 import './env';
+import { configureGeolocationApiKey } from './geolocation-config';
+
+configureGeolocationApiKey();
 import { app, BrowserWindow, dialog, ipcMain, Menu, type WebContents } from 'electron';
 import path from 'path';
-import { closeUpdaterSplashWindow, createUpdaterSplashWindow } from './updater-window';
-import { getBackendVersionGate, isUpdateInstallInProgress, runPackagedStartupFlow } from './updater';
+import {
+  emitBootstrapState,
+  getBackendVersionGate,
+  getLastBootstrapState,
+  isUpdateInstallInProgress,
+  replayBootstrapState,
+  runPackagedStartupFlow,
+} from './updater';
 import { TokenStorage } from './auth/token-storage';
 import { handleGoogleOAuth } from './auth/oauth-handler';
 import { registerDeviceControlIpcHandlers } from './device-control';
+import { buildApplicationMenu } from './menu';
+import { isAppQuitting, setAppQuitting } from './app-quit';
+import { registerSettingsIpc } from './settings-ipc';
+import { configureSessionPermissions } from './session-permissions';
+import { getStartup } from './settings-store';
+import { setTrayMainWindow, syncTrayFromSettings } from './tray';
 
 const isDev = process.env.NODE_ENV === 'development';
 
 /** Dev: local Vite dev server for the desktop renderer (port must match renderer/vite.config.ts). */
 const RENDERER_DEV_PORT = process.env.RENDERER_DEV_PORT || '59247';
-const RENDERER_DEV_URL = `http://localhost:${RENDERER_DEV_PORT}`;
+const RENDERER_DEV_URL = `http://127.0.0.1:${RENDERER_DEV_PORT}`;
 
 let mainWindow: BrowserWindow | null = null;
 
 const isDarwin = process.platform === 'darwin';
+
+/** Match renderer title strip + Electron titleBarOverlay.height (win32/linux). */
+const TITLE_BAR_HEIGHT = 32;
 
 function windowFromContents(contents: WebContents): BrowserWindow | null {
   return BrowserWindow.fromWebContents(contents) ?? null;
@@ -30,10 +48,17 @@ function createWindow() {
     ...(isDarwin
       ? {
           titleBarStyle: 'hiddenInset' as const,
-          // Align with our slim title strip (see DesktopTitleBarStrip mac height).
           trafficLightPosition: { x: 16, y: 8.5 },
         }
-      : { frame: false }),
+      : {
+          // Window Controls Overlay: native min/max/close; renderer draws drag strip only.
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: {
+            color: '#09090b',
+            symbolColor: '#a1a1aa',
+            height: TITLE_BAR_HEIGHT,
+          },
+        }),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -48,17 +73,45 @@ function createWindow() {
     mainWindow?.webContents.send('window:maximized-changed', false);
   });
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    replayBootstrapState();
+  });
+
   if (isDev) {
     mainWindow.loadURL(RENDERER_DEV_URL);
   } else {
     mainWindow.loadFile(path.join(__dirname, '../../renderer/dist/index.html'));
   }
 
+  setTrayMainWindow(mainWindow);
+
+  mainWindow.on('close', event => {
+    if (
+      !isAppQuitting() &&
+      getStartup().minimizeToTray &&
+      mainWindow &&
+      !mainWindow.isDestroyed()
+    ) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+  });
+
   mainWindow.on('closed', () => {
+    setTrayMainWindow(null);
     mainWindow = null;
   });
 
-  mainWindow.setMenuBarVisibility(false);
+  if (getStartup().startMinimized && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.minimize();
+  }
+
+  syncTrayFromSettings();
+
+  const isMacOrLinux = process.platform === 'darwin' || process.platform === 'linux';
+  if (!isMacOrLinux) {
+    mainWindow.setMenuBarVisibility(false);
+  }
 }
 
 ipcMain.handle('auth:store-tokens', async (_, accessToken: string, refreshToken: string) => {
@@ -157,8 +210,17 @@ ipcMain.handle('window:is-maximized', (event) => {
 
 registerDeviceControlIpcHandlers();
 
+ipcMain.handle('bootstrap:get-state', () => getLastBootstrapState());
+
 app.whenReady().then(async () => {
-  Menu.setApplicationMenu(null);
+  configureSessionPermissions();
+
+  const menu = buildApplicationMenu();
+  Menu.setApplicationMenu(menu ?? null);
+
+  registerSettingsIpc();
+
+  createWindow();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -167,33 +229,23 @@ app.whenReady().then(async () => {
   });
 
   if (!app.isPackaged) {
-    const gate = await getBackendVersionGate();
-    if (gate.mandatoryMismatch) {
-      dialog.showErrorBox(
-        'Update required',
-        `This build (v${app.getVersion()}) is not compatible with the server (${gate.serverVersion ?? 'unknown'}). Align the desktop version with the server major version.`,
-      );
-      app.quit();
-      return;
-    }
-    createWindow();
+    emitBootstrapState({ phase: 'ready', appVersion: app.getVersion() });
+    void (async () => {
+      const gate = await getBackendVersionGate();
+      if (gate.mandatoryMismatch) {
+        dialog.showErrorBox(
+          'Update required',
+          `This build (v${app.getVersion()}) is not compatible with the server (${gate.serverVersion ?? 'unknown'}). Align the desktop version with the server major version.`,
+        );
+        app.quit();
+      }
+    })();
     return;
   }
 
-  await createUpdaterSplashWindow();
-  const outcome = await runPackagedStartupFlow();
+  emitBootstrapState({ phase: 'booting', appVersion: app.getVersion() });
 
-  if (outcome === 'launch_main') {
-    closeUpdaterSplashWindow();
-    createWindow();
-    return;
-  }
-
-  if (outcome === 'quit_for_install') {
-    return;
-  }
-
-  // quit_manual: splash stays open with Open releases / Quit until the user exits.
+  void runPackagedStartupFlow();
 });
 
 app.on('window-all-closed', () => {
@@ -207,6 +259,7 @@ app.on('before-quit', async (event) => {
     return;
   }
 
+  setAppQuitting();
   event.preventDefault();
 
   const forceQuitTimeout = setTimeout(() => {

@@ -4,7 +4,7 @@ export const API_CONFIG = {
     INTERACTION: 30000,
     SERVICE_STOP: 10000,
     /** Wake-word claim can queue behind Whisper / passive ingest on a single API worker. */
-    ASSISTANT_MODE: 30000,
+    COMMAND_MODE: 30000,
   },
 
   RETRY: {
@@ -25,6 +25,8 @@ export const ENDPOINTS = {
   /** Browser redirect flow (backend must implement). */
   AUTH_GOOGLE_WEB_LOGIN: '/auth/google/web/login',
   AUTH_ME: '/auth/me',
+  TUTORIAL_COMPLETE: '/service/tutorial/complete',
+  INTRODUCTION_TEXT: '/service/introduction/text',
 
   // Service
   SERVICE_CLIENTS: '/service/clients',
@@ -32,8 +34,8 @@ export const ENDPOINTS = {
   SERVICE_CLIENT_BY_ID: '/service/clients/:clientId',
   SERVICE_NETWORK_ENABLE: '/service/network/enable',
   SERVICE_NETWORK_DISABLE: '/service/network/disable',
-  SERVICE_ASSISTANT_MODE_CLAIM: '/service/network/assistant-mode/claim',
-  SERVICE_ASSISTANT_MODE_RELEASE: '/service/network/assistant-mode/release',
+  SERVICE_COMMAND_MODE_CLAIM: '/service/network/command-mode/claim',
+  SERVICE_COMMAND_MODE_RELEASE: '/service/network/command-mode/release',
 
   // Interactions
   INTERACTIONS: '/interactions',
@@ -43,7 +45,6 @@ export const ENDPOINTS = {
   // Persons
   PERSONS: '/persons',
   PERSON_BY_ID: '/persons/:personId',
-
   // Conversations
   CONVERSATIONS: '/conversations',
   CONVERSATION_BY_ID: '/conversations/:conversationId',
@@ -53,6 +54,5 @@ export const ENDPOINTS = {
   MEMORY_BY_ID: '/memories/:memoryId',
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
-  COMMAND: '/service/command',
   COMMAND_TEXT: '/service/command/text',
 } as const;

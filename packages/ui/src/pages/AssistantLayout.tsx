@@ -1,17 +1,24 @@
 import { useLayoutEffect, useState, type CSSProperties } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
-import { useService } from '@dadei/ui/contexts/ServiceContext';
+import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
+import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
+import {
+  TutorialProvider,
+  useTutorialContext,
+  useTutorialEngaged,
+  useTutorialSettingsTourActive,
+} from '@dadei/ui/contexts/TutorialContext';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { CommandBubbleStackHost } from '@dadei/ui/contexts/CommandContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
-import AssistantSettingsModal from '@dadei/ui/components/modals/SettingsModal';
-import { DesktopTitleBarStrip } from '@dadei/ui/components/DesktopWindowChrome';
-import { useMemoriesQuery } from '@dadei/ui/lib/query/queryHooks';
-import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS, isElectronDesktop } from '@dadei/ui/lib/platform/electronWindowChrome';
+import AssistantSettingsModal from '@dadei/ui/components/settings';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { Mic } from 'lucide-react';
@@ -19,60 +26,85 @@ import { Mic } from 'lucide-react';
 const ASSISTANT_HINT_ROW =
   'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
 
-const KEY_HINT_CLASS =
-  'rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40';
-
-function SpokenWakeWord({
-  children,
-  variant,
-}: {
-  children: string;
-  variant: 'dadei' | 'assistant';
-}) {
-  const quoteClass =
-    variant === 'dadei' ? 'text-emerald-400/55' : 'text-sky-400/55';
-
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-0.5 rounded-lg border px-2.5 py-1 font-primary text-[15px] font-semibold tracking-tight shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]',
-        variant === 'dadei'
-          ? 'border-emerald-400/25 bg-emerald-500/10 text-emerald-50'
-          : 'border-sky-400/25 bg-sky-500/10 text-sky-50',
-      )}
-    >
-      <span className={cn('select-none text-[13px] font-normal leading-none', quoteClass)} aria-hidden>
-        {'\u201c'}
-      </span>
-      {children}
-      <span className={cn('select-none text-[13px] font-normal leading-none', quoteClass)} aria-hidden>
-        {'\u201d'}
-      </span>
-    </span>
-  );
-}
-
 /**
  * Authenticated assistant shell: layout, theme tokens, overlays (settings), and realtime hooks.
  */
-export default function AssistantLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { isConnected, isServiceEnabled } = useService();
-  const { state } = useCommand();
-  const showWakeHint = state === 'idle' && isServiceEnabled;
+function TutorialSettingsBridge({
+  settingsOpen,
+  setSettingsOpen,
+}: {
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
+}) {
+  const tutorial = useTutorialContext();
+  const settingsTourActive = useTutorialSettingsTourActive();
+  useLayoutEffect(() => {
+    if (settingsTourActive && tutorial?.openSettingsForTutorial) {
+      setSettingsOpen(true);
+    }
+  }, [settingsTourActive, tutorial?.openSettingsForTutorial, setSettingsOpen, tutorial]);
+
+  useLayoutEffect(() => {
+    if (!tutorial) return;
+    if (settingsOpen === false) return;
+    if (!isSettingsTutorialStep(tutorial.step.id)) {
+      setSettingsOpen(false);
+    }
+  }, [tutorial?.step.id, settingsOpen, setSettingsOpen, tutorial]);
+
+  return null;
+}
+
+function TutorialPersonsBridge({
+  setIsPeoplePanelOpen,
+}: {
+  setIsPeoplePanelOpen: (open: boolean) => void;
+}) {
+  const tutorial = useTutorialContext();
+  const tutorialEngaged = useTutorialEngaged();
+  useLayoutEffect(() => {
+    if (!tutorialEngaged || !tutorial) {
+      setIsPeoplePanelOpen(false);
+      return;
+    }
+    if (tutorial.step.openPersonsPanel || tutorial.step.id === 'delete_person') {
+      setIsPeoplePanelOpen(true);
+    }
+  }, [
+    tutorialEngaged,
+    tutorial?.step.openPersonsPanel,
+    tutorial?.step.id,
+    setIsPeoplePanelOpen,
+    tutorial,
+  ]);
+  return null;
+}
+
+function assistantLoadingSubtitle(
+  isBootstrapReady: boolean,
+  isLoading: boolean,
+  isLoggingOut: boolean,
+  meLoading: boolean,
+): string | undefined {
+  if (isLoggingOut) return 'Signing out…';
+  if (isBootstrapReady && isLoading) return 'Signing in…';
+  if (isBootstrapReady && meLoading) return 'Loading your profile…';
+  return undefined;
+}
+
+function AssistantLayoutShell() {
+  const { isAuthenticated, isLoading, isLoggingOut } = useAuth();
+  const { isBootstrapReady, formatHotkey, viewportFillClass } = useSystem();
+  const tutorial = useTutorialContext();
+  const tutorialEngaged = useTutorialEngaged();
+  const needsTutorial = useNeedsTutorial();
+  const elevateNotifications = tutorialEngaged && tutorial?.step.id === 'layout_tour';
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const location = useLocation();
 
-  const sessionDataEnabled = isAuthenticated && !isLoading;
-  useMemoriesQuery(sessionDataEnabled);
-
   useLayoutEffect(() => {
     const root = document.documentElement;
-    root.style.setProperty(
-      '--assistant-titlebar-offset',
-      isElectronDesktop() ? DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS : '0px',
-    );
     root.style.setProperty('--assistant-header-h', '4.75rem');
     root.style.setProperty('--assistant-mic-h', '10rem');
     root.style.setProperty('--assistant-mic-half', '5rem');
@@ -80,7 +112,6 @@ export default function AssistantLayout() {
     /** Reserved strip at panel bottom for hint overlays (does not affect mic centering). */
     root.style.setProperty('--assistant-hints-reserve', '4.75rem');
     return () => {
-      root.style.removeProperty('--assistant-titlebar-offset');
       root.style.removeProperty('--assistant-header-h');
       root.style.removeProperty('--assistant-mic-h');
       root.style.removeProperty('--assistant-mic-half');
@@ -89,27 +120,16 @@ export default function AssistantLayout() {
     };
   }, []);
 
-  if (isLoading) {
+  if (isLoggingOut) {
+    return <LoadingScreen visible subtitleOverride="Signing out…" />;
+  }
+
+  if (!isBootstrapReady || isLoading) {
     return (
-      <div className="flex h-screen flex-col overscroll-none bg-zinc-950">
-        {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
-        <div className="relative flex min-h-0 flex-1 items-center justify-center">
-          <div
-            className="absolute inset-0 opacity-40"
-            style={{
-              background:
-                'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(16,185,129,0.25), transparent), radial-gradient(circle at 100% 0%, rgba(6,182,212,0.12), transparent 50%)',
-            }}
-            aria-hidden
-          />
-          <div className="relative flex flex-col items-center gap-4">
-            <Mic className="h-16 w-16 animate-pulse text-emerald-400/90" strokeWidth={1.5} />
-            <p className="text-lg font-medium tracking-tight text-zinc-300">
-              <span className="font-secondary">Loading dadei…</span>
-            </p>
-          </div>
-        </div>
-      </div>
+      <LoadingScreen
+        visible={isBootstrapReady ? true : undefined}
+        subtitleOverride={assistantLoadingSubtitle(isBootstrapReady, isLoading, false, false)}
+      />
     );
   }
 
@@ -121,7 +141,11 @@ export default function AssistantLayout() {
 
   return (
     <div
-      className="assistant-shell relative flex h-screen flex-col overflow-hidden overscroll-none bg-zinc-950 text-zinc-100"
+      data-tutorial-target="assistant-layout-shell"
+      className={cn(
+        'assistant-shell relative flex flex-col overflow-hidden overscroll-none bg-zinc-950 text-zinc-100',
+        viewportFillClass,
+      )}
       style={
         {
           ['--assistant-accent' as string]: 'rgb(52 211 153)',
@@ -141,7 +165,6 @@ export default function AssistantLayout() {
       />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
-        {isElectronDesktop() ? <DesktopTitleBarStrip /> : null}
         <Header
           isPeoplePanelOpen={isPeoplePanelOpen}
           setIsPeoplePanelOpen={setIsPeoplePanelOpen}
@@ -156,10 +179,14 @@ export default function AssistantLayout() {
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
             }}
           >
-            <div className="pointer-events-none absolute top-4 left-10 z-30 w-[calc(100%-5rem)]">
+            <div
+              className={cn(
+                'pointer-events-none absolute top-4 left-10 w-[calc(100%-5rem)]',
+                elevateNotifications ? 'z-[10002]' : 'z-30',
+              )}
+            >
               <BannerStackHost />
             </div>
-            <ToastStackHost className="fixed right-5 bottom-5 z-180" />
             <div className="relative min-h-0 flex-1 overflow-hidden">
               {/* Mic: geometric center of the left panel; hints are out of flow. */}
               <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
@@ -174,26 +201,10 @@ export default function AssistantLayout() {
                 animate={{ opacity: 1 }}
                 className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pb-8 pt-3 text-sm text-zinc-500 font-secondary"
               >
-                <AnimatePresence initial={false}>
-                  {showWakeHint ? (
-                    <motion.p
-                      key="wake-hint"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 4 }}
-                      transition={{ duration: 0.2 }}
-                      className={ASSISTANT_HINT_ROW}
-                    >
-                      <span>Say</span>
-                      <SpokenWakeWord variant="dadei">Dadei</SpokenWakeWord>
-                      <span>or</span>
-                      <SpokenWakeWord variant="assistant">Assistant</SpokenWakeWord>
-                      <span>to start a command</span>
-                    </motion.p>
-                  ) : null}
-                </AnimatePresence>
                 <p className={ASSISTANT_HINT_ROW}>
-                  <kbd className={KEY_HINT_CLASS}>Space</kbd>
+                  <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
+                    {formatHotkey()}
+                  </kbd>
                   <span>to toggle</span>
                 </p>
               </motion.div>
@@ -208,7 +219,51 @@ export default function AssistantLayout() {
         </main>
       </div>
 
+      {needsTutorial ? (
+        <>
+          <TutorialSettingsBridge settingsOpen={settingsOpen} setSettingsOpen={setSettingsOpen} />
+          <TutorialPersonsBridge setIsPeoplePanelOpen={setIsPeoplePanelOpen} />
+        </>
+      ) : null}
       <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
+      <ToastStackHost
+        className={cn('fixed right-5 bottom-5', elevateNotifications ? 'z-[10002]' : 'z-[260]')}
+      />
     </div>
   );
+}
+
+export default function AssistantLayout() {
+  const { isAuthenticated, isLoading, isLoggingOut } = useAuth();
+  const { isBootstrapReady } = useSystem();
+  const meQuery = useAuthMeQuery(isAuthenticated && isBootstrapReady && !isLoading);
+  const needsTutorial = useNeedsTutorial();
+  const meLoading = isAuthenticated && meQuery.isLoading;
+  const showLoading = isLoggingOut || !isBootstrapReady || isLoading || meLoading;
+
+  if (showLoading) {
+    return (
+      <LoadingScreen
+        visible={isLoggingOut || isBootstrapReady ? true : undefined}
+        subtitleOverride={assistantLoadingSubtitle(
+          isBootstrapReady,
+          isLoading,
+          isLoggingOut,
+          meLoading,
+        )}
+      />
+    );
+  }
+
+  if (needsTutorial) {
+    return (
+      <TutorialProvider>
+        <AssistantLayoutShell />
+        <TutorialOverlayContent />
+      </TutorialProvider>
+    );
+  }
+
+  return <AssistantLayoutShell />;
 }
