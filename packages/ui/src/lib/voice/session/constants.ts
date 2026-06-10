@@ -30,17 +30,8 @@ export const COMMAND_TURN_PAIR_LAYOUT_MS = 0.38;
  * Lower RMS = quieter speech counts as active (aura + end-of-utterance timing).
  */
 export const COMMAND_SPEECH_RMS = 0.11;
-/** Sustained silence after speech before ending capture (covers ~1s mid-sentence pauses). */
-export const COMMAND_UTTERANCE_END_SILENCE_MS = 2_000;
-
-/**
- * Introduction capture — quieter speech, longer thinking pauses between phrases.
- * Lower RMS = softer letter-by-letter spelling still counts as active speech.
- */
-export const INTRODUCTION_COMMAND_SPEECH_RMS = 0.065;
-export const INTRODUCTION_FOLLOW_UP_SPEECH_RMS = 0.07;
-/** Longer than command (2s) so the user can pause while recalling / spelling. */
-export const INTRODUCTION_UTTERANCE_END_SILENCE_MS = 4_000;
+/** Sustained silence after speech before ending capture (command + introduction). */
+export const COMMAND_UTTERANCE_END_SILENCE_MS = 3_000;
 /** Analyser level multiplier while capturing a command (mic aura only). */
 export const COMMAND_MIC_LEVEL_GAIN = 2.45;
 

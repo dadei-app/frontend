@@ -638,10 +638,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const cancelProcessing = useCallback(() => {
     if (!COMMAND_PROCESSING_STATES.has(stateRef.current)) return;
 
+    const inIntroduction = introductionModeActiveRef.current;
     commandProcessingEpochRef.current += 1;
     suppressNextTranscriptFinalRef.current = true;
 
-    endIntroductionMode();
+    if (!inIntroduction) {
+      endIntroductionMode();
+    }
     abortActiveStream();
     clearFollowUpTimer();
     clearWakeTimeout();
@@ -658,8 +661,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     resetInterimCaptionState();
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
-    setState('listening');
-    scheduleWakeFalsePositiveRelease();
+    setState(inIntroduction ? 'follow_up' : 'listening');
+    if (!inIntroduction) {
+      scheduleWakeFalsePositiveRelease();
+    }
     const clientId = getRealtimeClientId();
     sendRealtimeMessage({
       type: 'command_inference_cancel',
@@ -847,15 +852,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           followUpCaptureRef.current = false;
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
-          if (
-            introductionModeActiveRef.current &&
-            assistantBubbleTextRef.current.trim()
-          ) {
-            setAssistantBubbleStatus('done');
-            setStateSynced((s) => (s === 'thinking' ? 'responding' : s));
-            queueMicrotask(() => notifyAssistantRevealComplete());
-            break;
-          }
+          commandStreamInFlightRef.current = false;
           if (!assistantBubbleTextRef.current.trim()) {
             if (streamHadOutputRef.current) {
               setAssistantBubbleStatus('revealing');
@@ -877,15 +874,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [
-      claimCommandMode,
-      commitLiveTurnToHistory,
-      endSession,
-      notifyAssistantRevealComplete,
-      queryClient,
-      setAssistantBubbleTextSynced,
-      setStateSynced,
-    ],
+    [endSession, queryClient, setAssistantBubbleTextSynced, setStateSynced],
   );
 
   const submitVisibleCommandText = useCallback(

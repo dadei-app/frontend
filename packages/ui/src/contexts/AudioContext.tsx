@@ -18,9 +18,6 @@ import {
   COMMAND_SPEECH_RMS,
   COMMAND_UTTERANCE_END_SILENCE_MS,
   FOLLOW_UP_SPEECH_RMS,
-  INTRODUCTION_COMMAND_SPEECH_RMS,
-  INTRODUCTION_FOLLOW_UP_SPEECH_RMS,
-  INTRODUCTION_UTTERANCE_END_SILENCE_MS,
 } from '@dadei/ui/lib/voice/session/constants';
 import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
@@ -313,16 +310,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const inCapture =
           stateRef.current === 'listening' || stateRef.current === 'follow_up';
         if (inCapture) {
-          const introCapture = introductionModeRef.current;
-          const followUpSpeechRms = introCapture
-            ? INTRODUCTION_FOLLOW_UP_SPEECH_RMS
-            : FOLLOW_UP_SPEECH_RMS;
-          const commandSpeechRms = introCapture
-            ? INTRODUCTION_COMMAND_SPEECH_RMS
-            : COMMAND_SPEECH_RMS;
-          const utteranceEndSilenceMs = introCapture
-            ? INTRODUCTION_UTTERANCE_END_SILENCE_MS
-            : COMMAND_UTTERANCE_END_SILENCE_MS;
+          const followUpSpeechRms = FOLLOW_UP_SPEECH_RMS;
+          const commandSpeechRms = COMMAND_SPEECH_RMS;
+          const utteranceEndSilenceMs = COMMAND_UTTERANCE_END_SILENCE_MS;
 
           const speaking = level >= followUpSpeechRms;
           if (speaking && !speechActive && stateRef.current === 'follow_up') {
