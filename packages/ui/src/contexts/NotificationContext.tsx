@@ -140,12 +140,22 @@ function useSyncedActionBanners(enabled: boolean): BannerItem[] {
     [queryClient],
   );
 
+  const expireAction = useCallback(
+    (actionId: string) => {
+      queryClient.setQueryData<NetworkAction[]>(queryKeys.actions, (prev) =>
+        (prev ?? []).filter((item) => item.id !== actionId),
+      );
+    },
+    [queryClient],
+  );
+
   return useMemo(() => {
     if (!enabled) return [];
     return networkActionsToBannerItems(normalizeNotificationActions(actions), {
       onReject: rejectAction,
+      onExpire: expireAction,
     });
-  }, [enabled, actions, rejectAction]);
+  }, [enabled, actions, rejectAction, expireAction]);
 }
 
 export function ToastStackHost({ className = '' }: { className?: string }) {
@@ -175,11 +185,6 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
 
   const { actionBanners, manualBanners, dismissBannerById } = ctx;
 
-  const stack = useMemo(
-    () => buildStackBanners(actionBanners, manualBanners),
-    [actionBanners, manualBanners],
-  );
-
   const slotByIdRef = useRef<Map<string, number>>(new Map());
   const prevStackIdsRef = useRef<string[]>([]);
   const lastKnownRef = useRef<Map<string, StackBanner>>(new Map());
@@ -189,10 +194,43 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
   const [, bumpEnterState] = useState(0);
 
   const [exitingIds, setExitingIds] = useState<Set<string>>(() => new Set());
+  const [dismissedBannerIds, setDismissedBannerIds] = useState<Set<string>>(() => new Set());
   const [exitModeById, setExitModeById] = useState<Map<string, BannerExitMode>>(
     () => new Map(),
   );
   const [exitBarrier, setExitBarrier] = useState(false);
+
+  const stack = useMemo(
+    () =>
+      buildStackBanners(actionBanners, manualBanners).filter(
+        (banner) => !dismissedBannerIds.has(banner.id),
+      ),
+    [actionBanners, manualBanners, dismissedBannerIds],
+  );
+
+  useEffect(() => {
+    const liveIds = new Set([
+      ...actionBanners.map((banner) => banner.id),
+      ...manualBanners.map((banner) => banner.id),
+    ]);
+    setDismissedBannerIds((prev) => {
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (liveIds.has(id)) next.add(id);
+      }
+      if (next.size === prev.size) {
+        let unchanged = true;
+        for (const id of prev) {
+          if (!next.has(id)) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) return prev;
+      }
+      return next;
+    });
+  }, [actionBanners, manualBanners]);
   const pingedEnterRef = useRef<Set<string>>(new Set());
   const pendingPingIdsRef = useRef<string[]>([]);
 
@@ -285,13 +323,16 @@ export function BannerStackHost({ className = '' }: { className?: string }) {
   }, []);
 
   const handleExitComplete = useCallback((id: string) => {
-    setExitingIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      if (next.size === 0) {
-        setExitBarrier(false);
-      }
-      return next;
+    flushSync(() => {
+      setDismissedBannerIds((prev) => new Set(prev).add(id));
+      setExitingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        if (next.size === 0) {
+          setExitBarrier(false);
+        }
+        return next;
+      });
     });
     slotByIdRef.current.delete(id);
     mountKeyRef.current.delete(id);

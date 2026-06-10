@@ -1,16 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import {
-  Brain,
-  Inbox,
-  Mic,
-  Monitor,
-  Terminal,
-  WandSparkles,
-  Waves,
-  type LucideIcon,
-} from 'lucide-react';
+import { Brain, Mic, WandSparkles, Waves, type LucideIcon } from 'lucide-react';
+import DesktopMomentum from '@/components/landing/DesktopMomentum';
 import FloatingAppMockup from '@/components/landing/FloatingAppMockup';
 import IntegrationsShowcase from '@/components/landing/IntegrationsShowcase';
 import LaunchConversationIntro from '@/components/landing/LaunchConversationIntro';
@@ -19,20 +11,38 @@ function SectionHeading({
   eyebrow,
   title,
   body,
+  compact = false,
 }: {
   eyebrow: string;
   title: string;
   body: string;
+  compact?: boolean;
 }) {
   return (
     <div className="max-w-4xl">
-      <p className="mb-2 text-md tracking-[0.22em] text-emerald-300/75 font-secondary">
+      <p
+        className={`mb-1.5 tracking-[0.22em] text-emerald-300/75 font-secondary ${
+          compact ? 'text-xs sm:text-sm' : 'text-xs sm:text-md'
+        }`}
+      >
         {eyebrow}
       </p>
-      <h2 className="font-primary text-3xl leading-tight tracking-tight text-zinc-100 sm:text-4xl lg:text-5xl">
+      <h2
+        className={`font-primary leading-tight tracking-tight text-zinc-100 ${
+          compact
+            ? 'text-2xl sm:text-3xl lg:text-4xl'
+            : 'text-2xl sm:text-4xl lg:text-5xl'
+        }`}
+      >
         {title}
       </h2>
-      <p className="mt-5 text-base leading-relaxed text-zinc-300 sm:text-lg font-secondary">{body}</p>
+      <p
+        className={`leading-relaxed text-zinc-300 font-secondary ${
+          compact ? 'mt-3 text-sm sm:mt-4 sm:text-base' : 'mt-4 text-sm sm:mt-5 sm:text-lg'
+        }`}
+      >
+        {body}
+      </p>
     </div>
   );
 }
@@ -65,23 +75,25 @@ export default function LandingPage() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -28, scale: 0.96 }}
             transition={{ duration: 0.35, ease: 'easeOut' }}
-              className="fixed right-4 top-4 z-50 rounded-2xl border border-emerald-100/30 bg-white/8 p-2 shadow-[0_20px_54px_-26px_rgba(16,185,129,0.55),0_0_0_1px_rgba(255,255,255,0.08)_inset] backdrop-blur-2xl sm:right-6 sm:top-5"
+            className="pointer-events-auto fixed right-3 top-3 z-[200] sm:right-5 sm:top-4"
           >
-            <div className="flex items-center gap-2">
-              <Link
-                to="/assistant"
-                  className="rounded-xl border border-emerald-100/35 bg-emerald-300/78 px-3 py-2 text-xs text-zinc-950 font-secondary shadow-[0_10px_24px_-16px_rgba(16,185,129,0.8)] hover:bg-emerald-200/86 sm:text-sm"
-              >
-                open assistant
-              </Link>
-              <a
-                href="https://github.com/dadei-app/frontend/releases/latest"
-                target="_blank"
-                rel="noopener noreferrer"
-                  className="rounded-xl border border-white/20 bg-white/8 px-3 py-2 text-xs text-zinc-100 font-secondary backdrop-blur-xl hover:bg-white/14 sm:text-sm"
-              >
-                download app
-              </a>
+            <div className="landing-dock rounded-xl p-1 sm:rounded-2xl sm:p-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                <Link
+                  to="/assistant"
+                  className="dock-btn dock-btn-primary rounded-lg px-2.5 py-1.5 text-[11px] font-secondary sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm"
+                >
+                  open assistant
+                </Link>
+                <a
+                  href="https://github.com/dadei-app/frontend/releases/latest"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="dock-btn dock-btn-secondary rounded-lg px-2.5 py-1.5 text-[11px] font-secondary sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm"
+                >
+                  download app
+                </a>
+              </div>
             </div>
           </motion.div>
         )}
@@ -90,15 +102,16 @@ export default function LandingPage() {
       <main className="pb-20">
         <LaunchConversationIntro />
 
-        <section id="meet" className="mx-auto w-full max-w-[1240px] px-5 py-14 sm:px-8">
-          <div className="grid items-center gap-12 lg:grid-cols-[1.05fr_0.95fr]">
+        <section id="meet" className="mx-auto w-full max-w-[1240px] px-5 py-8 sm:px-8 sm:py-14">
+          <div className="grid items-center gap-6 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12">
             <div>
               <SectionHeading
+                compact
                 eyebrow="Meet dadei"
                 title="the assistant you forget about, until you need it."
                 body="dadei keeps your context organized across your day, then shows up instantly when you ask for it."
               />
-              <p className="mt-8 max-w-2xl rounded-2xl border border-white/10 bg-zinc-900/60 px-5 py-4 text-md leading-relaxed text-zinc-300 font-secondary">
+              <p className="mt-4 max-w-2xl rounded-xl border border-white/10 bg-zinc-900/60 px-4 py-3 text-sm leading-relaxed text-zinc-300 font-secondary sm:mt-6 sm:rounded-2xl sm:px-5 sm:py-4 sm:text-base">
                 <span className="font-medium text-emerald-200">
                   "who was i just talking to?" "when did i last talk to mark?"
                 </span>{' '}
@@ -144,14 +157,15 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section id="how" className="mx-auto w-full max-w-[1240px] px-5 py-14 sm:px-8">
-          <div className="rounded-4xl border border-emerald-300/15 bg-linear-to-br from-zinc-950 to-zinc-900 p-7 sm:p-10">
+        <section id="how" className="mx-auto w-full max-w-[1240px] px-5 py-8 sm:px-8 sm:py-14">
+          <div className="rounded-3xl border border-emerald-300/15 bg-linear-to-br from-zinc-950 to-zinc-900 p-4 sm:rounded-4xl sm:p-10">
             <SectionHeading
+              compact
               eyebrow="How it works"
               title="from captured moments to real follow-through."
               body="dadei uses ai to organize context, answer recall questions, and turn your requests into reminders, drafts, and follow-ups."
             />
-            <div className="mt-12 grid gap-5 lg:grid-cols-3">
+            <div className="mt-6 grid gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-3">
               {[
                 {
                   step: '01',
@@ -179,15 +193,15 @@ export default function LandingPage() {
                   viewport={{ once: true }}
                   transition={{ duration: 0.45, delay: i * 0.08 }}
                   whileHover={{ y: -5, scale: 1.01 }}
-                  className="relative overflow-hidden rounded-2xl border border-white/10 bg-zinc-900/85 p-6 shadow-[0_20px_50px_-30px_rgba(16,185,129,0.65)]"
+                  className="relative overflow-hidden rounded-xl border border-white/10 bg-zinc-900/85 p-4 shadow-[0_20px_50px_-30px_rgba(16,185,129,0.65)] sm:rounded-2xl sm:p-6"
                 >
-                  <div className="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-emerald-400/20 blur-2xl" />
-                  <span className="text-4xl font-bold text-emerald-300/30">{item.step}</span>
-                  <div className="mt-4 flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/12 text-emerald-200">
-                    <item.icon className="h-5 w-5" aria-hidden />
+                  <div className="pointer-events-none absolute -right-10 -top-10 h-20 w-20 rounded-full bg-emerald-400/20 blur-2xl sm:h-28 sm:w-28" />
+                  <span className="text-2xl font-bold text-emerald-300/30 sm:text-4xl">{item.step}</span>
+                  <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-200 sm:mt-4 sm:h-11 sm:w-11 sm:rounded-xl">
+                    <item.icon className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
                   </div>
-                  <h3 className="mt-4 text-xl text-zinc-100">{item.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-400 font-secondary">{item.body}</p>
+                  <h3 className="mt-2 text-base text-zinc-100 sm:mt-4 sm:text-xl">{item.title}</h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-zinc-400 font-secondary sm:mt-2 sm:text-sm">{item.body}</p>
                 </motion.div>
               ))}
             </div>
@@ -203,41 +217,7 @@ export default function LandingPage() {
           <IntegrationsShowcase />
         </section>
 
-        <section className="mx-auto w-full max-w-[1240px] px-5 pt-14 sm:px-8">
-          <div className="overflow-hidden rounded-4xl border border-emerald-300/25 bg-linear-to-r from-emerald-500/12 via-teal-500/10 to-cyan-500/10 p-8 shadow-[0_36px_90px_-45px_rgba(16,185,129,0.95)] sm:p-12">
-            <div className="grid gap-10 lg:grid-cols-[1fr_auto] lg:items-center">
-              <div>
-                <p className="text-md tracking-[0.2em] text-emerald-200/80 font-secondary">
-                  Desktop first momentum
-                </p>
-                <h2 className="mt-2 font-primary text-3xl leading-tight text-zinc-50 sm:text-4xl">
-                  Keep dadei close on your desktop.
-                </h2>
-                <p className="mt-4 max-w-2xl text-base leading-relaxed text-zinc-200/90 font-secondary">
-                  If you are serious about not dropping tasks, start with desktop. It keeps dadei one click
-                  away so capturing and acting on reminders stays fast all day.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {['macOS', 'Windows', 'Linux'].map((os) => (
-                  <div
-                    key={os}
-                    className="min-w-[120px] rounded-2xl border border-white/15 bg-zinc-950/65 px-4 py-4 text-center"
-                  >
-                    {os === 'macOS' ? (
-                      <Inbox className="mx-auto mb-2 h-6 w-6 text-zinc-100" aria-hidden />
-                    ) : os === 'Windows' ? (
-                      <Monitor className="mx-auto mb-2 h-6 w-6 text-zinc-100" aria-hidden />
-                    ) : (
-                      <Terminal className="mx-auto mb-2 h-6 w-6 text-zinc-100" aria-hidden />
-                    )}
-                    <p className="text-sm text-zinc-100 font-secondary">{os}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
+        <DesktopMomentum />
       </main>
 
       <footer className="border-t border-white/10 bg-zinc-950/70 py-10">

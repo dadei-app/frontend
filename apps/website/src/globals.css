@@ -118,3 +118,167 @@ button:disabled {
     border-width: 0px;
   }
 }
+
+@property --holo-shimmer-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes holo-shimmer {
+  to {
+    --holo-shimmer-angle: 360deg;
+  }
+}
+
+.landing-dock {
+  background: rgba(9, 9, 11, 0.2);
+  backdrop-filter: blur(36px) saturate(1.15);
+  -webkit-backdrop-filter: blur(36px) saturate(1.15);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow:
+    0 12px 40px -18px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.dock-btn {
+  position: relative;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.dock-btn-primary {
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  background: rgba(16, 185, 129, 0.14);
+  color: rgba(236, 253, 245, 0.92);
+}
+
+.dock-btn-primary:hover {
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(16, 185, 129, 0.22);
+  color: #ecfdf5;
+}
+
+.dock-btn-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(244, 244, 245, 0.88);
+}
+
+.dock-btn-secondary:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.09);
+  color: #fafafa;
+}
+
+.holo-btn {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.holo-btn::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--holo-shimmer-angle),
+    transparent 0deg,
+    rgba(52, 211, 153, 0.55) 70deg,
+    rgba(6, 182, 212, 0.4) 140deg,
+    transparent 210deg,
+    rgba(16, 185, 129, 0.35) 300deg,
+    transparent 360deg
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: holo-shimmer 6s linear infinite;
+}
+
+.holo-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    125deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    transparent 42%,
+    transparent 58%,
+    rgba(52, 211, 153, 0.08) 100%
+  );
+  pointer-events: none;
+}
+
+.holo-btn:hover {
+  transform: translateY(-1px);
+}
+
+.holo-btn-primary {
+  border: 1px solid rgba(52, 211, 153, 0.42);
+  background: linear-gradient(
+    135deg,
+    rgba(16, 185, 129, 0.32) 0%,
+    rgba(6, 182, 212, 0.18) 48%,
+    rgba(52, 211, 153, 0.28) 100%
+  );
+  color: #ecfdf5;
+  box-shadow:
+    0 10px 28px -14px rgba(16, 185, 129, 0.75),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.holo-btn-primary:hover {
+  border-color: rgba(110, 231, 183, 0.55);
+  box-shadow:
+    0 14px 32px -12px rgba(16, 185, 129, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+.holo-btn-secondary {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(16, 185, 129, 0.08) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  color: #f4f4f5;
+  box-shadow:
+    0 8px 24px -16px rgba(16, 185, 129, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.holo-btn-secondary:hover {
+  border-color: rgba(52, 211, 153, 0.35);
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(16, 185, 129, 0.12) 50%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holo-btn::before {
+    animation: none;
+  }
+
+  .holo-btn:hover {
+    transform: none;
+  }
+}

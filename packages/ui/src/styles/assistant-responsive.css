@@ -1,0 +1,122 @@
+/**
+ * Assistant shell responsive tiers.
+ * lg+: desktop — mic + interactions side by side.
+ * <lg: mobile platform — full-height mic, interactions in bottom sheet (see MobileInteractionsSheet).
+ */
+
+@media (max-width: 1023px) {
+  .assistant-shell-main {
+    flex-direction: column !important;
+  }
+
+  .assistant-shell-mic-pane {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    border-bottom: none !important;
+    /* Room for collapsed interactions peek bar (see --assistant-mobile-sheet-peek) */
+    padding-bottom: calc(
+      var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) +
+        env(safe-area-inset-bottom, 0px)
+    ) !important;
+  }
+
+  .assistant-shell-interactions {
+    display: none !important;
+  }
+
+  .assistant-hint-kbd-row {
+    display: none !important;
+  }
+
+  .assistant-hint-row {
+    bottom: calc(
+      var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) +
+        env(safe-area-inset-bottom, 0px)
+    ) !important;
+    padding-bottom: 0.75rem !important;
+    font-size: 0.75rem !important;
+  }
+
+  .assistant-mic-anchor {
+    top: var(--assistant-header-h, 4.75rem);
+    bottom: calc(
+      var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) +
+        env(safe-area-inset-bottom, 0px)
+    );
+  }
+}
+
+@media (max-width: 1023px) {
+  .assistant-mobile-sheet {
+    bottom: calc(
+      env(safe-area-inset-bottom, 0px) + var(--assistant-mobile-sheet-lift, 0.5rem)
+    ) !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .assistant-mobile-sheet {
+    display: none !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .assistant-shell-header {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .assistant-brand-wordmark {
+    display: inline !important;
+    font-size: 1.65rem !important;
+    letter-spacing: 0.14em !important;
+  }
+
+  .assistant-toast-host {
+    bottom: calc(
+      var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) + 1.25rem +
+        env(safe-area-inset-bottom, 0px)
+    ) !important;
+  }
+}
+
+@media (max-width: 639px) {
+  .assistant-interactions-header p {
+    display: none;
+  }
+}
+
+/* Loading screen — ring matches mic anchor; copy sits below, not in the centroid. */
+.loading-glyph-anchor {
+  top: 50%;
+  bottom: auto;
+  height: 10rem;
+  transform: translateY(-50%);
+}
+
+.loading-copy-stack {
+  top: calc(50% + 6.25rem);
+}
+
+@media (max-width: 1023px) {
+  .loading-glyph-anchor {
+    top: var(--assistant-header-h, 4.75rem);
+    bottom: calc(
+      var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) +
+        env(safe-area-inset-bottom, 0px)
+    );
+    height: auto;
+    transform: none;
+  }
+
+  .loading-copy-stack {
+    top: calc(
+      var(--assistant-header-h, 4.75rem) +
+        (
+          100% - var(--assistant-header-h, 4.75rem) - var(--assistant-mobile-sheet-peek, 4.75rem) -
+            var(--assistant-mobile-sheet-lift, 0.5rem) - env(safe-area-inset-bottom, 0px)
+        ) / 2 + 6.25rem
+    );
+    bottom: auto;
+  }
+}

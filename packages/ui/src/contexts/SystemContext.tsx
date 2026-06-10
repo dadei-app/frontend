@@ -263,7 +263,11 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     const api = window.electronAPI?.startup;
     if (!api) return false;
     const value = await api.setLaunchAtLogin(enabled);
-    setStartup(prev => ({ ...prev, launchAtLogin: value }));
+    setStartup(prev => ({
+      ...prev,
+      launchAtLogin: value,
+      startMinimized: value ? prev.startMinimized : false,
+    }));
     return value;
   }, []);
 

@@ -86,6 +86,8 @@ function patchInteractionList(
 }
 
 interface ServiceContextType {
+  /** True once realtime is connected and initial conversations/persons have loaded. */
+  isReady: boolean;
   isServiceEnabled: boolean;
   isConnected: boolean;
   registrationConflict: boolean;
@@ -694,9 +696,18 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     recentConversationsQuery.isLoading ||
     (bootstrapReady && allBootstrapIds.length > 0 && bootstrapInteractionsQuery.isLoading);
 
+  const isReady =
+    !isAuthenticated ||
+    registrationConflict ||
+    (isConnected &&
+      sessionReady &&
+      !interactionsLoading &&
+      !personsQuery.isLoading);
+
   return (
     <ServiceContext.Provider
       value={{
+        isReady,
         isServiceEnabled,
         isConnected,
         registrationConflict,

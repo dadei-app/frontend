@@ -65,41 +65,41 @@ export function IntegrationCard({
   return (
     <article
       className={cn(
-        'relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/8 bg-zinc-900/55 p-3',
+        'relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/8 bg-zinc-900/55 p-2 sm:p-2.5 lg:p-3',
         className,
       )}
     >
       <span
         className={cn(
-          'absolute right-2.5 top-2.5 z-10 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide font-secondary',
+          'absolute top-2 right-2 z-10 rounded-md border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide font-secondary lg:top-2.5 lg:right-2.5',
           STATUS_BADGE[status],
         )}
       >
         {STATUS_LABEL[status]}
       </span>
 
-      <div className="flex shrink-0 items-center gap-2 pr-12">
+      <div className="flex shrink-0 items-center gap-1.5 pr-10 sm:gap-2 sm:pr-11 lg:pr-12">
         {logo ? (
           <IntegrationLogo def={logo} active={active} />
         ) : Icon ? (
           <IconTile Icon={Icon} active={active} />
         ) : null}
-        <p className="min-w-0 truncate text-sm font-medium text-zinc-100">{name}</p>
+        <p className="min-w-0 truncate text-xs font-medium text-zinc-100 sm:text-sm">{name}</p>
       </div>
 
       <p
         className={cn(
-          'mt-2 shrink-0 font-secondary text-zinc-400',
+          'mt-2 min-h-0 font-secondary',
           isWorkspace
-            ? 'line-clamp-2 text-xs leading-snug'
-            : 'line-clamp-4 flex-1 text-xs leading-relaxed text-zinc-500',
+            ? 'integration-card__desc integration-card__desc--workspace line-clamp-2 text-xs leading-snug text-zinc-400'
+            : 'integration-card__desc integration-card__desc--realtime settings-only-lg flex-1 overflow-y-auto overscroll-none text-xs leading-relaxed text-zinc-500 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0',
         )}
       >
         {description}
       </p>
 
       {showAccess ? (
-        <div className="mt-2 flex shrink-0 flex-wrap gap-1.5">
+        <div className="integration-card__access mt-auto flex shrink-0 flex-wrap gap-1.5 pt-1.5 lg:pt-2">
           <span
             className={cn(
               'rounded border px-1.5 py-0.5 text-[10px] font-medium font-secondary',

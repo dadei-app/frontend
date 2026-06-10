@@ -1,7 +1,6 @@
 import {
   formatActionTimeRange,
   formatActionWhen,
-  truncatePreview,
 } from '@dadei/ui/utils/actionDisplay';
 import { formatForUser } from '@dadei/ui/utils/time';
 import type { ActionOperation, NetworkAction } from '@dadei/ui/types/models.types';
@@ -88,8 +87,8 @@ function EmailComposerBody({
         </div>
       ) : null}
       {body ? (
-        <p className="mt-2 max-h-28 overflow-hidden border-t border-white/6 pt-2 text-xs leading-relaxed whitespace-pre-wrap text-zinc-400 font-secondary">
-          {truncatePreview(body, 320)}
+        <p className="mt-2 border-t border-white/6 pt-2 text-xs leading-relaxed whitespace-pre-wrap text-zinc-400 font-secondary">
+          {body}
         </p>
       ) : (
         <p className="mt-2 border-t border-white/6 pt-2 text-xs italic text-zinc-500 font-secondary">
@@ -155,13 +154,13 @@ function EventBannerBody({
         </div>
       </div>
       {description ? (
-        <p className="mt-2 border-t border-white/6 pt-2 text-xs leading-relaxed text-zinc-400 font-secondary">
-          {truncatePreview(description, 140)}
+        <p className="mt-2 border-t border-white/6 pt-2 text-xs leading-relaxed whitespace-pre-wrap text-zinc-400 font-secondary">
+          {description}
         </p>
       ) : null}
       {attendeeList.length > 0 ? (
         <div className="mt-2 flex flex-wrap gap-1 border-t border-white/6 pt-2">
-          {attendeeList.slice(0, 4).map((email) => (
+          {attendeeList.map((email) => (
             <span
               key={email}
               className="rounded-full border border-white/8 bg-white/4 px-2 py-0.5 text-[10px] text-zinc-300 font-secondary"
@@ -169,11 +168,6 @@ function EventBannerBody({
               {email}
             </span>
           ))}
-          {attendeeList.length > 4 ? (
-            <span className="px-1 text-[10px] text-zinc-500 font-secondary">
-              +{attendeeList.length - 4} more
-            </span>
-          ) : null}
         </div>
       ) : null}
     </div>

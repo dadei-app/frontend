@@ -26,6 +26,7 @@ export function networkActionsToBannerItems(
   actions: NetworkAction[],
   handlers: {
     onReject: (actionId: string) => Promise<void>;
+    onExpire?: (actionId: string) => void;
   },
 ): BannerItem[] {
   return actions.map((action) => {
@@ -47,6 +48,7 @@ export function networkActionsToBannerItems(
       queued,
       cancelLabel: 'Cancel',
       onCancel: () => handlers.onReject(action.id),
+      onAutoDismiss: isActive ? () => handlers.onExpire?.(action.id) : undefined,
     };
   });
 }

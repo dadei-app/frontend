@@ -20,7 +20,7 @@ import { isAppQuitting, setAppQuitting } from './app-quit';
 import { registerSettingsIpc } from './settings-ipc';
 import { configureSessionPermissions } from './session-permissions';
 import { getStartup } from './settings-store';
-import { setTrayMainWindow, syncTrayFromSettings } from './tray';
+import { setTrayMainWindow, syncTrayFromSettings, usesSystemTray } from './tray';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -86,12 +86,7 @@ function createWindow() {
   setTrayMainWindow(mainWindow);
 
   mainWindow.on('close', event => {
-    if (
-      !isAppQuitting() &&
-      getStartup().minimizeToTray &&
-      mainWindow &&
-      !mainWindow.isDestroyed()
-    ) {
+    if (!isAppQuitting() && usesSystemTray() && mainWindow && !mainWindow.isDestroyed()) {
       event.preventDefault();
       mainWindow.hide();
     }
@@ -106,7 +101,7 @@ function createWindow() {
     mainWindow.minimize();
   }
 
-  syncTrayFromSettings();
+  void syncTrayFromSettings();
 
   const isMacOrLinux = process.platform === 'darwin' || process.platform === 'linux';
   if (!isMacOrLinux) {
@@ -249,9 +244,8 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform === 'darwin' || usesSystemTray()) return;
+  app.quit();
 });
 
 app.on('before-quit', async (event) => {

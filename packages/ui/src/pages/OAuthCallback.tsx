@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
+import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { resolvePostOAuthPath } from '@dadei/ui/lib/platform/assistantPaths';
 
@@ -52,5 +52,5 @@ export default function OAuthCallback() {
     };
   }, [navigate, saveTokens, searchParams]);
 
-  return <LoadingScreen visible subtitleOverride={message} />;
+  return <Loading visible subtitleOverride={message} />;
 }

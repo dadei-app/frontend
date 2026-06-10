@@ -17,7 +17,7 @@ export function AssistantHotkeyControl({
       type="button"
       onClick={onPressDisplay}
       className={cn(
-        'flex w-full min-w-0 flex-col overflow-hidden rounded-lg border text-center font-mono transition emerald-glow',
+        'assistant-hotkey-btn flex w-full min-w-0 flex-col overflow-hidden rounded-lg border text-center font-mono transition emerald-glow',
         compact
           ? 'h-full min-h-0 flex-1 items-center justify-center px-2 text-sm leading-tight'
           : 'min-h-[5rem] flex-1 items-center justify-center px-3 text-lg leading-tight',

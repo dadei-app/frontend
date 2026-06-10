@@ -25,6 +25,8 @@ type SplitDeleteToolbarProps = {
   iconClassName?: string;
   idleWidthPx?: number;
   armedWidthPx?: number;
+  /** When true, idle trash is visible without row hover (interactions / persons). */
+  alwaysVisible?: boolean;
 };
 
 export default function SplitDeleteToolbar({
@@ -44,6 +46,7 @@ export default function SplitDeleteToolbar({
   iconClassName = 'h-3.5 w-3.5',
   idleWidthPx = DEFAULT_IDLE_WIDTH,
   armedWidthPx = DEFAULT_ARMED_WIDTH,
+  alwaysVisible = false,
 }: SplitDeleteToolbarProps) {
   const reduceMotion = useReducedMotion();
 
@@ -126,11 +129,12 @@ export default function SplitDeleteToolbar({
               onArm();
             }}
             className={cn(
-              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/85 opacity-0',
+              'flex h-full w-full items-center justify-center rounded-lg text-rose-400/85',
+              alwaysVisible ? 'opacity-100' : 'opacity-0',
               BTN_TRANSITION,
               !disabled &&
                 'hover:bg-rose-500/8 hover:text-rose-300 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]',
-              idleVisibleClassName,
+              !alwaysVisible && idleVisibleClassName,
               idleButtonClassName,
             )}
           >

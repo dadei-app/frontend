@@ -3,6 +3,7 @@ import { formatLocalTime } from './conversationUtils';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import { useTutorialTargetInteractive } from '@dadei/ui/contexts/TutorialContext';
 import { isTutorialTestId } from '@dadei/ui/lib/tutorial/testData';
+import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 export default function InteractionCard({
@@ -24,6 +25,7 @@ export default function InteractionCard({
   const isYou = person.isUser;
   const tutorialTarget = isTutorialTestId(interaction.id) ? interaction.id : undefined;
   const interactive = useTutorialTargetInteractive(tutorialTarget);
+  const isMobileAssistant = useMobileAssistant();
 
   return (
     <div
@@ -62,6 +64,7 @@ export default function InteractionCard({
       <SplitDeleteToolbar
         armed={armedInteractionDeleteId === interaction.id}
         disabled={!interactive}
+        alwaysVisible={interactive && isMobileAssistant}
         onArm={() => {
           setArmedConversationDeleteId(null);
           setArmedInteractionDeleteId(interaction.id);
@@ -72,7 +75,12 @@ export default function InteractionCard({
         }}
         idleTitle="Delete interaction"
         idleAriaLabel="Delete interaction"
-        idleVisibleClassName={interactive ? 'group-hover/interaction:opacity-100' : undefined}
+        idleVisibleClassName={
+          interactive && !isMobileAssistant ? 'group-hover/interaction:opacity-100' : undefined
+        }
+        idleButtonClassName={
+          isMobileAssistant ? 'text-rose-400/90 hover:bg-rose-500/10' : undefined
+        }
       />
     </div>
   );

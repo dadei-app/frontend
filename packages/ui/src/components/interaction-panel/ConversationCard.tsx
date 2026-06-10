@@ -7,6 +7,7 @@ import { formatLocalDate, getConversationTitle } from './conversationUtils';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import InteractionCard from './InteractionCard';
 import { useTutorialTargetInteractive } from '@dadei/ui/contexts/TutorialContext';
+import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
 import { cn } from '@dadei/ui/lib/shared/cn';
 
 const HEADER_META_EASE = 'duration-[260ms] ease-[cubic-bezier(0.22,1,0.36,1)]';
@@ -106,6 +107,7 @@ export default function ConversationCard({
       : undefined;
   const interactive = useTutorialTargetInteractive(tutorialConversationTarget);
   const isDeleteArmed = armedConversationDeleteId === conversationIdForActions;
+  const isMobileAssistant = useMobileAssistant();
 
   return (
     <div
@@ -177,19 +179,23 @@ export default function ConversationCard({
         {conversationIdForActions ? (
           <div
             className={cn(
-              'shrink-0 transition-[opacity,margin] pointer-events-none',
-              HEADER_META_EASE,
-              prefersReducedMotion && '!duration-0',
-              interactive &&
-                !isDeleteArmed &&
-                'max-w-0 overflow-hidden opacity-0 -ml-4 group-hover/conv:ml-0 group-hover/conv:max-w-none group-hover/conv:overflow-visible group-hover/conv:opacity-100 group-hover/conv:pointer-events-auto',
-              isDeleteArmed && 'ml-0 max-w-none overflow-visible opacity-100 pointer-events-auto',
-              !interactive && 'max-w-0 overflow-hidden opacity-0 -ml-4',
+              'shrink-0',
+              !isMobileAssistant && [
+                'transition-[opacity,margin] pointer-events-none',
+                HEADER_META_EASE,
+                prefersReducedMotion && '!duration-0',
+                interactive &&
+                  !isDeleteArmed &&
+                  'max-w-0 overflow-hidden opacity-0 -ml-4 group-hover/conv:ml-0 group-hover/conv:max-w-none group-hover/conv:overflow-visible group-hover/conv:opacity-100 group-hover/conv:pointer-events-auto',
+                isDeleteArmed && 'ml-0 max-w-none overflow-visible opacity-100 pointer-events-auto',
+                !interactive && 'max-w-0 overflow-hidden opacity-0 -ml-4',
+              ],
             )}
           >
             <SplitDeleteToolbar
               armed={isDeleteArmed}
               disabled={!interactive}
+              alwaysVisible={interactive && isMobileAssistant}
               onArm={() => {
                 setArmedInteractionDeleteId(null);
                 setArmedConversationDeleteId(conversationIdForActions);
@@ -200,7 +206,12 @@ export default function ConversationCard({
               }}
               idleTitle="Delete conversation"
               idleAriaLabel="Delete conversation"
-              idleVisibleClassName={interactive ? 'group-hover/conv:opacity-100' : undefined}
+              idleVisibleClassName={
+                interactive && !isMobileAssistant ? 'group-hover/conv:opacity-100' : undefined
+              }
+              idleButtonClassName={
+                isMobileAssistant ? 'text-rose-400/90 hover:bg-rose-500/10' : undefined
+              }
             />
           </div>
         ) : null}

@@ -13,11 +13,15 @@ import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
 import type { ActionOperation } from '@dadei/ui/types/models.types';
 import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import BannerBody from '@dadei/ui/components/notifications/BannerBody';
+import { BANNER_CARD_HEIGHT_PX } from '@dadei/ui/lib/notifications/bannerStack';
 import {
   actionOperationLabel,
   NEUTRAL_BANNER_THEME,
   OPERATION_BANNER_THEME,
 } from '@dadei/ui/utils/actionDisplay';
+
+const BANNER_BODY_SCROLL_CLASS =
+  'min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-color:rgba(161,161,170,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45';
 
 export type BannerExitMode = 'slide-up' | 'acid';
 
@@ -331,13 +335,14 @@ export default function Banner({
         ...theme.shell,
         backdropFilter: theme.shell.backdropFilter,
         WebkitBackdropFilter: theme.shell.backdropFilter,
+        height: BANNER_CARD_HEIGHT_PX,
         willChange: isDissolving ? 'mask-image' : undefined,
         pointerEvents: isStackFront && !isExiting ? 'auto' : 'none',
         WebkitMaskImage: isDissolving ? dissolveMask.image : undefined,
         maskImage: isDissolving ? dissolveMask.image : undefined,
         ...dissolveMaskStyle,
       }}
-      className="group relative w-full overflow-hidden rounded-xl"
+      className="group relative flex w-full flex-col overflow-hidden rounded-xl"
     >
       <div
         className="pointer-events-none absolute inset-0 overflow-hidden rounded-xl"
@@ -360,10 +365,10 @@ export default function Banner({
         />
       ) : null}
 
-      <div className="px-4 pt-3 pb-2.5">
-        <div className="flex items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
+      <div className="flex min-h-0 flex-1 flex-col px-4 pt-3 pb-2.5">
+        <div className="flex min-h-0 flex-1 items-start gap-3">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
               {operation ? (
                 <>
                   <span className={theme.operationTextClass}>
@@ -374,30 +379,32 @@ export default function Banner({
               ) : null}
               <span className="text-zinc-400/90">{category || 'Notification'}</span>
             </p>
-            {actionType ? (
-              <BannerBody
-                actionType={actionType}
-                operation={operation}
-                title={title}
-                body={body}
-                toolArgs={toolArgs}
-                startTime={startTime}
-                endTime={endTime}
-              />
-            ) : (
-              <>
-                <p className="mt-1 text-sm font-semibold leading-snug text-zinc-100">
-                  {title}
-                </p>
-                {body ? (
-                  <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">
-                    {body}
+            <div className={BANNER_BODY_SCROLL_CLASS}>
+              {actionType ? (
+                <BannerBody
+                  actionType={actionType}
+                  operation={operation}
+                  title={title}
+                  body={body}
+                  toolArgs={toolArgs}
+                  startTime={startTime}
+                  endTime={endTime}
+                />
+              ) : (
+                <>
+                  <p className="mt-1 text-sm font-semibold leading-snug text-zinc-100">
+                    {title}
                   </p>
-                ) : null}
-              </>
-            )}
+                  {body ? (
+                    <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">
+                      {body}
+                    </p>
+                  ) : null}
+                </>
+              )}
+            </div>
             {error ? (
-              <p className="mt-1 text-xs text-red-400/90 font-secondary">{error}</p>
+              <p className="mt-1 shrink-0 text-xs text-red-400/90 font-secondary">{error}</p>
             ) : null}
           </div>
 

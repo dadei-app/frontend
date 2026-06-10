@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { motion } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { IntegrationLogo } from '@dadei/ui/components/settings/integrations/integrationIcons';
 import {
   INTEGRATION_CATEGORIES,
@@ -7,24 +7,36 @@ import {
   type IntegrationTool,
 } from './integrationsData';
 
-function ToolIcon({ tool, active }: { tool: IntegrationTool; active: boolean }) {
+function ToolIcon({ tool, active, size = 'sm' }: { tool: IntegrationTool; active: boolean; size?: 'sm' | 'md' }) {
+  const iconClass =
+    size === 'md'
+      ? active
+        ? 'h-4 w-4 text-emerald-300/90'
+        : 'h-4 w-4 text-zinc-400'
+      : active
+        ? 'h-3.5 w-3.5 text-emerald-300/90'
+        : 'h-3.5 w-3.5 text-zinc-500';
+
   if (tool.logo) {
-    return (
-      <IntegrationLogo
-        def={tool.logo}
-        active={active}
-        iconClassName={active ? 'h-3.5 w-3.5 text-emerald-300/90' : 'h-3.5 w-3.5 text-zinc-500'}
-      />
-    );
+    return <IntegrationLogo def={tool.logo} active={active} iconClassName={iconClass} />;
   }
 
   if (tool.Icon) {
-    return (
-      <tool.Icon
-        className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-emerald-300/90' : 'text-zinc-500'}`}
-        aria-hidden
-      />
-    );
+    if (size === 'md') {
+      return (
+        <div
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${
+            active
+              ? 'border-emerald-500/25 bg-emerald-500/10'
+              : 'border-white/10 bg-zinc-950/80'
+          }`}
+        >
+          <tool.Icon className={iconClass} aria-hidden />
+        </div>
+      );
+    }
+
+    return <tool.Icon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} aria-hidden />;
   }
 
   return null;
@@ -34,6 +46,18 @@ function panelButtonClass(active: boolean) {
   return active
     ? 'border-emerald-200/55 bg-emerald-400/26'
     : 'border-white/10 bg-zinc-900/75 hover:border-emerald-200/30 hover:bg-zinc-800/75';
+}
+
+function categoryPillClass(active: boolean) {
+  return active
+    ? 'border-emerald-300/45 bg-emerald-400/18 text-emerald-100 shadow-[0_0_20px_-8px_rgba(16,185,129,0.65)]'
+    : 'border-white/10 bg-white/5 text-zinc-300 hover:border-emerald-200/25 hover:bg-white/8';
+}
+
+function toolTileClass(active: boolean) {
+  return active
+    ? 'border-emerald-300/40 bg-emerald-400/12 shadow-[0_0_24px_-10px_rgba(16,185,129,0.55)]'
+    : 'border-white/8 bg-zinc-900/50 hover:border-emerald-200/20 hover:bg-zinc-800/55';
 }
 
 function ShowcasePanel({
@@ -75,7 +99,7 @@ function ShowcasePanel({
   );
 }
 
-export default function IntegrationsShowcase() {
+function IntegrationsDesktopExplorer() {
   const familyPanelRef = useRef<HTMLDivElement>(null);
   const toolsScrollRef = useRef<HTMLDivElement>(null);
   const scopeScrollRef = useRef<HTMLDivElement>(null);
@@ -88,11 +112,6 @@ export default function IntegrationsShowcase() {
     if (!family) return;
 
     const measure = () => {
-      const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
-      if (!isDesktop) {
-        setPanelHeight(null);
-        return;
-      }
       setPanelHeight(family.offsetHeight);
     };
 
@@ -131,13 +150,7 @@ export default function IntegrationsShowcase() {
       : undefined;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-30px' }}
-      transition={{ duration: 0.5 }}
-      className="relative mt-10 rounded-4xl border border-emerald-300/20 bg-zinc-950/82 p-5 sm:p-8"
-    >
+    <div className="relative mt-10 rounded-4xl border border-emerald-300/20 bg-zinc-950/82 p-5 sm:p-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start" style={rowStyle}>
         <ShowcasePanel
           panelRef={familyPanelRef}
@@ -210,6 +223,119 @@ export default function IntegrationsShowcase() {
             ))}
           </div>
         </ShowcasePanel>
+      </div>
+    </div>
+  );
+}
+
+function IntegrationsMobileExplorer() {
+  const [categoryId, setCategoryId] = useState<IntegrationCategory['id']>('google');
+  const [toolId, setToolId] = useState<string>('gmail');
+
+  const category =
+    INTEGRATION_CATEGORIES.find((item) => item.id === categoryId) ?? INTEGRATION_CATEGORIES[0];
+  const tool = category.tools.find((item) => item.id === toolId) ?? category.tools[0];
+
+  const selectCategory = (nextCategoryId: IntegrationCategory['id']) => {
+    setCategoryId(nextCategoryId);
+    const nextCategory = INTEGRATION_CATEGORIES.find((item) => item.id === nextCategoryId);
+    if (nextCategory?.tools[0]) {
+      setToolId(nextCategory.tools[0].id);
+    }
+  };
+
+  const totalTools = INTEGRATION_CATEGORIES.reduce((sum, cat) => sum + cat.tools.length, 0);
+
+  return (
+    <div className="glass-panel conic-border relative mt-6 overflow-hidden rounded-2xl border border-emerald-300/18 bg-zinc-950/42 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <p className="text-[10px] tracking-[0.18em] text-zinc-400 font-secondary">
+          {totalTools} integrations · {INTEGRATION_CATEGORIES.length} families
+        </p>
+        <p className="text-[10px] text-zinc-500 font-secondary">{category.short}</p>
+      </div>
+
+      <div className="scrollbar-none -mx-1 mt-3 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
+        {INTEGRATION_CATEGORIES.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => selectCategory(item.id)}
+            className={`shrink-0 rounded-full border px-3 py-1 text-[11px] transition font-secondary ${categoryPillClass(item.id === categoryId)}`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-1.5">
+        {category.tools.map((item) => {
+          const active = item.id === tool.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setToolId(item.id)}
+              className={`flex flex-col items-center gap-1.5 rounded-lg border px-1.5 py-2 text-center transition ${toolTileClass(active)}`}
+            >
+              <ToolIcon tool={item} active={active} size="md" />
+              <span className="line-clamp-2 text-[10px] leading-tight text-zinc-100 font-secondary">
+                {item.name}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${categoryId}-${toolId}`}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -3 }}
+          transition={{ duration: 0.2 }}
+          className="mt-3 rounded-xl border border-white/8 bg-zinc-900/45 p-3"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs text-zinc-100 font-secondary">{tool.name}</p>
+              <p className="mt-0.5 text-[10px] text-zinc-400 font-secondary">{tool.short}</p>
+            </div>
+            <span className="shrink-0 rounded-full border border-emerald-300/25 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] text-emerald-200/90 font-secondary">
+              {tool.scopes.length} scopes
+            </span>
+          </div>
+
+          <div className="scrollbar-none -mx-1 mt-2 flex gap-1 overflow-x-auto px-1 pb-0.5">
+            {tool.scopes.map((scope) => (
+              <span
+                key={scope.label}
+                className="shrink-0 rounded-full border border-emerald-200/20 bg-emerald-400/8 px-2 py-0.5 text-[10px] text-emerald-100/90 font-secondary"
+                title={scope.detail}
+              >
+                {scope.label}
+              </span>
+            ))}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export default function IntegrationsShowcase() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: '-30px' }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="lg:hidden">
+        <IntegrationsMobileExplorer />
+      </div>
+      <div className="hidden lg:block">
+        <IntegrationsDesktopExplorer />
       </div>
     </motion.div>
   );

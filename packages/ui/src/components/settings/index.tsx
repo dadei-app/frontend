@@ -79,10 +79,10 @@ function dialogOverlayClass(isElectron: boolean, tourLite = false) {
 }
 
 const dialogContentClass =
-  'fixed left-1/2 z-[250] flex w-[min(calc(100%-1.5rem),80rem)] max-w-[80rem] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 shadow-none outline-none focus:outline-none top-[calc(50%+var(--assistant-titlebar-offset,2rem)/2)]';
+  'pointer-events-none fixed inset-x-0 bottom-0 z-[250] flex items-center justify-center border-0 bg-transparent p-3 shadow-none outline-none focus:outline-none top-[var(--assistant-titlebar-offset,2rem)]';
 
 const dialogContentClassWeb =
-  'fixed left-1/2 top-1/2 z-[250] flex w-[min(calc(100%-1.5rem),80rem)] max-w-[80rem] -translate-x-1/2 -translate-y-1/2 border-0 bg-transparent p-0 shadow-none outline-none focus:outline-none';
+  'pointer-events-none fixed inset-0 z-[250] flex items-center justify-center border-0 bg-transparent p-3 shadow-none outline-none focus:outline-none';
 
 export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
   const [view, setView] = useState<SidebarView>('integrations');
@@ -191,7 +191,10 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
             </Dialog.Overlay>
             <Dialog.Content
               data-tutorial-target="settings-panel-root"
-              className={isElectron ? dialogContentClass : dialogContentClassWeb}
+              className={cn(
+                'settings-dialog-host',
+                isElectron ? dialogContentClass : dialogContentClassWeb,
+              )}
               onPointerDownOutside={preventDialogDismissOnTitleBar}
               onInteractOutside={preventDialogDismissOnTitleBar}
             >
@@ -204,10 +207,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   tutorialSettingsStep
                     ? 'glass-panel-tour conic-border-tour'
                     : 'glass-panel conic-border',
-                  'relative grid w-full overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]',
-                  isElectron
-                    ? 'h-[min(800px,calc(100vh-var(--assistant-titlebar-offset,2rem)-2rem))]'
-                    : 'h-[min(800px,88dvh)]',
+                  'settings-shell-panel pointer-events-auto relative grid h-[min(800px,100%)] max-h-full w-full max-w-[80rem] overflow-hidden rounded-2xl shadow-2xl shadow-black/50 focus:outline-none [grid-template:1fr/1fr]',
                   tutorialSettingsStep && tutorial?.step.id === 'settings_intro' && 'ring-2 ring-emerald-400/35',
                 )}
               >
@@ -220,7 +220,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                 </div>
 
                 <div className="relative z-10 col-start-1 row-start-1 flex min-h-0 flex-col">
-                  <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
+                  <div className="settings-shell-header flex shrink-0 items-center justify-between border-b border-white/10 px-6 py-4">
                     <Dialog.Title className="text-xl font-semibold text-zinc-50">Settings</Dialog.Title>
                     {!tutorialSettingsStep ? (
                       <Dialog.Close asChild>
@@ -240,14 +240,14 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                   </div>
 
                   <div className="flex min-h-0 flex-1 flex-col">
-                    <div className="flex min-h-0 flex-1">
+                    <div className="settings-shell-body flex min-h-0 min-w-0 flex-1">
                       <aside
                         className={cn(
-                          'w-60 shrink-0 border-r border-white/5 bg-zinc-950/30 p-4',
+                          'settings-shell-nav flex w-48 shrink-0 flex-col border-r border-white/5 bg-zinc-950/30 p-3 sm:w-52 sm:p-4 xl:w-60',
                           tutorialSettingsStep && 'relative',
                         )}
                       >
-                        <nav className="space-y-1">
+                        <nav className="settings-shell-nav-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
                           {views.map(({ id, label, Icon }) => {
                             const isActiveSection = view === id;
                             const isTutorialHighlight =
@@ -263,7 +263,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                                   setPendingAction(undefined);
                                 }}
                                 className={cn(
-                                  'emerald-glow relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-base transition',
+                                  'settings-shell-nav-btn emerald-glow relative flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-base transition',
                                   isActiveSection
                                     ? 'bg-emerald-500/10 text-emerald-200'
                                     : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
@@ -282,7 +282,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                                   />
                                 ) : null}
                                 <Icon className="h-5 w-5 shrink-0" />
-                                <span>{label}</span>
+                                <span className="settings-shell-nav-label min-w-0 truncate">{label}</span>
                               </button>
                             );
                           })}
@@ -291,14 +291,14 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
                       <main
                         className={cn(
-                          'flex min-h-0 flex-1 flex-col overflow-hidden overscroll-none p-4 sm:p-5',
+                          'settings-shell-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-none p-4 sm:p-5 lg:overflow-hidden',
                           isCenteredPanel && 'items-center justify-center',
                           tutorialSettingsStep &&
                             tutorialSectionId &&
                             'ring-1 ring-inset ring-emerald-500/15',
                         )}
                       >
-                        <div className="flex min-h-0 w-full flex-1 flex-col">
+                        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
                           <ActivePanel
                             pendingAction={pendingAction}
                             onActionConsumed={() => setPendingAction(undefined)}

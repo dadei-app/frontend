@@ -9,6 +9,7 @@ import {
 
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
+const isWindows = process.platform === 'win32';
 const isDev = process.env.NODE_ENV === 'development';
 
 function sendToMain(channel: string, payload?: unknown) {
@@ -18,11 +19,11 @@ function sendToMain(channel: string, payload?: unknown) {
   }
 }
 
-function openSettings(section?: string, action?: string) {
+export function openSettings(section?: string, action?: string) {
   sendToMain('app:open-settings-section', { section: section ?? 'account', action });
 }
 
-function showAboutDialog() {
+export function showAboutDialog() {
   void dialog.showMessageBox({
     type: 'info',
     title: 'About dadei',
@@ -32,9 +33,64 @@ function showAboutDialog() {
   });
 }
 
+function helpLinkItems(): MenuItemConstructorOptions[] {
+  return [
+    {
+      label: 'Privacy Policy',
+      click: () => shell.openExternal('https://dadei.app/privacy'),
+    },
+    {
+      label: 'Terms of Service',
+      click: () => shell.openExternal('https://dadei.app/terms'),
+    },
+    {
+      label: 'Report an Issue',
+      click: () => shell.openExternal('https://github.com/dadei-app/frontend/issues/new'),
+    },
+  ];
+}
+
+function settingsAndAboutItems(): MenuItemConstructorOptions[] {
+  return [
+    {
+      label: 'Settings…',
+      accelerator: 'CmdOrCtrl+,',
+      click: () => openSettings('account'),
+    },
+    {
+      label: 'Check for Updates…',
+      click: () => openSettings('about', 'check-updates'),
+    },
+    { type: 'separator' },
+    { label: 'About dadei', click: showAboutDialog },
+  ];
+}
+
+/** Tray / compact menus: show window plus the common app actions. */
+export function buildTrayMenuTemplate(showMainWindow: () => void): MenuItemConstructorOptions[] {
+  return [
+    { label: 'Show dadei', click: showMainWindow },
+    { type: 'separator' },
+    ...settingsAndAboutItems(),
+    { type: 'separator' },
+    ...helpLinkItems(),
+    { type: 'separator' },
+    { role: 'quit' },
+  ];
+}
+
 export function buildApplicationMenu(): Menu | null {
-  if (!isMac && !isLinux) {
+  if (!isMac && !isLinux && !isWindows) {
     return null;
+  }
+
+  if (isWindows) {
+    return Menu.buildFromTemplate([
+      {
+        label: app.name,
+        submenu: [...settingsAndAboutItems(), { type: 'separator' }, ...helpLinkItems(), { type: 'separator' }, { role: 'quit' }],
+      },
+    ]);
   }
 
   const template: MenuItemConstructorOptions[] = [
@@ -91,19 +147,7 @@ export function buildApplicationMenu(): Menu | null {
               },
               { type: 'separator' as const },
             ]),
-        {
-          label: 'Privacy Policy',
-          click: () => shell.openExternal('https://dadei.app/privacy'),
-        },
-        {
-          label: 'Terms of Service',
-          click: () => shell.openExternal('https://dadei.app/terms'),
-        },
-        {
-          label: 'Report an Issue',
-          click: () =>
-            shell.openExternal('https://github.com/dadei-app/frontend/issues/new'),
-        },
+        ...helpLinkItems(),
       ],
     },
   ];

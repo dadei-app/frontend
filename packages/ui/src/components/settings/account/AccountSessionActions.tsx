@@ -11,13 +11,14 @@ export function AccountSessionActions({
   return (
     <div
       className={cn(
+        'account-session-actions',
         'col-start-3 col-span-2 row-start-4 row-end-5',
         'flex h-full min-h-0 w-full items-center justify-center',
         'rounded-xl border border-white/10 bg-zinc-950/55 p-6 sm:p-8',
         'shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]',
       )}
     >
-      <div className="grid h-full w-full grid-cols-2 items-stretch gap-x-14">
+      <div className="account-session-actions__grid grid h-full w-full grid-cols-2 items-stretch gap-x-14">
         <button
           type="button"
           onClick={onLogout}

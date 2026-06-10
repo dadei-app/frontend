@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
-import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
+import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
@@ -122,7 +122,7 @@ export default function LoginPage() {
 
   if (isLoading || isAuthenticated) {
     return (
-      <LoadingScreen
+      <Loading
         visible
         subtitleOverride={isAuthenticated ? 'Signing in…' : 'Checking your session…'}
       />

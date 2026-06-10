@@ -1,0 +1,538 @@
+/**
+ * Settings panel responsive tiers (pure CSS).
+ * xl+: maximized bento — reference design.
+ * lg:  tighter gaps, drop tile hints & secondary copy.
+ * md:  reflow grids (2-col), integration cards 2-wide.
+ * sm:  max-width 639px — icon nav, stacked integration/startup (aligns with Tailwind sm).
+ * md:  640px–1023px — horizontal nav, 2-row bento, 2-col workspace grid.
+ */
+
+/* ── Progressive disclosure ───────────────────────────────────────── */
+
+.settings-tile-hint {
+  display: block;
+}
+
+.settings-only-lg {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .settings-only-lg {
+    display: block;
+  }
+}
+
+@media (max-width: 1279px) {
+  .settings-tile-hint {
+    display: none;
+  }
+
+  .integration-card__desc--workspace {
+    display: none;
+  }
+}
+
+.settings-hide-md {
+  display: block;
+}
+
+@media (max-width: 1023px) {
+  .settings-hide-md {
+    display: none !important;
+  }
+}
+
+.settings-hide-sm {
+  display: block;
+}
+
+@media (max-width: 639px) {
+  .settings-hide-sm {
+    display: none !important;
+  }
+}
+
+/* ── Settings shell (modal) ───────────────────────────────────────── */
+
+/* Hide global light scrollbars inside settings (avoids gray gutter on dark UI). */
+.settings-dialog-host {
+  overflow-x: hidden;
+}
+
+.settings-dialog-host,
+.settings-dialog-host .settings-shell-panel,
+.settings-dialog-host .settings-shell-panel * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.settings-dialog-host .settings-shell-panel *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+  background: transparent;
+}
+
+@media (max-width: 1023px), (max-height: 740px) {
+  .settings-shell-main {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .settings-panel-grid,
+  .settings-account-grid,
+  .account-panel-mobile {
+    height: auto;
+    max-height: none;
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 1023px) {
+  .settings-shell-panel {
+    height: min(800px, 100%) !important;
+    max-height: 100% !important;
+  }
+
+  .settings-shell-body {
+    flex-direction: column !important;
+    overflow: hidden !important;
+  }
+
+  .settings-shell-header {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  .settings-shell-nav {
+    position: relative;
+    width: 100% !important;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0.5rem 0.75rem !important;
+  }
+
+  /* Fade hint: more tabs off-screen to the right */
+  .settings-shell-nav::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 2.5rem;
+    pointer-events: none;
+    background: linear-gradient(to left, rgb(9 9 11 / 0.98), transparent);
+  }
+
+  .settings-shell-nav-list {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 0.25rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-right: 1.5rem;
+    scroll-padding-inline: 1rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .settings-shell-nav-btn {
+    width: auto !important;
+    flex-shrink: 0;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.8125rem !important;
+    gap: 0.5rem !important;
+  }
+
+  .settings-shell-main {
+    padding: 0.75rem !important;
+    min-height: 0;
+    flex: 1;
+  }
+}
+
+@media (max-width: 639px) {
+  .settings-dialog-host {
+    padding: 0.5rem !important;
+  }
+
+  .settings-shell-nav-label {
+    display: none;
+  }
+
+  .settings-shell-nav-btn {
+    padding: 0.5rem !important;
+  }
+}
+
+/* ── Account panel (desktop inline 4×4 grid) ───────────────────────── */
+
+.settings-account-grid {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+/* Mobile account: natural-height stack — never shrink tiles inside the scroll area. */
+.account-panel-mobile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  width: 100%;
+  min-width: 0;
+  flex: none;
+  height: auto;
+  padding-bottom: 1.25rem;
+}
+
+.account-panel-mobile > * {
+  flex: none;
+  flex-shrink: 0;
+}
+
+.account-panel-mobile .settings-tile {
+  min-height: auto;
+  height: auto;
+  padding: 0.875rem 1rem;
+}
+
+.account-panel-mobile .settings-tile-hint {
+  display: block;
+  line-height: 1.35;
+}
+
+.account-panel-mobile .settings-tile > div:last-child {
+  flex: none !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+  min-height: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+}
+
+.account-panel-mobile .account-timezone-tile > div:last-child {
+  max-height: 7rem;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+
+/* ── Panel grid base ────────────────────────────────────────────────── */
+
+.settings-panel-grid {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (max-width: 1279px) {
+  .settings-panel-grid {
+    gap: 0.625rem;
+  }
+}
+
+@media (max-width: 1023px) {
+  .settings-panel-grid {
+    gap: 0.5rem;
+  }
+}
+
+.settings-tile {
+  min-height: 0;
+  min-width: 0;
+}
+
+.settings-tile-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.settings-tile-body--scroll {
+  overflow-y: auto;
+  overscroll-behavior: none;
+  scrollbar-width: none;
+}
+
+.settings-tile-body--scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Integration inner grids (column tiers via Tailwind on the element) ─ */
+
+/* 7 workspace APIs: keep 4×2 at lg+, jump to 2-col (never 3-col — avoids 3+3+1 orphan row). */
+@media (max-width: 1023px) {
+  /* 7 items @ 2-col: full-width last row instead of a half-width orphan */
+  .settings-integration-grid--workspace > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .integration-card__access {
+    display: none;
+  }
+}
+
+@media (min-width: 1024px) {
+  .settings-integration-grid--realtime .integration-card--realtime {
+    grid-row: span 2;
+  }
+}
+
+/* ── Integrations panel (xl reference) ─────────────────────────────── */
+
+[data-settings-layout='integrations'] {
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+
+[data-settings-layout='integrations'] [data-tile='google'] {
+  grid-column: 1 / span 4;
+  grid-row: 1 / span 2;
+}
+
+[data-settings-layout='integrations'] [data-tile='realtime'] {
+  grid-column: 1 / span 4;
+  grid-row: 3 / span 2;
+}
+
+@media (max-width: 1023px) {
+  [data-settings-layout='integrations'] {
+    grid-template-rows: minmax(11rem, 1.25fr) minmax(9rem, 1fr);
+  }
+
+  [data-settings-layout='integrations'] [data-tile='google'] {
+    grid-row: 1;
+  }
+
+  [data-settings-layout='integrations'] [data-tile='realtime'] {
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 639px) {
+  [data-settings-layout='integrations'] {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+  }
+
+  [data-settings-layout='integrations'] [data-tile='google'] {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 18rem;
+  }
+
+  [data-settings-layout='integrations'] [data-tile='realtime'] {
+    grid-column: 1;
+    grid-row: auto;
+    min-height: 14rem;
+  }
+
+  .settings-integration-grid--workspace {
+    grid-auto-rows: minmax(3.25rem, auto) !important;
+  }
+}
+
+/* ── Audio panel ───────────────────────────────────────────────────── */
+
+[data-settings-layout='audio'] {
+  grid-template-rows:
+    minmax(5.5rem, 1.2fr)
+    minmax(4.5rem, 1fr)
+    minmax(0, 1.1fr)
+    minmax(0, 1.1fr);
+}
+
+[data-settings-layout='audio'] [data-tile='mic'] {
+  grid-column: 1 / span 3;
+  grid-row: 1 / span 2;
+}
+
+[data-settings-layout='audio'] [data-tile='noise'] {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+[data-settings-layout='audio'] [data-tile='hotkey'] {
+  grid-column: 4;
+  grid-row: 2;
+}
+
+[data-settings-layout='audio'] [data-tile='meter'] {
+  grid-column: 1 / span 4;
+  grid-row: 3 / span 2;
+}
+
+/* Input level bars: %-height segments must stay inside the track at all compact widths. */
+@media (max-width: 1023px) {
+  .mic-level-meter__bars {
+    height: 5.5rem !important;
+    min-height: 5.5rem !important;
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+    box-sizing: border-box !important;
+    align-items: flex-end !important;
+    overflow: hidden !important;
+  }
+}
+
+/* Compact audio: mic full width, noise + hotkey paired, meter below. */
+@media (max-width: 1023px), (max-height: 740px) {
+  [data-settings-layout='audio'] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: none;
+    grid-auto-rows: auto;
+    align-content: start;
+    height: auto;
+    gap: 0.5rem;
+  }
+
+  [data-settings-layout='audio'] [data-tile='mic'] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    min-height: 12rem;
+    max-height: 15rem;
+  }
+
+  [data-settings-layout='audio'] [data-tile='mic'] .settings-tile-body {
+    overflow-y: auto;
+    overscroll-behavior: none;
+    scrollbar-width: none;
+  }
+
+  [data-settings-layout='audio'] [data-tile='mic'] .settings-tile-body::-webkit-scrollbar {
+    display: none;
+  }
+
+  [data-settings-layout='audio'] [data-tile='noise'] {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    min-height: 5.5rem;
+  }
+
+  [data-settings-layout='audio'] [data-tile='hotkey'] {
+    grid-column: 2 !important;
+    grid-row: auto !important;
+    min-height: 5.5rem;
+  }
+
+  [data-settings-layout='audio'] [data-tile='hotkey'] .settings-tile-body {
+    flex: 1;
+    min-height: 0;
+  }
+
+  [data-settings-layout='audio'] [data-tile='hotkey'] .assistant-hotkey-btn {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+  }
+
+  [data-settings-layout='audio'] [data-tile='meter'] {
+    grid-column: 1 / -1 !important;
+    grid-row: auto !important;
+    min-height: 10rem;
+  }
+
+  [data-settings-layout='audio'] [data-tile='meter'] .mic-level-meter {
+    justify-content: flex-start !important;
+    gap: 0.75rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+}
+
+/* ── Memories panel ────────────────────────────────────────────────── */
+
+[data-settings-layout='memories'] {
+  grid-template-rows: repeat(4, minmax(0, 1fr));
+}
+
+[data-settings-layout='memories'] [data-tile='facts'] {
+  grid-column: 1 / span 2;
+  grid-row: 1 / span 4;
+}
+
+[data-settings-layout='memories'] [data-tile='proposed'] {
+  grid-column: 3 / span 2;
+  grid-row: 1 / span 4;
+}
+
+@media (max-width: 1023px) {
+  [data-settings-layout='memories'] {
+    grid-template-columns: 1fr;
+    /* Equal halves — auto rows let the facts list grow and dwarf proposed */
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    height: min(72vh, 36rem);
+    min-height: 20rem;
+    gap: 0.5rem;
+  }
+
+  [data-settings-layout='memories'] [data-tile='facts'] {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 0;
+  }
+
+  [data-settings-layout='memories'] [data-tile='proposed'] {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+  }
+}
+
+/* ── Startup panel ─────────────────────────────────────────────────── */
+
+[data-settings-layout='startup'] {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+[data-settings-layout='startup'] [data-tile='launch'] {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+[data-settings-layout='startup'] [data-tile='location'] {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+[data-settings-layout='startup'] [data-tile='microphone'] {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+[data-settings-layout='startup'] [data-tile='screen'] {
+  grid-column: 4;
+  grid-row: 1;
+}
+
+@media (max-width: 1023px) {
+  [data-settings-layout='startup'] {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    height: auto;
+  }
+
+  [data-settings-layout='startup'] [data-tile] {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    min-height: 5.5rem;
+  }
+}

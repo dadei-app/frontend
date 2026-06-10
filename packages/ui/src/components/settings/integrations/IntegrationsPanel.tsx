@@ -62,8 +62,12 @@ const REALTIME_SOURCES = [
   },
 ] as const;
 
-const integrationGridClass =
-  'grid h-full min-h-0 w-full grid-cols-4 grid-rows-2 gap-3 [grid-auto-rows:1fr]';
+/** lg+: 4×2 (reference). Below lg: always 2-col workspace grid (never 1-col). */
+const workspaceGridClass =
+  'settings-integration-grid--workspace grid h-full min-h-0 w-full grid-cols-2 gap-2 lg:grid-cols-4 lg:grid-rows-2 lg:gap-3 [grid-auto-rows:minmax(3.25rem,1fr)] lg:[grid-auto-rows:minmax(0,1fr)]';
+
+const realtimeGridClass =
+  'settings-integration-grid--realtime grid h-full min-h-0 w-full grid-cols-2 grid-rows-2 gap-2 lg:grid-cols-4 lg:gap-3 [grid-auto-rows:minmax(4rem,1fr)] lg:[grid-auto-rows:minmax(0,1fr)]';
 
 function googleStatus(
   status: string,
@@ -143,14 +147,11 @@ export function IntegrationsPanel() {
   const fetchErr = (e: unknown) => getUserErrorMessage(e, 'Something went wrong. Please try again.');
 
   return (
-    <SettingsGrid4 className="min-h-0 flex-1">
+    <SettingsGrid4 layout="integrations" className="min-h-0 flex-1">
       <GridTile
+        tile="google"
         title="Google Workspace"
         hint="Connect once, then re-authorize when scopes change."
-        col={1}
-        row={1}
-        colSpan={4}
-        rowSpan={2}
         bodyClassName="min-h-0 gap-3"
       >
         {!googleConnected ? (
@@ -164,7 +165,7 @@ export function IntegrationsPanel() {
           </SegmentedShell>
         ) : needsGoogleReauth ? (
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-            <p className="text-sm text-amber-200/90 font-secondary">
+            <p className="settings-hide-sm text-sm text-amber-200/90 font-secondary">
               Some Google permissions are missing — re-authorize to turn on Calendar and other
               integrations.
             </p>
@@ -188,7 +189,7 @@ export function IntegrationsPanel() {
             {fetchErr(integrationsStatusQuery.error)}
           </p>
         ) : (
-          <div className={integrationGridClass}>
+          <div className={workspaceGridClass}>
             {integrationCards.map(integration => (
               <IntegrationCard
                 key={integration.id}
@@ -214,19 +215,16 @@ export function IntegrationsPanel() {
       </GridTile>
 
       <GridTile
+        tile="realtime"
         title="Realtime data"
         hint="Always on — no account authorization."
-        col={1}
-        row={3}
-        colSpan={4}
-        rowSpan={2}
         bodyClassName="min-h-0"
       >
-        <div className={integrationGridClass}>
+        <div className={realtimeGridClass}>
           {REALTIME_SOURCES.map(source => (
             <IntegrationCard
               key={source.name}
-              className="row-span-2"
+              className="integration-card--realtime"
               name={source.name}
               description={source.description}
               Icon={source.Icon}

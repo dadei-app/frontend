@@ -104,21 +104,19 @@ export function AudioPanel() {
       : '';
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-2 lg:gap-3">
       {!isElectron ? (
-        <p className="shrink-0 text-xs text-zinc-500 font-secondary">
+        <p className="settings-hide-sm shrink-0 text-xs text-zinc-500 font-secondary">
           Device preferences persist in the desktop app. Mic changes apply to this session.
         </p>
       ) : null}
 
-      <SettingsGrid4 className="flex-1">
+      <SettingsGrid4 layout="audio" className="min-h-0 flex-1 lg:h-full">
         <GridTile
+          tile="mic"
           title="Microphone"
-          col={1}
-          row={1}
-          colSpan={3}
-          rowSpan={2}
-          bodyClassName="min-h-0"
+          scrollable
+          bodyClassName="flex min-h-0 flex-col"
         >
           {deviceError ? (
             <p className="mb-2 shrink-0 text-xs text-amber-300/90 font-secondary">{deviceError}</p>
@@ -131,11 +129,8 @@ export function AudioPanel() {
         </GridTile>
 
         <GridTile
+          tile="noise"
           title="Noise suppression"
-          col={4}
-          row={1}
-          colSpan={1}
-          rowSpan={1}
           headerAction={
             <PowerToggleButton
               active={settings.noiseSuppression}
@@ -156,7 +151,7 @@ export function AudioPanel() {
           />
         </GridTile>
 
-        <GridTile title="Toggle assistant" col={4} row={2} colSpan={1} rowSpan={1}>
+        <GridTile tile="hotkey" title="Toggle assistant">
           <AssistantHotkeyControl
             compact
             displayLabel={capturing ? 'Press any key…' : formatHotkey()}
@@ -166,12 +161,9 @@ export function AudioPanel() {
         </GridTile>
 
         <GridTile
+          tile="meter"
           title="Input level"
           hint="Speak normally — aim for Medium"
-          col={1}
-          row={3}
-          colSpan={4}
-          rowSpan={2}
           bodyClassName="min-h-0"
         >
           <MicLevelMeter level={micLevel} />

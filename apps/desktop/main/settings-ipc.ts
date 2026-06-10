@@ -39,17 +39,23 @@ export function registerSettingsIpc(): void {
   ipcMain.handle('startup:set-launch-at-login', (_e, enabled: boolean) => {
     app.setLoginItemSettings({ openAtLogin: enabled });
     setStartupField('launchAtLogin', enabled);
+    if (!enabled) {
+      setStartupField('startMinimized', false);
+    }
     return enabled;
   });
   ipcMain.handle('startup:get-start-minimized', () => getStartup().startMinimized);
   ipcMain.handle('startup:set-start-minimized', (_e, enabled: boolean) => {
+    if (enabled && !app.getLoginItemSettings().openAtLogin) {
+      return false;
+    }
     setStartupField('startMinimized', enabled);
     return enabled;
   });
   ipcMain.handle('startup:get-minimize-to-tray', () => getStartup().minimizeToTray);
   ipcMain.handle('startup:set-minimize-to-tray', (_e, enabled: boolean) => {
     setStartupField('minimizeToTray', enabled);
-    syncTrayFromSettings();
+    void syncTrayFromSettings();
     return enabled;
   });
 

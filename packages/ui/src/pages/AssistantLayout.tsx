@@ -1,9 +1,9 @@
-import { useLayoutEffect, useState, type CSSProperties } from 'react';
-import { motion } from 'framer-motion';
+import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
-import { LoadingScreen } from '@dadei/ui/components/LoadingScreen';
+import { Loading } from '@dadei/ui/components/Loading';
 import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
 import {
   TutorialProvider,
@@ -12,19 +12,41 @@ import {
   useTutorialSettingsTourActive,
 } from '@dadei/ui/contexts/TutorialContext';
 import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
-import { CommandBubbleStackHost } from '@dadei/ui/contexts/CommandContext';
+import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
+import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
+import MobileInteractionsSheet from '@dadei/ui/components/MobileInteractionsSheet';
 import AssistantSettingsModal from '@dadei/ui/components/settings';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
+import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
 import { cn } from '@dadei/ui/lib/shared/cn';
 import { Mic } from 'lucide-react';
 
 const ASSISTANT_HINT_ROW =
   'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
+
+const WAKE_WORD_COLOR = {
+  dadei: 'text-emerald-400',
+  jarvis: 'text-sky-400',
+} as const;
+
+function SpokenWakeWord({
+  variant,
+  children,
+}: {
+  variant: keyof typeof WAKE_WORD_COLOR;
+  children: ReactNode;
+}) {
+  return (
+    <span className={WAKE_WORD_COLOR[variant]}>
+      &ldquo;{children}&rdquo;
+    </span>
+  );
+}
 
 /**
  * Authenticated assistant shell: layout, theme tokens, overlays (settings), and realtime hooks.
@@ -85,23 +107,35 @@ function assistantLoadingSubtitle(
   isLoading: boolean,
   isLoggingOut: boolean,
   meLoading: boolean,
+  sessionDataLoading: boolean,
+  isConnected: boolean,
 ): string | undefined {
   if (isLoggingOut) return 'Signing out…';
   if (isBootstrapReady && isLoading) return 'Signing in…';
   if (isBootstrapReady && meLoading) return 'Loading your profile…';
+  if (isBootstrapReady && sessionDataLoading) {
+    return isConnected ? 'Loading your data…' : 'Connecting…';
+  }
   return undefined;
 }
 
 function AssistantLayoutShell() {
-  const { isAuthenticated, isLoading, isLoggingOut } = useAuth();
-  const { isBootstrapReady, formatHotkey, viewportFillClass } = useSystem();
+  const { formatHotkey, viewportFillClass } = useSystem();
+  const isMobileAssistant = useMobileAssistant();
+  const { isServiceEnabled } = useService();
+  const { state, introductionModeActive } = useCommand();
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
   const needsTutorial = useNeedsTutorial();
   const elevateNotifications = tutorialEngaged && tutorial?.step.id === 'layout_tour';
+  const showTalkHint = introductionModeActive;
+  const showWakeHint =
+    state === 'idle' &&
+    isServiceEnabled &&
+    !introductionModeActive &&
+    (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const location = useLocation();
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -119,25 +153,6 @@ function AssistantLayoutShell() {
       root.style.removeProperty('--assistant-hints-reserve');
     };
   }, []);
-
-  if (isLoggingOut) {
-    return <LoadingScreen visible subtitleOverride="Signing out…" />;
-  }
-
-  if (!isBootstrapReady || isLoading) {
-    return (
-      <LoadingScreen
-        visible={isBootstrapReady ? true : undefined}
-        subtitleOverride={assistantLoadingSubtitle(isBootstrapReady, isLoading, false, false)}
-      />
-    );
-  }
-
-  if (!isAuthenticated) {
-    const next = `${location.pathname}${location.search}${location.hash}`;
-    const qs = next && next !== ASSISTANT_PATH ? `?next=${encodeURIComponent(next)}` : '';
-    return <Navigate to={`/login${qs}`} replace />;
-  }
 
   return (
     <div
@@ -171,9 +186,9 @@ function AssistantLayoutShell() {
           onOpenSettings={() => setSettingsOpen(true)}
         />
 
-        <main className="relative z-0 flex min-h-0 flex-1 min-w-0 overscroll-none">
+        <main className="assistant-shell-main relative z-0 flex min-h-0 flex-1 min-w-0 overscroll-none">
           <div
-            className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible px-10 pt-6 pb-10"
+            className="assistant-shell-mic-pane relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible px-4 pt-4 pb-6 sm:px-6 lg:px-10 lg:pt-6 lg:pb-10"
             style={{
               background:
                 'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
@@ -181,7 +196,7 @@ function AssistantLayoutShell() {
           >
             <div
               className={cn(
-                'pointer-events-none absolute top-4 left-10 w-[calc(100%-5rem)]',
+                'pointer-events-none absolute top-4 left-4 w-[calc(100%-2rem)] sm:left-6 sm:w-[calc(100%-3rem)] lg:left-10 lg:w-[calc(100%-5rem)]',
                 elevateNotifications ? 'z-[10002]' : 'z-30',
               )}
             >
@@ -189,9 +204,16 @@ function AssistantLayoutShell() {
             </div>
             <div className="relative min-h-0 flex-1 overflow-hidden">
               {/* Mic: geometric center of the left panel; hints are out of flow. */}
-              <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+              <div
+                className={cn(
+                  'pointer-events-none absolute z-10 flex items-center justify-center',
+                  isMobileAssistant ? 'assistant-mic-anchor inset-x-0' : 'inset-0',
+                )}
+              >
                 <div className="pointer-events-auto isolate">
-                  <MicrophoneButton disableSpaceToggle={isPeoplePanelOpen} />
+                  <MicrophoneButton
+                    disableSpaceToggle={isPeoplePanelOpen || isMobileAssistant}
+                  />
                 </div>
               </div>
 
@@ -199,10 +221,40 @@ function AssistantLayoutShell() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pb-8 pt-3 text-sm text-zinc-500 font-secondary"
+                className="assistant-hint-row pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pt-3 pb-8 text-sm text-zinc-500 font-secondary lg:pb-8"
               >
-                <p className={ASSISTANT_HINT_ROW}>
-                  <kbd className="rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
+                <AnimatePresence initial={false}>
+                  {showTalkHint ? (
+                    <motion.p
+                      key="talk-hint"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.2 }}
+                      className={ASSISTANT_HINT_ROW}
+                    >
+                      <span>dadei will guide you — listen and follow along</span>
+                    </motion.p>
+                  ) : null}
+                  {showWakeHint ? (
+                    <motion.p
+                      key="wake-hint"
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 4 }}
+                      transition={{ duration: 0.2 }}
+                      className={ASSISTANT_HINT_ROW}
+                    >
+                      <span>Say</span>
+                      <SpokenWakeWord variant="dadei">hey dadei</SpokenWakeWord>
+                      <span>or</span>
+                      <SpokenWakeWord variant="jarvis">hey jarvis</SpokenWakeWord>
+                      <span>to begin a command</span>
+                    </motion.p>
+                  ) : null}
+                </AnimatePresence>
+                <p className={cn(ASSISTANT_HINT_ROW, 'assistant-hint-kbd-row')}>
+                  <kbd className="assistant-hint-kbd rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
                     {formatHotkey()}
                   </kbd>
                   <span>to toggle</span>
@@ -213,10 +265,18 @@ function AssistantLayoutShell() {
             </div>
           </div>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-white/7 bg-zinc-950/40 backdrop-blur-sm">
-            <InteractionPanel />
-          </div>
+          {!isMobileAssistant ? (
+            <div className="assistant-shell-interactions flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-white/7 bg-zinc-950/40 backdrop-blur-sm">
+              <InteractionPanel />
+            </div>
+          ) : null}
         </main>
+
+        {isMobileAssistant ? (
+          <MobileInteractionsSheet>
+            <InteractionPanel embedded />
+          </MobileInteractionsSheet>
+        ) : null}
       </div>
 
       {needsTutorial ? (
@@ -228,7 +288,10 @@ function AssistantLayoutShell() {
       <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
       <ToastStackHost
-        className={cn('fixed right-5 bottom-5', elevateNotifications ? 'z-[10002]' : 'z-[260]')}
+        className={cn(
+          'assistant-toast-host fixed right-5 bottom-5',
+          elevateNotifications ? 'z-[10002]' : 'z-[260]',
+        )}
       />
     </div>
   );
@@ -237,33 +300,50 @@ function AssistantLayoutShell() {
 export default function AssistantLayout() {
   const { isAuthenticated, isLoading, isLoggingOut } = useAuth();
   const { isBootstrapReady } = useSystem();
+  const { isConnected, isReady } = useService();
   const meQuery = useAuthMeQuery(isAuthenticated && isBootstrapReady && !isLoading);
   const needsTutorial = useNeedsTutorial();
+  const location = useLocation();
   const meLoading = isAuthenticated && meQuery.isLoading;
-  const showLoading = isLoggingOut || !isBootstrapReady || isLoading || meLoading;
+  const sessionDataLoading = isAuthenticated && !isReady;
+  const showLoadingOverlay =
+    isLoggingOut ||
+    !isBootstrapReady ||
+    isLoading ||
+    meLoading ||
+    sessionDataLoading;
+  const showShell =
+    isBootstrapReady && !isLoading && !isLoggingOut && isAuthenticated && isReady;
 
-  if (showLoading) {
-    return (
-      <LoadingScreen
-        visible={isLoggingOut || isBootstrapReady ? true : undefined}
+  if (isBootstrapReady && !isLoading && !isLoggingOut && !isAuthenticated) {
+    const next = `${location.pathname}${location.search}${location.hash}`;
+    const qs = next && next !== ASSISTANT_PATH ? `?next=${encodeURIComponent(next)}` : '';
+    return <Navigate to={`/login${qs}`} replace />;
+  }
+
+  return (
+    <>
+      {showShell ? (
+        needsTutorial ? (
+          <TutorialProvider>
+            <AssistantLayoutShell />
+            <TutorialOverlayContent />
+          </TutorialProvider>
+        ) : (
+          <AssistantLayoutShell />
+        )
+      ) : null}
+      <Loading
+        visible={showLoadingOverlay}
         subtitleOverride={assistantLoadingSubtitle(
           isBootstrapReady,
           isLoading,
           isLoggingOut,
           meLoading,
+          sessionDataLoading,
+          isConnected,
         )}
       />
-    );
-  }
-
-  if (needsTutorial) {
-    return (
-      <TutorialProvider>
-        <AssistantLayoutShell />
-        <TutorialOverlayContent />
-      </TutorialProvider>
-    );
-  }
-
-  return <AssistantLayoutShell />;
+    </>
+  );
 }

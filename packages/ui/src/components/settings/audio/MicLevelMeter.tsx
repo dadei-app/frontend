@@ -20,9 +20,9 @@ export function MicLevelMeter({ level }: { level: number }) {
   const zone = activeZone(clamped);
 
   return (
-    <div className="flex h-full min-h-0 flex-col justify-center gap-5 px-1 py-2">
+    <div className="mic-level-meter flex h-full min-h-0 flex-col justify-center gap-5 px-1 py-2">
       <div
-        className="flex h-[7.5rem] w-full items-end justify-center gap-[2px] rounded-xl border border-white/8 bg-zinc-950/70 px-3 py-4"
+        className="mic-level-meter__bars flex h-[7.5rem] w-full items-end justify-center gap-[2px] rounded-xl border border-white/8 bg-zinc-950/70 px-3 py-4"
         role="meter"
         aria-valuenow={Math.round(clamped * 100)}
         aria-valuemin={0}
@@ -32,12 +32,12 @@ export function MicLevelMeter({ level }: { level: number }) {
         {Array.from({ length: SEGMENTS }).map((_, i) => {
           const on = i < active;
           const t = i / SEGMENTS;
-          const h = 18 + t * 62;
+          const hPct = 22 + t * 78;
           return (
             <div
               key={i}
               className={cn(
-                'w-1.5 max-w-[10px] flex-1 rounded-sm transition-all duration-75',
+                'mic-level-meter__bar w-1.5 max-w-[10px] flex-1 rounded-sm transition-all duration-75',
                 on
                   ? t > 0.85
                     ? 'bg-emerald-200 shadow-[0_0_10px_rgba(167,243,208,0.5)]'
@@ -46,7 +46,7 @@ export function MicLevelMeter({ level }: { level: number }) {
                       : 'bg-emerald-600/85'
                   : 'bg-white/[0.06]',
               )}
-              style={{ height: h }}
+              style={{ height: `${hPct}%` }}
             />
           );
         })}

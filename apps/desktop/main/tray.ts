@@ -1,7 +1,10 @@
-import { app, Menu, Tray, nativeImage, type BrowserWindow } from 'electron';
+import { app, Menu, Tray, nativeImage, type BrowserWindow, type NativeImage } from 'electron';
 import path from 'path';
-import { setAppQuitting } from './app-quit';
-import { getStartup } from './settings-store';
+import { buildTrayMenuTemplate } from './menu';
+
+export function usesSystemTray(): boolean {
+  return process.platform === 'win32' || process.platform === 'linux';
+}
 
 let tray: Tray | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -23,38 +26,56 @@ export function destroyTray(): void {
   tray = null;
 }
 
-export function syncTrayFromSettings(): void {
-  const useTray = getStartup().minimizeToTray;
-  const canTray = process.platform === 'win32' || process.platform === 'linux';
+async function resolveTrayIcon(): Promise<NativeImage> {
+  const candidates = [
+    path.join(process.resourcesPath, 'icon.png'),
+    path.join(app.getAppPath(), 'resources', 'icon.png'),
+  ];
 
-  if (!useTray || !canTray) {
+  for (const candidate of candidates) {
+    const image = nativeImage.createFromPath(candidate);
+    if (!image.isEmpty()) {
+      return image.resize({ width: 16, height: 16 });
+    }
+  }
+
+  try {
+    const fromExe = await app.getFileIcon(process.execPath, { size: 'small' });
+    if (!fromExe.isEmpty()) {
+      return fromExe.resize({ width: 16, height: 16 });
+    }
+  } catch (error) {
+    console.warn('[tray] failed to read icon from executable', error);
+  }
+
+  return nativeImage.createEmpty();
+}
+
+function attachTrayHandlers(icon: NativeImage): void {
+  if (tray) {
+    tray.setImage(icon);
+    tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate(showMainWindow)));
+    return;
+  }
+
+  tray = new Tray(icon);
+  tray.setToolTip('dadei');
+  tray.on('click', () => showMainWindow());
+  tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate(showMainWindow)));
+}
+
+export async function syncTrayFromSettings(): Promise<void> {
+  if (!usesSystemTray()) {
     destroyTray();
     return;
   }
 
-  if (tray) return;
-
-  const iconPath = path.join(app.getAppPath(), 'resources', 'icon.png');
-  const image = nativeImage.createFromPath(iconPath);
+  const image = await resolveTrayIcon();
   if (image.isEmpty()) {
-    console.warn('[tray] icon missing at', iconPath);
+    console.warn('[tray] no tray icon available');
+    destroyTray();
     return;
   }
 
-  tray = new Tray(image.resize({ width: 16, height: 16 }));
-  tray.setToolTip('dadei');
-  tray.on('click', () => showMainWindow());
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Show dadei', click: () => showMainWindow() },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        click: () => {
-          setAppQuitting();
-          app.quit();
-        },
-      },
-    ]),
-  );
+  attachTrayHandlers(image);
 }

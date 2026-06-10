@@ -9,6 +9,7 @@ import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
 import { cn } from '@dadei/ui/lib/shared/cn';
+import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
 import {
   GridTile,
   SettingsGrid4,
@@ -24,13 +25,21 @@ import { buildPopularTimezoneOptions } from './timezonePicker';
 import { AccountSessionActions } from './AccountSessionActions';
 import { PasswordDialog } from './PasswordDialog';
 
-function CenteredField({ children }: { children: React.ReactNode }) {
+function CenteredField({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-full min-h-0 flex-col items-center justify-center px-1">{children}</div>
   );
 }
 
+function AccountField({ mobile, children }: { mobile: boolean; children: ReactNode }) {
+  if (mobile) {
+    return <div className="w-full">{children}</div>;
+  }
+  return <CenteredField>{children}</CenteredField>;
+}
+
 export function AccountPanel() {
+  const isMobile = useMobileAssistant();
   const queryClient = useQueryClient();
   const { user: me, updateNetwork, logout, saveTokens, refreshUser } = useAuth();
   const settingsTourActive = useTutorialSettingsTourActive();
@@ -62,6 +71,13 @@ export function AccountPanel() {
     () => buildPopularTimezoneOptions(sysTz, selectedTz),
     [sysTz, selectedTz],
   );
+
+  const passwordHint =
+    !hasPassword && profile?.google_connected
+      ? 'Sign in without Google.'
+      : hasPassword
+        ? 'Update your password.'
+        : 'Email sign-in.';
 
   const handleLogout = async () => {
     await logout();
@@ -101,129 +117,158 @@ export function AccountPanel() {
     }
   };
 
+  const timezoneTile = (
+    <GridTile
+      title="Timezone"
+      hint="Used for scheduling and reminders."
+      stacked={isMobile}
+      col={isMobile ? undefined : 1}
+      row={isMobile ? undefined : 1}
+      colSpan={isMobile ? undefined : 2}
+      rowSpan={isMobile ? undefined : 4}
+      className={isMobile ? 'account-timezone-tile shrink-0' : undefined}
+      bodyClassName={isMobile ? undefined : 'min-h-0'}
+      scrollable={isMobile}
+    >
+      <SegmentedControl
+        layout="stack"
+        scrollable
+        options={timezoneOptions}
+        value={selectedTz}
+        onChange={tz => void updateNetwork({ timezone: tz })}
+      />
+    </GridTile>
+  );
+
+  const networkTile = (
+    <GridTile
+      title="Network name"
+      hint="Shown in the assistant header."
+      stacked={isMobile}
+      col={isMobile ? undefined : 3}
+      row={isMobile ? undefined : 1}
+      colSpan={isMobile ? undefined : 2}
+      rowSpan={isMobile ? undefined : 1}
+      className={isMobile ? 'shrink-0' : undefined}
+      bodyClassName={isMobile ? undefined : 'min-h-0'}
+    >
+      <AccountField mobile={isMobile}>
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          onBlur={() => {
+            const trimmed = name.trim();
+            if (trimmed && trimmed !== profile?.name) {
+              void updateNetwork({ name: trimmed });
+            }
+          }}
+          className={cn(
+            settingsInputClass,
+            'w-full border-white/10 bg-zinc-950/80',
+            isMobile ? 'text-left' : 'max-w-md text-center',
+          )}
+        />
+      </AccountField>
+    </GridTile>
+  );
+
+  const emailTile = (
+    <GridTile
+      title="Email"
+      hint="Managed by your sign-in provider."
+      stacked={isMobile}
+      col={isMobile ? undefined : 3}
+      row={isMobile ? undefined : 2}
+      colSpan={isMobile ? undefined : 2}
+      rowSpan={isMobile ? undefined : 1}
+      className={isMobile ? 'shrink-0' : undefined}
+      bodyClassName={isMobile ? undefined : 'min-h-0'}
+    >
+      <AccountField mobile={isMobile}>
+        <input
+          type="email"
+          readOnly
+          disabled
+          value={email}
+          title={email}
+          className={cn(
+            settingsReadonlyFieldClass,
+            'w-full truncate',
+            isMobile ? 'text-left text-[0.9375rem]' : 'max-w-md',
+          )}
+          aria-label="Account email"
+        />
+      </AccountField>
+    </GridTile>
+  );
+
+  const passwordTile = (
+    <GridTile
+      title="Password"
+      hint={passwordHint}
+      stacked={isMobile}
+      col={isMobile ? undefined : 3}
+      row={isMobile ? undefined : 3}
+      colSpan={isMobile ? undefined : 2}
+      rowSpan={isMobile ? undefined : 1}
+      className={isMobile ? 'shrink-0' : undefined}
+      bodyClassName={isMobile ? undefined : 'min-h-0'}
+    >
+      <AccountField mobile={isMobile}>
+        <div className={cn('w-full', !isMobile && 'max-w-md')}>
+          {hasPassword ? (
+            <button
+              type="button"
+              onClick={() => setShowChangePassword(true)}
+              className={cn(settingsButtonClass, 'w-full')}
+            >
+              Change password
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowSetPassword(true)}
+              className={cn(settingsPrimaryButtonClass, 'w-full')}
+            >
+              Set a password
+            </button>
+          )}
+          {!googleConnected ? (
+            <button
+              type="button"
+              disabled={linkingGoogle}
+              onClick={() => void handleLinkGoogle()}
+              className={cn(settingsButtonClass, 'mt-2 w-full disabled:opacity-50')}
+            >
+              {linkingGoogle ? 'Connecting…' : 'Link Google account'}
+            </button>
+          ) : null}
+        </div>
+      </AccountField>
+    </GridTile>
+  );
+
   return (
     <>
-      <SettingsGrid4 className="min-h-0 flex-1">
-        <GridTile
-          title="Timezone"
-          hint="Used for scheduling and reminders."
-          col={1}
-          row={1}
-          colSpan={2}
-          rowSpan={4}
-          bodyClassName="min-h-0"
-        >
-          <SegmentedControl
-            layout="stack"
-            scrollable
-            options={timezoneOptions}
-            value={selectedTz}
-            onChange={tz => void updateNetwork({ timezone: tz })}
+      {isMobile ? (
+        <div className="account-panel-mobile">
+          {timezoneTile}
+          {networkTile}
+          {emailTile}
+          {passwordTile}
+        </div>
+      ) : (
+        <SettingsGrid4 className="min-h-0 flex-1">
+          {timezoneTile}
+          {networkTile}
+          {emailTile}
+          {passwordTile}
+          <AccountSessionActions
+            onLogout={() => void handleLogout()}
+            onDeleteAccount={() => setAlertOpen(true)}
           />
-        </GridTile>
-
-        <GridTile
-          title="Network name"
-          hint="Shown in the assistant header."
-          col={3}
-          row={1}
-          colSpan={2}
-          rowSpan={1}
-          bodyClassName="min-h-0"
-        >
-          <CenteredField>
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onBlur={() => {
-                const trimmed = name.trim();
-                if (trimmed && trimmed !== profile?.name) {
-                  void updateNetwork({ name: trimmed });
-                }
-              }}
-              className={cn(
-                settingsInputClass,
-                'w-full max-w-md border-white/10 bg-zinc-950/80 text-center',
-              )}
-            />
-          </CenteredField>
-        </GridTile>
-
-        <GridTile
-          title="Email"
-          hint="Managed by your sign-in provider."
-          col={3}
-          row={2}
-          colSpan={2}
-          rowSpan={1}
-          bodyClassName="min-h-0"
-        >
-          <CenteredField>
-            <input
-              type="email"
-              readOnly
-              disabled
-              value={email}
-              title={email}
-              className={cn(settingsReadonlyFieldClass, 'max-w-md truncate')}
-              aria-label="Account email"
-            />
-          </CenteredField>
-        </GridTile>
-
-        <GridTile
-          title="Password"
-          hint={
-            !hasPassword && profile?.google_connected
-              ? 'Sign in without Google.'
-              : hasPassword
-                ? 'Update your password.'
-                : 'Email sign-in.'
-          }
-          col={3}
-          row={3}
-          colSpan={2}
-          rowSpan={1}
-          bodyClassName="min-h-0"
-        >
-          <CenteredField>
-            <div className="w-full max-w-md">
-              {hasPassword ? (
-                <button
-                  type="button"
-                  onClick={() => setShowChangePassword(true)}
-                  className={cn(settingsButtonClass, 'w-full')}
-                >
-                  Change password
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setShowSetPassword(true)}
-                  className={cn(settingsPrimaryButtonClass, 'w-full')}
-                >
-                  Set a password
-                </button>
-              )}
-              {!googleConnected ? (
-                <button
-                  type="button"
-                  disabled={linkingGoogle}
-                  onClick={() => void handleLinkGoogle()}
-                  className={cn(settingsButtonClass, 'mt-2 w-full disabled:opacity-50')}
-                >
-                  {linkingGoogle ? 'Connecting…' : 'Link Google account'}
-                </button>
-              ) : null}
-            </div>
-          </CenteredField>
-        </GridTile>
-
-        <AccountSessionActions
-          onLogout={() => void handleLogout()}
-          onDeleteAccount={() => setAlertOpen(true)}
-        />
-      </SettingsGrid4>
+        </SettingsGrid4>
+      )}
 
       <PasswordDialog mode="set" open={showSetPassword} onOpenChange={setShowSetPassword} />
       <PasswordDialog mode="change" open={showChangePassword} onOpenChange={setShowChangePassword} />

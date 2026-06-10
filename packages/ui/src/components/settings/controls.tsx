@@ -75,7 +75,11 @@ export function SegmentedControl<T extends string | number>({
   return (
     <SegmentedShell
       layout={layout}
-      className={scrollable ? 'min-h-0 flex-1 overflow-y-auto overscroll-none' : undefined}
+      className={
+        scrollable
+          ? 'min-h-0 flex-1 overflow-y-auto overscroll-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0'
+          : undefined
+      }
     >
       {options.map(opt => (
         <SegmentedOption
@@ -97,27 +101,36 @@ export function Toggle({
   onChange,
   label,
   portrait = false,
+  disabled = false,
+  showLabel = true,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   label: string;
   portrait?: boolean;
+  disabled?: boolean;
+  showLabel?: boolean;
 }) {
   return (
     <label
       className={cn(
-        'flex cursor-pointer gap-3 text-sm text-zinc-300',
+        'flex gap-3 text-sm text-zinc-300',
         portrait ? 'flex-col items-start' : 'items-center',
+        disabled ? 'cursor-not-allowed opacity-45' : 'cursor-pointer',
+        !showLabel && 'inline-flex',
       )}
     >
       <button
         type="button"
         role="switch"
         aria-checked={checked}
+        aria-label={label}
+        disabled={disabled}
         onClick={() => onChange(!checked)}
         className={cn(
           'relative flex h-7 w-12 shrink-0 items-center rounded-full border px-0.5 transition-colors emerald-glow',
           checked ? 'border-emerald-500/50 bg-emerald-500/30' : 'border-white/10 bg-zinc-800',
+          disabled && 'pointer-events-none',
         )}
       >
         <span
@@ -127,7 +140,7 @@ export function Toggle({
           )}
         />
       </button>
-      <span className="min-w-0 flex-1 leading-snug">{label}</span>
+      {showLabel ? <span className="min-w-0 flex-1 leading-snug">{label}</span> : null}
     </label>
   );
 }
@@ -190,7 +203,15 @@ export function NoiseSuppressionControl({
 }) {
   if (compact) {
     return (
-      <div className="flex h-full min-h-0 flex-col justify-end gap-2">
+      <div className="flex h-full min-h-0 flex-col justify-center gap-2 py-0.5">
+        <p
+          className={cn(
+            'shrink-0 text-[10px] leading-tight',
+            enabled ? 'text-zinc-500' : 'text-zinc-600',
+          )}
+        >
+          Hiss reduction
+        </p>
         <GlowSlider
           min={0}
           max={100}
@@ -199,9 +220,6 @@ export function NoiseSuppressionControl({
           disabled={!enabled}
           onChange={onLevelChange}
         />
-        <p className={cn('text-[10px] leading-tight', enabled ? 'text-zinc-500' : 'text-zinc-600')}>
-          Hiss reduction
-        </p>
       </div>
     );
   }

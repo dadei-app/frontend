@@ -27,7 +27,7 @@ function MemorySection({
 }) {
   if (memories.length === 0) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-zinc-900/55 px-4 py-6 text-center">
+      <div className="flex h-full min-h-0 flex-1 flex-col items-center justify-center rounded-lg border border-dashed border-white/10 bg-zinc-900/55 px-4 py-6 text-center">
         <p className="text-sm font-medium text-zinc-400">{emptyTitle}</p>
         <p className="mt-2 max-w-xs text-xs leading-relaxed text-zinc-500 font-secondary">
           {emptyDetail}
@@ -37,7 +37,7 @@ function MemorySection({
   }
 
   return (
-    <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-none">
+    <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
       {memories.map(m => (
         <MemorySettingsRow
           key={m.id}
@@ -103,15 +103,12 @@ export function MemoriesPanel() {
   }
 
   return (
-    <SettingsGrid4 className="min-h-0 flex-1">
+    <SettingsGrid4 layout="memories" className="min-h-0 flex-1">
       <GridTile
+        tile="facts"
         title="Memories"
         hint="Observations and facts the assistant has retained."
-        col={1}
-        row={1}
-        colSpan={2}
-        rowSpan={4}
-        bodyClassName="min-h-0"
+        bodyClassName="min-h-0 flex-1"
       >
         <MemorySection
           emptyTitle="No memories yet"
@@ -126,13 +123,10 @@ export function MemoriesPanel() {
       </GridTile>
 
       <GridTile
+        tile="proposed"
         title="Proposed"
         hint="Unfinished thoughts and intents still being shaped."
-        col={3}
-        row={1}
-        colSpan={2}
-        rowSpan={4}
-        bodyClassName="min-h-0"
+        bodyClassName="min-h-0 flex-1"
       >
         <MemorySection
           emptyTitle="No proposed memories"

@@ -9,6 +9,7 @@ import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
+import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
 import { isTutorialTestId } from '@dadei/ui/lib/tutorial/testData';
 
 /** Below client tooltip (195); above main chrome. Raised during tutorial persons step. */
@@ -22,6 +23,7 @@ interface PersonsPanelProps {
 }
 
 export default function PersonsPanel({ isOpen, onClose, excludeElement }: PersonsPanelProps) {
+  const isMobileAssistant = useMobileAssistant();
   const { showToast } = useNotifications();
   const panelRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -262,10 +264,12 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
 
                           <div
                             className={cn(
-                              'flex items-center gap-1 transition-opacity',
-                              armedPersonDeleteId === person.id
-                                ? 'opacity-100'
-                                : 'opacity-0 group-hover/person:opacity-100'
+                              'flex shrink-0 items-center gap-1',
+                              !isMobileAssistant && 'transition-opacity',
+                              !isMobileAssistant &&
+                                (armedPersonDeleteId === person.id
+                                  ? 'opacity-100'
+                                  : 'opacity-0 group-hover/person:opacity-100'),
                             )}
                           >
                             {isEditing ? (
@@ -273,14 +277,20 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                 <button
                                   onClick={() => handleRename(person.id)}
                                   disabled={isRenamingPerson}
-                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-950/50 text-emerald-300 transition-colors hover:bg-emerald-950/80"
+                                  className={cn(
+                                    'flex items-center justify-center rounded-md bg-emerald-950/50 text-emerald-300 transition-colors hover:bg-emerald-950/80',
+                                    isMobileAssistant ? 'h-7 w-7' : 'h-8 w-8',
+                                  )}
                                   title="Save"
                                 >
                                   <i className="fas fa-check text-xs" />
                                 </button>
                                 <button
                                   onClick={cancelEdit}
-                                  className="flex h-7 w-7 items-center justify-center rounded-md bg-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-700"
+                                  className={cn(
+                                    'flex items-center justify-center rounded-md bg-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-700',
+                                    isMobileAssistant ? 'h-7 w-7' : 'h-8 w-8',
+                                  )}
                                   title="Cancel"
                                 >
                                   <i className="fas fa-times text-xs" />
@@ -290,7 +300,10 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                               <>
                                 <button
                                   onClick={() => startEdit(person)}
-                                  className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-300"
+                                  className={cn(
+                                    'flex items-center justify-center rounded-md text-zinc-500 transition-colors hover:bg-white/10 hover:text-zinc-300',
+                                    isMobileAssistant ? 'h-7 w-7' : 'h-8 w-8',
+                                  )}
                                   title="Rename"
                                 >
                                   <i className="fas fa-pencil-alt text-xs" />
@@ -299,7 +312,10 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                   <button
                                     type="button"
                                     onClick={() => void handleRetrainVoice()}
-                                    className="flex h-7 w-7 items-center justify-center rounded-md text-emerald-400/80 transition-colors hover:bg-emerald-950/40 hover:text-emerald-300"
+                                    className={cn(
+                                      'flex items-center justify-center rounded-md text-emerald-400/80 transition-colors hover:bg-emerald-950/40 hover:text-emerald-300',
+                                      isMobileAssistant ? 'h-7 w-7' : 'h-8 w-8',
+                                    )}
                                     title="Retrain your voice"
                                     aria-label="Retrain your voice"
                                   >
@@ -309,6 +325,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                   <SplitDeleteToolbar
                                     armed={armedPersonDeleteId === person.id}
                                     disabled={isDeletingPerson}
+                                    alwaysVisible={isMobileAssistant}
                                     onArm={() => setArmedPersonDeleteId(person.id)}
                                     onDisarm={() => setArmedPersonDeleteId(null)}
                                     onConfirm={() => {
@@ -316,13 +333,19 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                     }}
                                     idleTitle="Delete person"
                                     idleAriaLabel="Delete person"
-                                    containerClassName="h-7 self-auto"
-                                    armedContainerClassName="gap-0.5"
-                                    idleButtonClassName="opacity-100 rounded-md hover:bg-rose-950/35"
-                                    confirmButtonClassName="h-7 w-7 rounded-md"
-                                    cancelButtonClassName="h-7 w-7 rounded-md"
-                                    idleWidthPx={28}
-                                    armedWidthPx={58}
+                                    {...(isMobileAssistant
+                                      ? {
+                                          containerClassName: 'h-7 self-auto',
+                                          armedContainerClassName: 'gap-0.5',
+                                          idleButtonClassName:
+                                            'rounded-md text-rose-400/85 hover:bg-rose-950/35',
+                                          confirmButtonClassName: 'h-7 w-7 rounded-md',
+                                          cancelButtonClassName: 'h-7 w-7 rounded-md',
+                                          iconClassName: 'h-3 w-3',
+                                          idleWidthPx: 28,
+                                          armedWidthPx: 58,
+                                        }
+                                      : {})}
                                   />
                                 )}
                               </>
