@@ -57,14 +57,6 @@ const CORE_STEPS: TutorialStep[] = [
     targetKey: null,
   },
   {
-    id: 'permissions',
-    title: 'A few permissions',
-    body: "I need access to your microphone and a couple of system services to actually do my job. Grant what you're comfortable with — anything you skip, you can turn on later in Settings.",
-    targetKey: null,
-    actionTriggers: ['permission-resolved'],
-    autoAdvanceOnAction: true,
-  },
-  {
     id: 'expand_conversation',
     title: 'Conversations',
     body: 'Everything I hear gets grouped into conversations. Click the conversation in the panel to open it up.',
@@ -130,26 +122,14 @@ const CORE_STEPS: TutorialStep[] = [
   },
 ];
 
-export const TUTORIAL_PERMISSIONS_STEP_ID = 'permissions';
-
 export const TUTORIAL_FINISH_STEP_ID = 'finish_tutorial';
 
-/** Step index after skipping optional steps (e.g. permissions). */
 export function adjacentTutorialStepIndex(
   steps: TutorialStep[],
   index: number,
   delta: -1 | 1,
-  options?: { skipPermissions?: boolean },
 ): number {
-  let next = index + delta;
-  while (
-    options?.skipPermissions &&
-    next >= 0 &&
-    next < steps.length &&
-    steps[next]?.id === TUTORIAL_PERMISSIONS_STEP_ID
-  ) {
-    next += delta;
-  }
+  const next = index + delta;
   return Math.max(0, Math.min(next, steps.length - 1));
 }
 

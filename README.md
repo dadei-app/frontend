@@ -32,7 +32,8 @@ Local wake-word detection uses the [openWakeWord](https://github.com/dscripka/op
 - **Models:** `packages/ui/src/renderer/audio/models/` (bundled by Vite with `?url` imports)
   - `melspectrogram.onnx` — mel feature extractor
   - `embedding_model.onnx` — embedding network
-  - `hey_jarvis.onnx` — wake classifier (placeholder until a custom `dadei.onnx` is trained and dropped in)
+  - `hey_dadei.onnx` — wake classifier for "Dadei"
+  - `hey_jarvis.onnx` — wake classifier for "Jarvis"
 - **ORT WASM:** loaded from jsDelivr CDN (`onnxruntime-web@1.26.0`), not self-hosted in the repo
 - **Behavior:** runs on the mic stream in parallel with command capture; on detection it transitions to `listening` — transcription is **WebSocket-only** on the server
 

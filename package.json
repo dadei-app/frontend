@@ -22,7 +22,7 @@
     "version:major": "npm version major --workspaces --include-workspace-root --no-git-tag-version"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^10.0.3"
   },
   "allowScripts": {
     "electron@39.8.10": true,

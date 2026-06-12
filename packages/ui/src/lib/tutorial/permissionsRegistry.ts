@@ -166,12 +166,18 @@ export function permissionsForPlatform(
   return buildPermissionEntries(isElectron).filter(perm => perm.platforms.includes(platform));
 }
 
-/** True when every permission required for this platform is already granted. */
-export async function areAllTutorialPermissionsGranted(
+export const REQUIRED_PERMISSION_IDS = new Set(['microphone']);
+
+export function isRequiredPermission(entry: PermissionEntry): boolean {
+  return REQUIRED_PERMISSION_IDS.has(entry.id);
+}
+
+/** True when every permission required to run the assistant is granted. */
+export async function areRequiredPermissionsGranted(
   platform: TutorialPlatform,
   isElectron: boolean,
 ): Promise<boolean> {
-  const entries = permissionsForPlatform(platform, isElectron);
+  const entries = permissionsForPlatform(platform, isElectron).filter(isRequiredPermission);
   if (entries.length === 0) return true;
   const results = await Promise.all(entries.map(entry => entry.check()));
   return results.every(result => result === 'granted');

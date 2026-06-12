@@ -1,7 +1,6 @@
 export type TutorialPlatform = 'desktop-darwin' | 'desktop-win32' | 'desktop-linux' | 'web';
 
 export type ActionTrigger =
-  | 'permission-resolved'
   | 'expand-conversation'
   | 'delete-conversation'
   | 'delete-interaction'

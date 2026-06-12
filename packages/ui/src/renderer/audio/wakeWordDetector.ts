@@ -2,11 +2,24 @@ import * as ort from 'onnxruntime-web';
 import melUrl from './models/melspectrogram.onnx?url';
 import embeddingUrl from './models/embedding_model.onnx?url';
 import heyJarvisUrl from './models/hey_jarvis.onnx?url';
+import heyDadeiUrl from './models/hey_dadei.onnx?url';
+
+export type WakeWordLabel = 'hey_dadei' | 'hey_jarvis';
+
+export interface WakeWordClassifierConfig {
+  label: WakeWordLabel;
+  url: string;
+}
 
 export interface WakeWordDetectorConfig {
   threshold?: number;
-  wakeWordModelUrl?: string;
+  wakeWordClassifiers?: WakeWordClassifierConfig[];
 }
+
+const DEFAULT_WAKE_WORD_CLASSIFIERS: WakeWordClassifierConfig[] = [
+  { label: 'hey_dadei', url: heyDadeiUrl },
+  { label: 'hey_jarvis', url: heyJarvisUrl },
+];
 
 const SAMPLE_RATE = 16000;
 const PROCESSOR_BUFFER_SAMPLES = 2048; // ScriptProcessorNode requires power-of-two
@@ -17,22 +30,27 @@ const MEL_HOP_FRAMES = 8;
 const MEL_FRAMES_PER_AUDIO_FRAME = 5;
 const EMBEDDING_SIZE = 96;
 const EMBEDDING_WINDOW_SIZE = 16;
-const DEFAULT_THRESHOLD = 0.5;
+const DEFAULT_THRESHOLD = 0.8;
 const DETECTION_COOLDOWN_MS = 1500;
 const ORT_WEB_VERSION = '1.26.0';
 const ORT_WASM_DIST_URL = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_WEB_VERSION}/dist/`;
 
-type WakeCallback = (timestampMs: number) => void;
+type WakeCallback = (timestampMs: number, wakeWord: WakeWordLabel) => void;
 let wakeWordRuntimeUnavailable = false;
 let ortWasmConfigured = false;
 
+type WakeClassifierSession = {
+  label: WakeWordLabel;
+  session: ort.InferenceSession;
+};
+
 export class WakeWordDetector {
   private readonly threshold: number;
-  private readonly wakeWordModelUrl: string;
+  private readonly wakeWordClassifiers: WakeWordClassifierConfig[];
   private readonly callbacks = new Set<WakeCallback>();
   private melSession: ort.InferenceSession | null = null;
   private embeddingSession: ort.InferenceSession | null = null;
-  private wakeSession: ort.InferenceSession | null = null;
+  private wakeClassifierSessions: WakeClassifierSession[] = [];
   private audioContext: globalThis.AudioContext | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private processorNode: ScriptProcessorNode | null = null;
@@ -45,7 +63,7 @@ export class WakeWordDetector {
 
   constructor(config: WakeWordDetectorConfig = {}) {
     this.threshold = config.threshold ?? DEFAULT_THRESHOLD;
-    this.wakeWordModelUrl = config.wakeWordModelUrl ?? heyJarvisUrl;
+    this.wakeWordClassifiers = config.wakeWordClassifiers ?? DEFAULT_WAKE_WORD_CLASSIFIERS;
     this.resetPipelineState();
   }
 
@@ -103,7 +121,7 @@ export class WakeWordDetector {
     }
     this.melSession = null;
     this.embeddingSession = null;
-    this.wakeSession = null;
+    this.wakeClassifierSessions = [];
     this.pendingAudio = new Float32Array(0);
     this.inferenceQueue = Promise.resolve();
     this.resetPipelineState();
@@ -128,9 +146,14 @@ export class WakeWordDetector {
       // eslint-disable-next-line no-console
       console.info('[WakeWord] model load success: embedding_model');
 
-      this.wakeSession = await ort.InferenceSession.create(this.wakeWordModelUrl, sessionOptions);
-      // eslint-disable-next-line no-console
-      console.info('[WakeWord] model load success: wake_classifier');
+      this.wakeClassifierSessions = await Promise.all(
+        this.wakeWordClassifiers.map(async ({ label, url }) => {
+          const session = await ort.InferenceSession.create(url, sessionOptions);
+          // eslint-disable-next-line no-console
+          console.info(`[WakeWord] model load success: ${label}`);
+          return { label, session };
+        }),
+      );
     } catch (error) {
       const stage = this.melSession
         ? this.embeddingSession
@@ -152,7 +175,14 @@ export class WakeWordDetector {
   }
 
   private async processFrame(frame: Float32Array): Promise<void> {
-    if (!this.running || !this.melSession || !this.embeddingSession || !this.wakeSession) return;
+    if (
+      !this.running ||
+      !this.melSession ||
+      !this.embeddingSession ||
+      this.wakeClassifierSessions.length === 0
+    ) {
+      return;
+    }
 
     // openWakeWord expects float32 values in int16 magnitude range before mel extraction.
     const scaledFrame = new Float32Array(frame.length);
@@ -200,20 +230,39 @@ export class WakeWordDetector {
         flattenedEmbeddings.set(this.embeddingBuffer[i], i * EMBEDDING_SIZE);
       }
 
-      const wakeInputName = this.wakeSession.inputNames[0];
-      const wakeOutputName = this.wakeSession.outputNames[0];
-      const wakeFeeds: Record<string, ort.Tensor> = {
-        [wakeInputName]: new ort.Tensor('float32', flattenedEmbeddings, [1, EMBEDDING_WINDOW_SIZE, EMBEDDING_SIZE]),
-      };
-      const wakeResult = await this.wakeSession.run(wakeFeeds);
-      const score = (wakeResult[wakeOutputName].data as Float32Array)[0] ?? 0;
+      const wakeInputTensor = new ort.Tensor('float32', flattenedEmbeddings, [
+        1,
+        EMBEDDING_WINDOW_SIZE,
+        EMBEDDING_SIZE,
+      ]);
+
+      let bestScore = 0;
+      let bestLabel: WakeWordLabel | null = null;
+      for (const { label, session } of this.wakeClassifierSessions) {
+        const wakeInputName = session.inputNames[0];
+        const wakeOutputName = session.outputNames[0];
+        const wakeResult = await session.run({
+          [wakeInputName]: wakeInputTensor,
+        });
+        const score = (wakeResult[wakeOutputName].data as Float32Array)[0] ?? 0;
+        if (score > bestScore) {
+          bestScore = score;
+          bestLabel = label;
+        }
+      }
 
       const now = Date.now();
-      if (score > this.threshold && now - this.lastDetectedAtMs >= DETECTION_COOLDOWN_MS) {
+      if (
+        bestLabel &&
+        bestScore > this.threshold &&
+        now - this.lastDetectedAtMs >= DETECTION_COOLDOWN_MS
+      ) {
         this.lastDetectedAtMs = now;
         // eslint-disable-next-line no-console
-        console.info(`[WakeWord] detected wake word (score=${score.toFixed(4)})`);
-        this.callbacks.forEach((cb) => cb(now));
+        console.info(
+          `[WakeWord] detected ${bestLabel} (score=${bestScore.toFixed(4)})`,
+        );
+        this.callbacks.forEach((cb) => cb(now, bestLabel));
       }
 
       this.melBuffer.splice(0, MEL_HOP_FRAMES);

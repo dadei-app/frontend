@@ -10,6 +10,8 @@ import {
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
+import { ServicePermissionsGate } from '@dadei/ui/components/permissions/ServicePermissionsGate';
 import { parseInteractionDate } from '@dadei/ui/components/interaction-panel/conversationUtils';
 import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/errors/userMessage';
 import { actionsApi } from '@dadei/ui/lib/api/actions';
@@ -35,6 +37,10 @@ import {
   useAuthMeQuery,
 } from '@dadei/ui/lib/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import {
+  areRequiredPermissionsGranted,
+  toTutorialPlatform,
+} from '@dadei/ui/lib/tutorial/permissionsRegistry';
 import type {
   Conversation,
   EpisodicMemory,
@@ -126,6 +132,11 @@ interface ServiceContextType {
   conversationIdsKey: string;
   pruneExtraBootstrapConversationId: (conversationId: string) => void;
   clearExtraBootstrapConversationIds: () => void;
+
+  permissionsGateOpen: boolean;
+  permissionsGateIntent: 'enable' | 'active-service' | null;
+  completePermissionsGate: () => Promise<void>;
+  dismissPermissionsGate: () => void;
 }
 
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
@@ -133,6 +144,7 @@ export const ServiceContext = createContext<ServiceContextType | undefined>(unde
 export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading, getAccessToken } = useAuth();
   const { showToast } = useNotifications();
+  const { isElectron, platform } = useSystem();
   const queryClient = useQueryClient();
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
@@ -154,6 +166,13 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const [extraBootstrapConversationIds, setExtraBootstrapConversationIds] = useState<string[]>([]);
   const [actions, setActions] = useState<NetworkAction[]>([]);
+  const [permissionsGateOpen, setPermissionsGateOpen] = useState(false);
+  const [permissionsGateIntent, setPermissionsGateIntent] = useState<
+    'enable' | 'active-service' | null
+  >(null);
+  const permissionsGateIntentRef = useRef<'enable' | 'active-service' | null>(null);
+  const permissionsGateDismissedRef = useRef(false);
+  const pendingEnableRef = useRef(false);
 
   const sessionReady = isAuthenticated && isConnected;
   const recentIdsRef = useRef<string[]>([]);
@@ -319,6 +338,60 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     setIsTogglingService(false);
   }, []);
 
+  const checkRequiredPermissions = useCallback(async () => {
+    const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+    return areRequiredPermissionsGranted(tutorialPlatform, isElectron);
+  }, [platform, isElectron]);
+
+  const openPermissionsGate = useCallback((intent: 'enable' | 'active-service') => {
+    permissionsGateIntentRef.current = intent;
+    setPermissionsGateIntent(intent);
+    setPermissionsGateOpen(true);
+  }, []);
+
+  const dismissPermissionsGate = useCallback(() => {
+    if (permissionsGateIntentRef.current === 'active-service') {
+      permissionsGateDismissedRef.current = true;
+    }
+    pendingEnableRef.current = false;
+    permissionsGateIntentRef.current = null;
+    setPermissionsGateOpen(false);
+    setPermissionsGateIntent(null);
+    setIsTogglingService(false);
+  }, []);
+
+  const completePermissionsGate = useCallback(async () => {
+    const intent = permissionsGateIntentRef.current;
+    const shouldEnable = intent === 'enable' || pendingEnableRef.current;
+    pendingEnableRef.current = false;
+    permissionsGateIntentRef.current = null;
+    setPermissionsGateOpen(false);
+    setPermissionsGateIntent(null);
+
+    if (!shouldEnable) return;
+
+    setIsTogglingService(true);
+    try {
+      await serviceApi.enable();
+      applyServiceStatus(true);
+    } catch (error) {
+      console.error('Failed to enable service after permissions:', error);
+      setIsTogglingService(false);
+      showToast(getUserErrorMessage(error, 'Could not enable assistant service.'), 'error');
+    }
+  }, [applyServiceStatus, showToast]);
+
+  const maybePromptForActiveServicePermissions = useCallback(
+    async (enabled: boolean) => {
+      if (!enabled || permissionsGateDismissedRef.current || permissionsGateOpen) return;
+      const granted = await checkRequiredPermissions();
+      if (!granted) {
+        openPermissionsGate('active-service');
+      }
+    },
+    [checkRequiredPermissions, openPermissionsGate, permissionsGateOpen],
+  );
+
   const syncCommandModeFromClaim = useCallback((state: CommandModeState) => {
     setIsCommandMode(state.active);
     setCommandOwnerSessionId(state.owner_session_id);
@@ -354,6 +427,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       setCommandOwnerSessionId(null);
       setCommandModeExpiresAt(null);
       setExtraBootstrapConversationIds([]);
+      permissionsGateDismissedRef.current = false;
+      pendingEnableRef.current = false;
+      permissionsGateIntentRef.current = null;
+      setPermissionsGateOpen(false);
+      setPermissionsGateIntent(null);
       clearAssistantSessionCaches(queryClient);
     }
   }, [isAuthenticated, queryClient]);
@@ -402,6 +480,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       }
       console.log('[Service] Status event:', status.enabled ? 'ENABLED' : 'DISABLED');
       applyServiceStatus(status.enabled);
+      if (status.enabled) {
+        void maybePromptForActiveServicePermissions(true);
+      }
     };
     const handleCommandModeChanged = (payload: {
       active: boolean;
@@ -594,7 +675,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       if (offElectron) offElectron();
       if (offNewInteraction) offNewInteraction();
     };
-  }, [applyServiceStatus, queryClient, trackExtraBootstrapConversation]);
+  }, [applyServiceStatus, maybePromptForActiveServicePermissions, queryClient, trackExtraBootstrapConversation]);
 
   useEffect(() => {
     if (!window.electronAPI?.onWebhookAction) return;
@@ -642,6 +723,13 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           setIsTogglingService(false);
           return;
         }
+        const granted = await checkRequiredPermissions();
+        if (!granted) {
+          pendingEnableRef.current = true;
+          openPermissionsGate('enable');
+          setIsTogglingService(false);
+          return;
+        }
         await serviceApi.enable();
         applyServiceStatus(true);
       }
@@ -650,7 +738,15 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       setIsTogglingService(false);
       showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
     }
-  }, [applyServiceStatus, isServiceEnabled, registrationConflict, showToast, tutorialIncomplete]);
+  }, [
+    applyServiceStatus,
+    checkRequiredPermissions,
+    isServiceEnabled,
+    openPermissionsGate,
+    registrationConflict,
+    showToast,
+    tutorialIncomplete,
+  ]);
 
   const rejectAction = useCallback(
     async (actionId: string) => {
@@ -721,6 +817,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         commandModeRemainingMs,
         syncCommandModeFromClaim,
 
+        permissionsGateOpen,
+        permissionsGateIntent,
+        completePermissionsGate,
+        dismissPermissionsGate,
+
         memories: memoriesQuery.data ?? [],
         memoriesLoading: memoriesQuery.isLoading,
         deleteMemory: async id => {
@@ -753,6 +854,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+      <ServicePermissionsGate />
     </ServiceContext.Provider>
   );
 }

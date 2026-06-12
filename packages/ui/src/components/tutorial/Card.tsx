@@ -22,8 +22,11 @@ const CONFIRM_KNOB_CLASS =
   'flex h-6 w-6 items-center justify-center rounded-full border border-emerald-400/35 bg-emerald-950/70 text-emerald-200 shadow-sm shadow-emerald-950/40 transition hover:border-emerald-300/50 hover:bg-emerald-900/60 hover:text-emerald-100 disabled:pointer-events-none disabled:opacity-30';
 
 const CARD_MARGIN = 16;
-const CARD_WIDTH_SM = 384;
-const CARD_WIDTH_LG = 512;
+const CARD_WIDTH = 384;
+
+function cardWidthFor(_step: TutorialStep) {
+  return CARD_WIDTH;
+}
 
 const MORPH_MS = TUTORIAL_MORPH_MS;
 const MORPH_BOX = TUTORIAL_MORPH_TRANSITION;
@@ -118,10 +121,6 @@ export function CardNav({
       </button>
     </nav>
   );
-}
-
-function cardWidthFor(step: TutorialStep) {
-  return step.id === 'permissions' ? CARD_WIDTH_LG : CARD_WIDTH_SM;
 }
 
 function centerFromTopLeft(tl: { top: number; left: number }, cardW: number, cardH: number): Point {
@@ -250,21 +249,13 @@ function defaultBoxSize(step: TutorialStep): BoxSize {
   return { width: cardWidthFor(step), height: 200 };
 }
 
-function CardBody({
-  step,
-  permissionsChildren,
-}: {
-  step: TutorialStep;
-  permissionsChildren?: ReactNode;
-}) {
+function CardBody({ step }: { step: TutorialStep }) {
   return (
     <>
       <h2 className="pr-[4.25rem] font-primary text-lg font-semibold leading-tight text-zinc-50">
         {step.title}
       </h2>
-      {step.id === 'permissions' ? (
-        permissionsChildren
-      ) : step.body.trim() ? (
+      {step.body.trim() ? (
         <p className="mt-2 text-sm leading-relaxed text-zinc-300 font-secondary">{step.body}</p>
       ) : null}
     </>
@@ -273,7 +264,6 @@ function CardBody({
 
 function CardContent({
   step,
-  permissionsChildren,
   canBack,
   canNext,
   onBack,
@@ -283,7 +273,6 @@ function CardContent({
   confirmFinish,
 }: {
   step: TutorialStep;
-  permissionsChildren?: ReactNode;
   canBack: boolean;
   canNext: boolean;
   onBack: () => void;
@@ -308,7 +297,7 @@ function CardContent({
       <h2 id={titleId} className="sr-only">
         {step.title}
       </h2>
-      <CardBody step={step} permissionsChildren={permissionsChildren} />
+      <CardBody step={step} />
     </>
   );
 }
@@ -319,14 +308,12 @@ export default function Card({
   canNext,
   onBack,
   onNext,
-  children,
 }: {
   step: TutorialStep;
   canBack: boolean;
   canNext: boolean;
   onBack: () => void;
   onNext: () => void;
-  children?: ReactNode;
 }) {
   const confirmFinish = Boolean(step.startsIntroduction);
   const reduceMotion = useReducedMotion();
@@ -339,7 +326,6 @@ export default function Card({
   const [center, setCenter] = useState<Point>(() => centerForStep(step, initialSize));
   const [ready, setReady] = useState(false);
   const [displayedStep, setDisplayedStep] = useState(step);
-  const [displayedChildren, setDisplayedChildren] = useState(children);
   const [phase, setPhase] = useState<Phase>('idle');
   const [boxSize, setBoxSize] = useState<BoxSize>(initialSize);
 
@@ -382,37 +368,25 @@ export default function Card({
 
     if (reduceMotion) {
       setDisplayedStep(next);
-      setDisplayedChildren(next.id === 'permissions' ? children : null);
       lastCenterRef.current = nextCenter;
       setPhase('idle');
       return;
     }
 
     setPhase('morph');
-  }, [step, children, measureStepSize, reduceMotion]);
+  }, [step, measureStepSize, reduceMotion]);
 
   useLayoutEffect(() => {
     if (phase !== 'idle') return;
     applyLayout(step);
     setReady(true);
-  }, [step, children, phase, applyLayout]);
-
-  useLayoutEffect(() => {
-    if (phase !== 'idle' || step.id !== 'permissions') return;
-    const id = requestAnimationFrame(() => {
-      requestAnimationFrame(() => applyLayout(step));
-    });
-    return () => cancelAnimationFrame(id);
-  }, [phase, step.id, children, applyLayout, step]);
+  }, [step, phase, applyLayout]);
 
   useEffect(() => {
-    if (step.id === displayedStep.id) {
-      if (phase === 'idle') setDisplayedChildren(children);
-      return;
-    }
+    if (step.id === displayedStep.id) return;
     if (phase !== 'idle') return;
     startMorph();
-  }, [step.id, displayedStep.id, phase, children, startMorph]);
+  }, [step.id, displayedStep.id, phase, startMorph]);
 
   useEffect(() => {
     if (phase !== 'idle') return;
@@ -445,7 +419,6 @@ export default function Card({
 
     const swapId = window.setTimeout(() => {
       setDisplayedStep(step);
-      setDisplayedChildren(step.id === 'permissions' ? children : null);
     }, swapMs);
 
     const endId = window.setTimeout(() => {
@@ -457,7 +430,7 @@ export default function Card({
       window.clearTimeout(swapId);
       window.clearTimeout(endId);
     };
-  }, [phase, step, children]);
+  }, [phase, step]);
 
   return (
     <>
@@ -471,7 +444,6 @@ export default function Card({
           <div className="relative">
             <CardContent
               step={step}
-              permissionsChildren={step.id === 'permissions' ? children : undefined}
               canBack={false}
               canNext={false}
               onBack={() => {}}
@@ -518,9 +490,6 @@ export default function Card({
             >
               <CardContent
                 step={displayedStep}
-                permissionsChildren={
-                  displayedStep.id === 'permissions' ? displayedChildren : undefined
-                }
                 canBack={canBack}
                 canNext={canNext}
                 onBack={onBack}

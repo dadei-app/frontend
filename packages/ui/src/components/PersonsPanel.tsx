@@ -333,6 +333,9 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                     }}
                                     idleTitle="Delete person"
                                     idleAriaLabel="Delete person"
+                                    idleVisibleClassName={
+                                      !isMobileAssistant ? 'group-hover/person:opacity-100' : undefined
+                                    }
                                     {...(isMobileAssistant
                                       ? {
                                           containerClassName: 'h-7 self-auto',
