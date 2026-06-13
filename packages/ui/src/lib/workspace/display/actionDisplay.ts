@@ -3,11 +3,20 @@ import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
 import type { ActionOperation, NetworkAction } from '@dadei/ui/types/models.types';
 
 /** Domains that surface approval notification banners. */
-export const NOTIFICATION_ACTION_TYPES = new Set(['calendar', 'email']);
+export const SIDE_EFFECT_ACTION_TYPES = new Set(['conversation', 'interaction', 'person']);
+
+export const NOTIFICATION_ACTION_TYPES = new Set([
+  'calendar',
+  'email',
+  ...SIDE_EFFECT_ACTION_TYPES,
+]);
 
 const DOMAIN_LABELS: Record<string, string> = {
   calendar: 'Calendar',
   email: 'Email',
+  conversation: 'Conversation',
+  interaction: 'Interaction',
+  person: 'Person',
 };
 
 const OPERATION_LABELS: Record<ActionOperation, string> = {
@@ -145,6 +154,22 @@ export function proposedActionHumanLine(payload: ProposedToolPayload): string | 
     }
     if (title) return `Scheduled ${title}.`;
     return 'Scheduled a calendar event.';
+  }
+  if (kind === 'conversation') {
+    if (operation === 'delete') {
+      return title ? `Prepared to delete ${title}.` : 'Prepared to delete a conversation.';
+    }
+    return title ? `Prepared ${title}.` : null;
+  }
+  if (kind === 'interaction') {
+    if (operation === 'delete') return 'Prepared to delete an interaction.';
+    return title ? `Prepared ${title}.` : null;
+  }
+  if (kind === 'person') {
+    if (operation === 'delete') {
+      return title ? `Prepared to remove ${title}.` : 'Prepared to remove a person.';
+    }
+    return title ? `Prepared ${title}.` : null;
   }
   if (title) return `Prepared ${title}.`;
   return null;

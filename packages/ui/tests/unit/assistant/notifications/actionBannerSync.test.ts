@@ -34,4 +34,13 @@ describe('normalizeNotificationActions', () => {
     ]);
     expect(result).toHaveLength(0);
   });
+
+  it('includes workspace side-effect delete domains', () => {
+    const result = normalizeNotificationActions([
+      action({ id: 'a', action_type: 'conversation', operation: 'delete' }),
+      action({ id: 'b', action_type: 'interaction', operation: 'delete' }),
+      action({ id: 'c', action_type: 'person', operation: 'delete' }),
+    ]);
+    expect(result.map((x) => x.action_type)).toEqual(['conversation', 'interaction', 'person']);
+  });
 });

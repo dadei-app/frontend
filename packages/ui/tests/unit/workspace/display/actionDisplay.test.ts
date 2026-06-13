@@ -55,9 +55,12 @@ describe('resolveActionOperation', () => {
 });
 
 describe('isNotificationAction', () => {
-  it('includes calendar and email domains only', () => {
+  it('includes calendar, email, and workspace side-effect domains', () => {
     expect(isNotificationAction(action({ action_type: 'calendar' }))).toBe(true);
     expect(isNotificationAction(action({ action_type: 'email' }))).toBe(true);
+    expect(isNotificationAction(action({ action_type: 'conversation' }))).toBe(true);
+    expect(isNotificationAction(action({ action_type: 'interaction' }))).toBe(true);
+    expect(isNotificationAction(action({ action_type: 'person' }))).toBe(true);
     expect(isNotificationAction(action({ action_type: 'task' }))).toBe(false);
     expect(isNotificationAction(action({ action_type: 'contact' }))).toBe(false);
   });
@@ -80,6 +83,9 @@ describe('actionDomainLabel', () => {
   it('humanizes known action types', () => {
     expect(actionDomainLabel('calendar')).toBe('Calendar');
     expect(actionDomainLabel('email')).toBe('Email');
+    expect(actionDomainLabel('conversation')).toBe('Conversation');
+    expect(actionDomainLabel('interaction')).toBe('Interaction');
+    expect(actionDomainLabel('person')).toBe('Person');
   });
 });
 

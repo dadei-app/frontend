@@ -10,12 +10,16 @@ export const BANNER_STACK_STAGGER_MS = 70;
 export const BANNER_ACTIVE_ENTER_TRAVEL_PX = 36;
 /** How far above the target slot a new card begins its entrance (× layer step). */
 export const BANNER_ENTER_TRAVEL_MULT = 2.5;
-/** Fixed rendered card height — banners clamp here so the stack stays aligned. */
-export const BANNER_CARD_HEIGHT_PX = 168;
+/** Compact height for queued (inactive) banners — title row only. */
+export const BANNER_COLLAPSED_HEIGHT_PX = 58;
+/** Max height for the active (expanded) banner — body scrolls beyond this. */
+export const BANNER_EXPANDED_MAX_HEIGHT_PX = 168;
+/** Default expanded height used for stack layout / pouch travel when content is unknown. */
+export const BANNER_CARD_HEIGHT_PX = BANNER_EXPANDED_MAX_HEIGHT_PX;
 /** Same clamp used for pouch travel so exit animations clear the header lip. */
-export const BANNER_HIDE_HEIGHT_PX = BANNER_CARD_HEIGHT_PX;
+export const BANNER_HIDE_HEIGHT_PX = BANNER_EXPANDED_MAX_HEIGHT_PX;
 /** Slide distance so a card fully clears the slot on enter/exit (pouch animation). */
-export const BANNER_POUCH_TRAVEL_PX = BANNER_CARD_HEIGHT_PX + 12;
+export const BANNER_POUCH_TRAVEL_PX = BANNER_EXPANDED_MAX_HEIGHT_PX + 12;
 /** Distance from header bottom to the banner anchor (`pt-6` + `top-4` in assistant layout). */
 export const ASSISTANT_BANNER_ANCHOR_OFFSET_PX = 40;
 
@@ -97,7 +101,15 @@ export function stackLayoutForSlot(slotFromTop: number, total: number) {
   };
 }
 
-export function stackContainerHeight(total: number, cardHeightPx = BANNER_CARD_HEIGHT_PX) {
+export function stackContainerHeight(
+  total: number,
+  activeHeightPx = BANNER_EXPANDED_MAX_HEIGHT_PX,
+) {
   if (total <= 0) return 0;
-  return cardHeightPx + (total - 1) * BANNER_LAYER_STEP_PX;
+  return activeHeightPx + (total - 1) * BANNER_LAYER_STEP_PX;
+}
+
+export function bannerHeightPx(isActive: boolean, expandedHeightPx?: number) {
+  if (!isActive) return BANNER_COLLAPSED_HEIGHT_PX;
+  return expandedHeightPx ?? BANNER_EXPANDED_MAX_HEIGHT_PX;
 }

@@ -12,8 +12,18 @@ import { X } from 'lucide-react';
 import { parseApiDateTimeMs } from '@dadei/ui/lib/platform/shared/parseApiDateTime';
 import type { ActionOperation } from '@dadei/ui/types/models.types';
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
-import BannerBody from '@dadei/ui/components/notifications/BannerBody';
-import { BANNER_CARD_HEIGHT_PX } from '@dadei/ui/lib/assistant/notifications/bannerStack';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
+import {
+  CalendarEventBody,
+  ConversationDeleteBody,
+  EmailBody,
+  InteractionDeleteBody,
+  PersonDeleteBody,
+} from '@dadei/ui/components/notifications/bodies';
+import {
+  BANNER_COLLAPSED_HEIGHT_PX,
+  BANNER_EXPANDED_MAX_HEIGHT_PX,
+} from '@dadei/ui/lib/assistant/notifications/bannerStack';
 import {
   actionOperationLabel,
   NEUTRAL_BANNER_THEME,
@@ -50,7 +60,8 @@ export interface BannerProps {
   onExitComplete?: () => void;
 }
 
-const ENTER_EASE = [0.16, 1, 0.3, 1] as const;
+const EXPAND_EASE = [0.16, 1, 0.3, 1] as const;
+const EXPAND_TRANSITION = { duration: 0.34, ease: EXPAND_EASE } as const;
 const EXIT_SETTLE_MS = 650;
 const ACID_DISSOLVE_DURATION_MS = 1800;
 const COUNTDOWN_REVEAL_MS = 0.38;
@@ -181,6 +192,89 @@ function dissolveActive(progress: number): number {
   return progress * progress * progress;
 }
 
+function DefaultBannerContent({
+  title,
+  body,
+  compact,
+}: {
+  title: string;
+  body?: string;
+  compact: boolean;
+}) {
+  return (
+    <>
+      <p
+        className={cn(
+          'text-sm font-semibold leading-snug text-zinc-100',
+          compact ? 'mt-0.5 truncate' : 'mt-1',
+        )}
+      >
+        {title}
+      </p>
+      {body && !compact ? (
+        <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">{body}</p>
+      ) : null}
+    </>
+  );
+}
+
+function BannerContent({
+  actionType,
+  operation,
+  title,
+  body,
+  toolArgs,
+  startTime,
+  endTime,
+  compact,
+}: {
+  actionType?: string;
+  operation?: ActionOperation;
+  title: string;
+  body?: string;
+  toolArgs?: Record<string, unknown>;
+  startTime?: string | null;
+  endTime?: string | null;
+  compact: boolean;
+}) {
+  const kind = (actionType ?? 'notification').toLowerCase();
+
+  if (kind === 'conversation' && operation === 'delete') {
+    return (
+      <ConversationDeleteBody title={title} body={body} toolArgs={toolArgs} compact={compact} />
+    );
+  }
+
+  if (kind === 'interaction' && operation === 'delete') {
+    return (
+      <InteractionDeleteBody title={title} body={body} toolArgs={toolArgs} compact={compact} />
+    );
+  }
+
+  if (kind === 'person' && operation === 'delete') {
+    return <PersonDeleteBody title={title} body={body} toolArgs={toolArgs} compact={compact} />;
+  }
+
+  if (kind === 'email') {
+    return <EmailBody toolArgs={toolArgs} title={title} />;
+  }
+
+  if (kind === 'calendar') {
+    return (
+      <CalendarEventBody
+        title={title}
+        body={body}
+        toolArgs={toolArgs}
+        startTime={startTime}
+        endTime={endTime}
+        operation={operation}
+      />
+    );
+  }
+
+  return <DefaultBannerContent title={title} body={body} compact={compact} />;
+}
+
 export default function Banner({
   id,
   category,
@@ -213,6 +307,7 @@ export default function Banner({
 
   const theme = operation ? OPERATION_BANNER_THEME[operation] : NEUTRAL_BANNER_THEME;
   const showActions = isStackFront && !isExiting;
+  const isExpanded = isStackFront && !queued;
   const acidSpots = useMemo(() => seedAcidSpots(id), [id]);
   const noiseSeed = acidSpots[0]?.seed ?? 7;
 
@@ -329,13 +424,19 @@ export default function Banner({
     : {};
 
   return (
-    <div
+    <motion.div
       data-tutorial-target={id}
+      layout
+      initial={false}
+      animate={{
+        height: isExpanded ? 'auto' : BANNER_COLLAPSED_HEIGHT_PX,
+      }}
+      transition={EXPAND_TRANSITION}
       style={{
         ...theme.shell,
         backdropFilter: theme.shell.backdropFilter,
         WebkitBackdropFilter: theme.shell.backdropFilter,
-        height: BANNER_CARD_HEIGHT_PX,
+        maxHeight: isExpanded ? BANNER_EXPANDED_MAX_HEIGHT_PX : BANNER_COLLAPSED_HEIGHT_PX,
         willChange: isDissolving ? 'mask-image' : undefined,
         pointerEvents: isStackFront && !isExiting ? 'auto' : 'none',
         WebkitMaskImage: isDissolving ? dissolveMask.image : undefined,
@@ -379,29 +480,22 @@ export default function Banner({
               ) : null}
               <span className="text-zinc-400/90">{category || 'Notification'}</span>
             </p>
-            <div className={BANNER_BODY_SCROLL_CLASS}>
-              {actionType ? (
-                <BannerBody
-                  actionType={actionType}
-                  operation={operation}
-                  title={title}
-                  body={body}
-                  toolArgs={toolArgs}
-                  startTime={startTime}
-                  endTime={endTime}
-                />
-              ) : (
-                <>
-                  <p className="mt-1 text-sm font-semibold leading-snug text-zinc-100">
-                    {title}
-                  </p>
-                  {body ? (
-                    <p className="mt-0.5 text-xs leading-relaxed text-zinc-400 font-secondary">
-                      {body}
-                    </p>
-                  ) : null}
-                </>
+            <div
+              className={cn(
+                BANNER_BODY_SCROLL_CLASS,
+                !isExpanded && 'overflow-hidden',
               )}
+            >
+              <BannerContent
+                actionType={actionType}
+                operation={operation}
+                title={title}
+                body={body}
+                toolArgs={toolArgs}
+                startTime={startTime}
+                endTime={endTime}
+                compact={!isExpanded}
+              />
             </div>
             {error ? (
               <p className="mt-1 shrink-0 text-xs text-red-400/90 font-secondary">{error}</p>
@@ -431,7 +525,7 @@ export default function Banner({
           ) : null}
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 

@@ -501,6 +501,18 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     releaseCommandMode,
   ]);
 
+  const rollbackIntroductionAttempt = useCallback(async () => {
+    commandProcessingEpochRef.current += 1;
+    suppressNextTranscriptFinalRef.current = true;
+    endIntroductionMode();
+    abortActiveStream();
+    commandStreamInFlightRef.current = false;
+    if (localClaimRef.current) {
+      await releaseCommandMode();
+    }
+    goIdle();
+  }, [abortActiveStream, endIntroductionMode, goIdle, releaseCommandMode]);
+
   const claimCommandMode = useCallback(async (): Promise<boolean> => {
     if (!isServiceEnabledRef.current && !localClaimRef.current) return false;
     const sessionToken = getRealtimeSessionToken();
@@ -952,27 +964,22 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     activeCommandStreamEpochRef.current = introEpoch;
     setStateSynced('thinking');
 
-    const failIntroduction = (message: string) => {
-      streamHadOutputRef.current = true;
-      setAssistantBubbleTextSynced(message);
-      setAssistantBubbleStatus('revealing');
-      setStateSynced('responding');
-      return false;
-    };
-
     try {
       const claimed = await claimCommandMode();
       if (!claimed) {
-        return failIntroduction(ERROR_CODES.invalid_session);
+        await rollbackIntroductionAttempt();
+        return false;
       }
 
       const accessToken = await getAccessToken();
       if (!accessToken) {
-        return failIntroduction('Sign in to use the assistant.');
+        await rollbackIntroductionAttempt();
+        return false;
       }
 
       if (!isConnected || !getRealtimeSessionToken()) {
-        return failIntroduction(ERROR_CODES.invalid_session);
+        await rollbackIntroductionAttempt();
+        return false;
       }
 
       abortActiveStream();
@@ -980,12 +987,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       streamAbortRef.current = abortController;
 
       let sawDone = false;
+      let introStreamErrored = false;
       for await (const ev of streamIntroductionFromText(INTRODUCTION_KICKOFF_TEXT, accessToken, {
         signal: abortController.signal,
       })) {
         if (introEpoch !== commandProcessingEpochRef.current) break;
         if (abortController.signal.aborted) break;
         if (ev.type === 'error' && abortController.signal.aborted) continue;
+        if (ev.type === 'error') introStreamErrored = true;
         if (ev.type === 'done') sawDone = true;
         handleStreamEvent(ev);
       }
@@ -998,22 +1007,23 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         handleStreamEvent({ type: 'done' });
       }
 
-      return (
-        streamHadOutputRef.current ||
-        assistantBubbleTextRef.current.trim().length > 0
-      );
-    } catch (e) {
-      if (isAbortError(e)) {
-        if (
-          (stateRef.current as CommandState) === 'thinking' &&
-          !streamHadOutputRef.current &&
-          !assistantBubbleTextRef.current.trim()
-        ) {
-          failIntroduction('Request cancelled');
-        }
+      const introOk =
+        introEpoch === commandProcessingEpochRef.current &&
+        !introStreamErrored &&
+        !abortController.signal.aborted &&
+        (streamHadOutputRef.current || assistantBubbleTextRef.current.trim().length > 0);
+
+      if (!introOk) {
+        await rollbackIntroductionAttempt();
         return false;
       }
-      failIntroduction(getUserErrorMessage(e));
+      return true;
+    } catch (e) {
+      if (isAbortError(e)) {
+        await rollbackIntroductionAttempt();
+        return false;
+      }
+      await rollbackIntroductionAttempt();
       return false;
     } finally {
       streamAbortRef.current = null;
@@ -1028,6 +1038,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     getAccessToken,
     handleStreamEvent,
     isConnected,
+    rollbackIntroductionAttempt,
     setAssistantBubbleTextSynced,
     setStateSynced,
     startNewTurn,

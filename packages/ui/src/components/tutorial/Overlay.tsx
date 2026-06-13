@@ -11,8 +11,12 @@ import {
   backdropBlurForStep,
   isSettingsTutorialStep,
   TUTORIAL_TEST_BANNER_ID,
-  TUTORIAL_TEST_BANNER_TITLE,
 } from '@dadei/ui/lib/onboarding/tutorial/constants';
+import {
+  TUTORIAL_INTERACTION_COUNT,
+  TUTORIAL_TEST_CONVERSATION_ID,
+} from '@dadei/ui/lib/onboarding/tutorial/fixtures';
+import { actionDomainLabel } from '@dadei/ui/lib/workspace/display/actionDisplay';
 import { isTutorialClickAllowed } from '@dadei/ui/lib/onboarding/tutorial/clickGuard';
 import { TUTORIAL_MORPH_TRANSITION } from '@dadei/ui/lib/onboarding/tutorial/motion';
 import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
@@ -176,9 +180,14 @@ function NotificationsBridge() {
     const bannerId = showBanner({
       id: TUTORIAL_TEST_BANNER_ID,
       operation: 'delete',
-      category: 'Tutorial',
-      title: TUTORIAL_TEST_BANNER_TITLE,
-      body: 'Wait for the countdown to delete the test conversation, or click Cancel and delete it from the panel.',
+      actionType: 'conversation',
+      category: actionDomainLabel('conversation'),
+      title: 'Getting started with dadei',
+      toolArgs: {
+        conversation_id: TUTORIAL_TEST_CONVERSATION_ID,
+        topic_summary: 'Getting started with dadei',
+        interaction_count: TUTORIAL_INTERACTION_COUNT,
+      },
       showCountdown: true,
       durationMs: 15_000,
       countdownEndsAt: new Date(Date.now() + 15_000).toISOString(),

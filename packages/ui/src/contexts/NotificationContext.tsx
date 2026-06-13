@@ -46,8 +46,10 @@ export type ShowBannerInput = {
   id?: string;
   category?: string;
   operation?: 'create' | 'update' | 'delete';
+  actionType?: string;
   title: string;
   body?: string;
+  toolArgs?: Record<string, unknown>;
   durationMs?: number;
   showCountdown?: boolean;
   countdownEndsAt?: string;
@@ -577,8 +579,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         id,
         category: input.category,
         operation: input.operation,
+        actionType: input.actionType,
         title: input.title,
         body: input.body,
+        toolArgs: input.toolArgs,
         durationMs,
         showCountdown: input.showCountdown,
         countdownEndsAt,
