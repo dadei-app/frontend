@@ -14,8 +14,12 @@ concurrency:
 
 jobs:
   ci:
-    name: CI
+    name: CI (${{ matrix.task }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        task: [test, typecheck]
 
     steps:
       - name: Checkout code
@@ -34,15 +38,20 @@ jobs:
       - name: Verify app versions are in sync
         run: node scripts/check-versions.mjs
 
-      - name: Run UI unit tests
+      - name: Run UI tests
+        if: matrix.task == 'test'
         run: npm run test --workspace=@dadei/ui
 
+      - name: Typecheck UI package
+        if: matrix.task == 'typecheck'
+        run: npm run build --workspace=@dadei/ui
+
       - name: Verify version bump on code changes
-        if: github.event_name == 'pull_request'
+        if: matrix.task == 'test' && github.event_name == 'pull_request'
         run: node scripts/check-version-bump.mjs origin/${{ github.base_ref }}
 
       - name: Verify version bump before release
-        if: github.event_name == 'push'
+        if: matrix.task == 'test' && github.event_name == 'push'
         run: node scripts/check-version-bump.mjs HEAD^
 
   release:

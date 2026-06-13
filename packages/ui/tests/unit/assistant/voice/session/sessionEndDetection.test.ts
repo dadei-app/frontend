@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSessionEndUtterance } from './sessionEndDetection';
+import { isSessionEndUtterance } from '@dadei/ui/lib/assistant/voice/session/sessionEndDetection';
 
 describe('isSessionEndUtterance', () => {
   it('matches common dismiss phrases', () => {

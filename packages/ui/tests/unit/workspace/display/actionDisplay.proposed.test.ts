@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isProposedToolSummary, proposedActionHumanLine } from '@dadei/ui/utils/actionDisplay';
+import { isProposedToolSummary, proposedActionHumanLine } from '@dadei/ui/lib/workspace/display/actionDisplay';
 
 describe('proposed tool summaries', () => {
   it('detects nested proposed JSON in message (legacy SSE)', () => {

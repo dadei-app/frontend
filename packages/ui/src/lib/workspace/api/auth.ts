@@ -1,12 +1,12 @@
-import { api } from '@dadei/ui/lib/api/http/client';
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
 import {
   LoginCredentials,
   RegisterData,
   AuthResponse,
   TokenResponse,
   UserMe,
-} from '../../types/auth.types';
-import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+} from '../../../types/auth.types';
+import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
 
 export const authApi = {
   /**

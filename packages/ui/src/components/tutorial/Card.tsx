@@ -8,11 +8,11 @@ import {
 } from 'react';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import {
   TUTORIAL_MORPH_MS,
   TUTORIAL_MORPH_TRANSITION,
-} from '@dadei/ui/lib/tutorial/motion';
+} from '@dadei/ui/lib/onboarding/tutorial/motion';
 import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
 
 const KNOB_CLASS =

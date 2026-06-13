@@ -1,6 +1,6 @@
 import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
-import { parseApiDateTime } from '@dadei/ui/lib/shared/parseApiDateTime';
-import { formatForUser } from '@dadei/ui/utils/time';
+import { parseApiDateTime } from '@dadei/ui/lib/platform/shared/parseApiDateTime';
+import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
 
 export const TUTORIAL_TEST_PERSON_ID = 'tutorial-test-person';
 export const TUTORIAL_TEST_CONVERSATION_ID = 'tutorial-test-conversation';

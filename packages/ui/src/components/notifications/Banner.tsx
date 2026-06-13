@@ -9,16 +9,16 @@ import {
 import { flushSync } from 'react-dom';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
-import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
+import { parseApiDateTimeMs } from '@dadei/ui/lib/platform/shared/parseApiDateTime';
 import type { ActionOperation } from '@dadei/ui/types/models.types';
-import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 import BannerBody from '@dadei/ui/components/notifications/BannerBody';
-import { BANNER_CARD_HEIGHT_PX } from '@dadei/ui/lib/notifications/bannerStack';
+import { BANNER_CARD_HEIGHT_PX } from '@dadei/ui/lib/assistant/notifications/bannerStack';
 import {
   actionOperationLabel,
   NEUTRAL_BANNER_THEME,
   OPERATION_BANNER_THEME,
-} from '@dadei/ui/utils/actionDisplay';
+} from '@dadei/ui/lib/workspace/display/actionDisplay';
 
 const BANNER_BODY_SCROLL_CLASS =
   'min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-color:rgba(161,161,170,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45';

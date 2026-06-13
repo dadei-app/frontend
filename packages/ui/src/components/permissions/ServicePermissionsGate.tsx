@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { PermissionsPrompt } from '@dadei/ui/components/permissions/PermissionsPrompt';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 export function ServicePermissionsGate() {
   const {

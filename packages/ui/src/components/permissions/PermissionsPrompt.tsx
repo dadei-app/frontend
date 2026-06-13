@@ -5,8 +5,8 @@ import {
   permissionsForPlatform,
   toTutorialPlatform,
   type PermissionEntry,
-} from '@dadei/ui/lib/tutorial/permissionsRegistry';
-import { cn } from '@dadei/ui/lib/shared/cn';
+} from '@dadei/ui/lib/onboarding/tutorial/permissionsRegistry';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 type PermissionUiStatus = 'idle' | 'pending' | 'granted' | 'denied';
 

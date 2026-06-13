@@ -6,7 +6,7 @@ import {
   formatConfidence,
   formatMetaLine,
   resolveMemoryConfidence,
-} from '@dadei/ui/utils/actionDisplay';
+} from '@dadei/ui/lib/workspace/display/actionDisplay';
 
 type MemorySettingsRowProps = {
   memory: EpisodicMemory;

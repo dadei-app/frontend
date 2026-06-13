@@ -1,5 +1,5 @@
 import { Power } from 'lucide-react';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 const segmentBase =
   'rounded-md px-3 py-2 text-sm font-medium transition emerald-glow disabled:cursor-not-allowed disabled:opacity-45';

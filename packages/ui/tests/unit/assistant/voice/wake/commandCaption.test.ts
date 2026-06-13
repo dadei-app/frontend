@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { liveCommandCaptionText, submitCommandText } from './commandCaption';
+import { liveCommandCaptionText, submitCommandText } from '@dadei/ui/lib/assistant/voice/wake/commandCaption';
 
 describe('liveCommandCaptionText', () => {
   it('keeps the full sanitized transcript while listening', () => {

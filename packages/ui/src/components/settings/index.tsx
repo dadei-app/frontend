@@ -21,12 +21,12 @@ import { MemoriesPanel } from './memories/MemoriesPanel';
 import { StartupPanel } from './startup/StartupPanel';
 import { SubscriptionPanel } from './subscription/SubscriptionPanel';
 import type { SettingsPanelProps } from './layout';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import SettingsGuide from '@dadei/ui/components/tutorial/SettingsGuide';
 import { useTutorialContext, useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
-import { veilEase } from '@dadei/ui/lib/shared/motion';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/onboarding/tutorial/constants';
+import { veilEase } from '@dadei/ui/lib/platform/shared/motion';
 
 type AssistantSettingsModalProps = {
   open: boolean;

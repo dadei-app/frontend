@@ -1,6 +1,6 @@
-import { api } from '@dadei/ui/lib/api/http/client';
-import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
-import { buildEndpoint } from '@dadei/ui/lib/api/utils';
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
+import { buildEndpoint } from '@dadei/ui/lib/workspace/api/utils';
 import { Conversation } from '@dadei/ui/types/models.types';
 
 export const conversationsApi = {

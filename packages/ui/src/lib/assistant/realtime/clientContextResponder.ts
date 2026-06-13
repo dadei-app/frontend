@@ -1,7 +1,7 @@
 import {
   sendRealtimeMessage,
   subscribeRealtimeMessages,
-} from '@dadei/ui/lib/realtime/realtimeClient';
+} from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 
 const LOCATION_TIMEOUT_MS = 3500;
 

@@ -1,5 +1,5 @@
 import { Mic } from 'lucide-react';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 export function MicDeviceList<T extends string>({
   options,

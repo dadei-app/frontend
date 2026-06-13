@@ -1,5 +1,5 @@
-import { api } from '@dadei/ui/lib/api/http/client';
-import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 import { buildEndpoint } from './utils';

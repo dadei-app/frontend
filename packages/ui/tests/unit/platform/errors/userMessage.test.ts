@@ -5,7 +5,7 @@ import {
   getUserErrorMessage,
   parseApiDetail,
   sanitizeTechnicalMessage,
-} from './userMessage';
+} from '@dadei/ui/lib/platform/errors/userMessage';
 
 describe('userMessage', () => {
   it('maps quota errors', () => {

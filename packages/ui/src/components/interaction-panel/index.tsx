@@ -2,7 +2,7 @@ import { useState, type RefObject } from 'react';
 
 import { Trash2 } from 'lucide-react';
 
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 import { useMobileInteractionsSheetOptional } from '@dadei/ui/components/MobileInteractionsSheet';
 
@@ -44,7 +44,7 @@ type PanelBodyProps = {
 
   setArmedInteractionDeleteId: (id: string | null) => void;
 
-  toggleConversation: (id: string) => void;
+  toggleConversation: (index: number) => void;
 
   handleDeleteConversation: (id: string) => void;
 
@@ -308,7 +308,7 @@ export default function InteractionPanel({ embedded = false }: { embedded?: bool
 
     displayGroups,
 
-    prefersReducedMotion,
+    prefersReducedMotion: prefersReducedMotion ?? false,
 
     armedConversationDeleteId,
 

@@ -7,7 +7,7 @@ import {
   operationForToolName,
   resolveActionOperation,
   resolveMemoryConfidence,
-} from './actionDisplay';
+} from '@dadei/ui/lib/workspace/display/actionDisplay';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 function action(overrides: Partial<NetworkAction>): NetworkAction {

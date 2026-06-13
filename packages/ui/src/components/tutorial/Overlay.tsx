@@ -12,9 +12,9 @@ import {
   isSettingsTutorialStep,
   TUTORIAL_TEST_BANNER_ID,
   TUTORIAL_TEST_BANNER_TITLE,
-} from '@dadei/ui/lib/tutorial/constants';
-import { isTutorialClickAllowed } from '@dadei/ui/lib/tutorial/clickGuard';
-import { TUTORIAL_MORPH_TRANSITION } from '@dadei/ui/lib/tutorial/motion';
+} from '@dadei/ui/lib/onboarding/tutorial/constants';
+import { isTutorialClickAllowed } from '@dadei/ui/lib/onboarding/tutorial/clickGuard';
+import { TUTORIAL_MORPH_TRANSITION } from '@dadei/ui/lib/onboarding/tutorial/motion';
 import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
 import Card from './Card';
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { computeApprovalCountdown } from './approvalCountdown';
-import { AUTO_FIRE_DELAY_MS } from './constants';
+import { computeApprovalCountdown } from '@dadei/ui/lib/assistant/notifications/approvalCountdown';
+import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/assistant/notifications/constants';
 
 describe('computeApprovalCountdown', () => {
   it('uses full window when countdown ends in 10s', () => {

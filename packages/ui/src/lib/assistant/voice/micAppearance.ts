@@ -1,4 +1,4 @@
-import type { CommandState } from '@dadei/ui/contexts/CommandContext';
+import type { CommandState } from '@dadei/ui/types/voice.types';
 
 export type MicTone = 'blue' | 'red' | 'green' | 'none';
 

@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import * as AlertDialog from '@radix-ui/react-alert-dialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { authApi } from '@dadei/ui/lib/api/auth';
-import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
+import { authApi } from '@dadei/ui/lib/workspace/api/auth';
+import { triggerGoogleOAuth } from '@dadei/ui/lib/platform/auth/googleAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
-import { cn } from '@dadei/ui/lib/shared/cn';
-import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
+import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
+import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
 import {
   GridTile,
   SettingsGrid4,
@@ -19,7 +19,7 @@ import {
   settingsReadonlyFieldClass,
 } from '@dadei/ui/components/settings/layout';
 import { SegmentedControl } from '@dadei/ui/components/settings/controls';
-import { useAuthMeQuery } from '@dadei/ui/lib/query/queryHooks';
+import { useAuthMeQuery } from '@dadei/ui/lib/platform/query/queryHooks';
 import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import { buildPopularTimezoneOptions } from './timezonePicker';
 import { AccountSessionActions } from './AccountSessionActions';

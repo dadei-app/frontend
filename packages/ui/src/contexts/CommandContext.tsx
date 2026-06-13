@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import axios from 'axios';
@@ -18,65 +18,56 @@ import {
   streamCommandFromText,
   streamIntroductionFromText,
   type CommandSSEEvent,
-} from '@dadei/ui/lib/api/command';
-import { INTRODUCTION_KICKOFF_TEXT } from '@dadei/ui/lib/introduction/constants';
-import { serviceApi } from '@dadei/ui/lib/api/service';
+} from '@dadei/ui/lib/workspace/api/command';
+import { INTRODUCTION_KICKOFF_TEXT } from '@dadei/ui/lib/onboarding/introduction/constants';
+import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
 import {
   getRealtimeClientId,
   getRealtimeSessionToken,
   sendRealtimeMessage,
   subscribeRealtimeMessages,
-} from '@dadei/ui/lib/realtime/realtimeClient';
+} from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
   ERROR_CODES,
   formatCommandStreamError,
   formatToolResultUserMessage,
   formatWsTranscriptError,
   getUserErrorMessage,
-} from '@dadei/ui/lib/errors/userMessage';
-import { isProposedToolSummary, proposedActionHumanLine } from '@dadei/ui/utils/actionDisplay';
+} from '@dadei/ui/lib/platform/errors/userMessage';
+import { isProposedToolSummary, proposedActionHumanLine } from '@dadei/ui/lib/workspace/display/actionDisplay';
 import {
   isInstructionalTranscriptBleed,
   sanitizeCommandTranscript,
-} from '@dadei/ui/lib/voice/wake/commandTranscriptSanitize';
+} from '@dadei/ui/lib/assistant/voice/wake/commandTranscriptSanitize';
 import {
   liveCommandCaptionText,
   submitCommandText,
-} from '@dadei/ui/lib/voice/wake/commandCaption';
-import { normalizeVisibleCommandText, transcriptStartsWithWakeCommand } from '@dadei/ui/lib/voice/wake/wakeWordDetection';
+} from '@dadei/ui/lib/assistant/voice/wake/commandCaption';
+import { normalizeVisibleCommandText, transcriptStartsWithWakeCommand } from '@dadei/ui/lib/assistant/voice/wake/wakeWordDetection';
 import {
   CLAIM_HOLD_SECONDS,
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
   computeFollowUpMs,
   FOLLOW_UP_MIN_MS,
-} from '@dadei/ui/lib/voice/session/constants';
+} from '@dadei/ui/lib/assistant/voice/constants';
 import {
   commandToolStatusLabel,
   formatAssistantStatusLine,
-} from '@dadei/ui/lib/voice/labels/commandToolLabels';
-import { isSessionEndUtterance } from '@dadei/ui/lib/voice/session/sessionEndDetection';
+} from '@dadei/ui/lib/assistant/voice/labels/commandToolLabels';
+import { isSessionEndUtterance } from '@dadei/ui/lib/assistant/voice/session/sessionEndDetection';
 import {
   notifyCommandCaptureCommit,
   subscribeVoiceSpeechActivity,
-} from '@dadei/ui/lib/voice/session/voiceSessionActivity';
+} from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
-import { formatForUser } from '@dadei/ui/utils/time';
-import { COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/voice/micAppearance';
+import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
+import { COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/assistant/voice/micAppearance';
 
 const ASSISTANT_STATUS_THINKING = 'Thinking';
 
-export type CommandState =
-  | 'idle'
-  | 'listening'
-  /** User finished speaking; mic spinner only until transcript arrives. */
-  | 'transcribing'
-  | 'thinking'
-  | 'responding'
-  | 'follow_up'
-  | 'locked';
+import type { AssistantBubbleStatus, CommandState } from '@dadei/ui/types/voice.types';
 
-/** pending/status = tool labels; streaming = buffering tokens; revealing = typewriter after done. */
-export type AssistantBubbleStatus = 'pending' | 'streaming' | 'revealing' | 'done';
+export type { AssistantBubbleStatus, CommandState } from '@dadei/ui/types/voice.types';
 
 export interface CommandTurnHistory {
   id: string;
@@ -1106,7 +1097,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         introEpoch === commandProcessingEpochRef.current &&
         !sawDone &&
         !abortController.signal.aborted &&
-        (stateRef.current === 'responding' || stateRef.current === 'thinking')
+        (['responding', 'thinking'] as CommandState[]).includes(stateRef.current as CommandState)
       ) {
         handleStreamEvent({ type: 'done' });
       }
@@ -1118,7 +1109,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       if (isAbortError(e)) {
         if (
-          stateRef.current === 'thinking' &&
+          (stateRef.current as CommandState) === 'thinking' &&
           !streamHadOutputRef.current &&
           !assistantBubbleTextRef.current.trim()
         ) {

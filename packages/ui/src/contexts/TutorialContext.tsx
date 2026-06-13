@@ -8,27 +8,27 @@ import {
   type ReactNode,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@dadei/ui/lib/api/http/client';
-import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import {
   adjacentTutorialStepIndex,
   buildTutorialSteps,
   isSettingsTutorialStep,
   TUTORIAL_STEP_EVENT,
-} from '@dadei/ui/lib/tutorial/constants';
+} from '@dadei/ui/lib/onboarding/tutorial/constants';
 import { preloadAmbientShader } from '@dadei/ui/components/settings/AmbientShader';
-import { isTutorialTargetInteractive } from '@dadei/ui/lib/tutorial/clickGuard';
+import { isTutorialTargetInteractive } from '@dadei/ui/lib/onboarding/tutorial/clickGuard';
 import {
   buildTutorialFixtures,
   isTutorialTestId,
-} from '@dadei/ui/lib/tutorial/testData';
+} from '@dadei/ui/lib/onboarding/tutorial/fixtures';
 import type { ActionTrigger, TutorialStep } from '@dadei/ui/types/tutorial.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { useNeedsTutorial } from '@dadei/ui/lib/platform/query/queryHooks';
 
 export interface TutorialContextValue {
   isActive: boolean;

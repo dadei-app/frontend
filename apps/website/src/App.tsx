@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { createQueryClient } from '@dadei/ui/lib/query/createQueryClient';
-import { startClientContextResponder } from '@dadei/ui/lib/realtime/clientContextResponder';
+import { createQueryClient } from '@dadei/ui/lib/platform/query/createQueryClient';
+import { startClientContextResponder } from '@dadei/ui/lib/assistant/realtime/clientContextResponder';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { SystemProvider } from '@dadei/ui/contexts/SystemContext';
 import { AuthProvider } from '@dadei/ui/contexts/AuthContext';
@@ -13,7 +13,7 @@ import AssistantLayout from '@dadei/ui/pages/AssistantLayout';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@dadei/ui/pages/LoginPage';
 import OAuthCallback from '@dadei/ui/pages/OAuthCallback';
-import { OAUTH_CALLBACK_PATH } from '@dadei/ui/lib/platform/assistantPaths';
+import { OAUTH_CALLBACK_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 
 export function App() {
   const [queryClient] = useState(() => createQueryClient());

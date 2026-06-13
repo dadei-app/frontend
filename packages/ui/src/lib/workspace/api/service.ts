@@ -1,5 +1,5 @@
-import { api } from '@dadei/ui/lib/api/http/client';
-import { API_CONFIG, ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
+import { API_CONFIG, ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
 import { buildEndpoint, getClientIpAddresses, retryWithBackoff } from './utils';
 

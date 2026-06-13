@@ -13,34 +13,34 @@ import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { ServicePermissionsGate } from '@dadei/ui/components/permissions/ServicePermissionsGate';
 import { parseInteractionDate } from '@dadei/ui/components/interaction-panel/conversationUtils';
-import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/errors/userMessage';
-import { actionsApi } from '@dadei/ui/lib/api/actions';
-import { memoriesApi } from '@dadei/ui/lib/api/memories';
-import { personsApi } from '@dadei/ui/lib/api/persons';
-import { conversationsApi } from '@dadei/ui/lib/api/conversations';
-import { interactionsApi } from '@dadei/ui/lib/api/interactions';
-import { serviceApi, type CommandModeState } from '@dadei/ui/lib/api/service';
+import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/platform/errors/userMessage';
+import { actionsApi } from '@dadei/ui/lib/workspace/api/actions';
+import { memoriesApi } from '@dadei/ui/lib/workspace/api/memories';
+import { personsApi } from '@dadei/ui/lib/workspace/api/persons';
+import { conversationsApi } from '@dadei/ui/lib/workspace/api/conversations';
+import { interactionsApi } from '@dadei/ui/lib/workspace/api/interactions';
+import { serviceApi, type CommandModeState } from '@dadei/ui/lib/workspace/api/service';
 import {
   startRealtimeClient,
   stopRealtimeClient,
   subscribeRealtimeMessages,
-} from '@dadei/ui/lib/realtime/realtimeClient';
-import { getRealtimeSessionId } from '@dadei/ui/lib/realtime/realtimeClient';
+} from '@dadei/ui/lib/assistant/realtime/realtimeClient';
+import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
   clearAssistantSessionCaches,
   removePersonFromCaches,
-} from '@dadei/ui/lib/query/cacheUtils';
+} from '@dadei/ui/lib/platform/query/cacheUtils';
 import {
   ASSISTANT_MEMORIES_LIST_LIMIT,
   conversationQueryOptions,
   INTERACTION_PANEL_RECENT_LIMIT,
   useAuthMeQuery,
-} from '@dadei/ui/lib/query/queryHooks';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+} from '@dadei/ui/lib/platform/query/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import {
   areRequiredPermissionsGranted,
   toTutorialPlatform,
-} from '@dadei/ui/lib/tutorial/permissionsRegistry';
+} from '@dadei/ui/lib/onboarding/tutorial/permissionsRegistry';
 import type {
   Conversation,
   EpisodicMemory,
@@ -662,10 +662,10 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
     let offNewInteraction: (() => void) | undefined;
     if (window.electronAPI?.onNewInteraction) {
-      offNewInteraction = window.electronAPI.onNewInteraction((payload: { data?: unknown }) => {
-        const interaction = payload.data;
-        if (interaction && typeof interaction === 'object') {
-          trackExtraBootstrapConversation(interaction as Interaction);
+      offNewInteraction = window.electronAPI.onNewInteraction((payload: unknown) => {
+        const data = (payload as { data?: unknown }).data;
+        if (data && typeof data === 'object') {
+          trackExtraBootstrapConversation(data as Interaction);
         }
       });
     }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { resolvePostOAuthPath } from '@dadei/ui/lib/platform/assistantPaths';
+import { resolvePostOAuthPath } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 
 /**
  * Web OAuth return handler — not a user-facing page.

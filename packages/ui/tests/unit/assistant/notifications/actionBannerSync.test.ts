@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeNotificationActions } from './actionBannerSync';
+import { normalizeNotificationActions } from '@dadei/ui/lib/assistant/notifications/actionBannerSync';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 
 function action(partial: Partial<NetworkAction> & { id: string }): NetworkAction {

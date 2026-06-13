@@ -1,4 +1,4 @@
-import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/notifications/constants';
+import { AUTO_FIRE_DELAY_MS } from '@dadei/ui/lib/assistant/notifications/constants';
 import type { BannerItem } from '@dadei/ui/contexts/NotificationContext';
 import type { NetworkAction } from '@dadei/ui/types/models.types';
 import {
@@ -7,7 +7,7 @@ import {
   actionDomainLabel,
   isNotificationAction,
   resolveActionOperation,
-} from '@dadei/ui/utils/actionDisplay';
+} from '@dadei/ui/lib/workspace/display/actionDisplay';
 
 /** Dedupe by id and keep API order (active first, then pending FIFO). */
 export function normalizeNotificationActions(actions: NetworkAction[]): NetworkAction[] {

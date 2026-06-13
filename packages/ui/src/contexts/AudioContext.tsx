@@ -8,23 +8,23 @@ import {
 } from 'react';
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
+import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
   notifyVoiceSpeechActivity,
   subscribeCommandCaptureCommit,
-} from '@dadei/ui/lib/voice/session/voiceSessionActivity';
+} from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
   COMMAND_SPEECH_RMS,
   COMMAND_UTTERANCE_END_SILENCE_MS,
   FOLLOW_UP_SPEECH_RMS,
-} from '@dadei/ui/lib/voice/session/constants';
+} from '@dadei/ui/lib/assistant/voice/constants';
 import {
-  WakeWordDetector,
+  OpenWakeWordDetector,
   type WakeWordLabel,
-} from '@dadei/ui/renderer/audio/wakeWordDetector';
+} from '@dadei/ui/lib/assistant/voice/wake/openWakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
-import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/audio/audioSettingsEvents';
+import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/assistant/audio/audioSettingsEvents';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 
@@ -47,8 +47,8 @@ const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['transcribing', 'thinking', 'responding'];
 
 /** Normalized 0–1 level from a time-domain analyser (command aura + settings meter). */
-export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint8Array): number {
-  analyser.getByteTimeDomainData(buffer);
+export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint8Array<ArrayBufferLike>): number {
+  analyser.getByteTimeDomainData(buffer as Uint8Array<ArrayBuffer>);
   let sumSq = 0;
   for (let i = 0; i < buffer.length; i++) {
     const v = (buffer[i] - 128) / 128;
@@ -169,7 +169,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const previewCtxRef = useRef<globalThis.AudioContext | null>(null);
   const previewAnalyserRef = useRef<AnalyserNode | null>(null);
 
-  const wakeDetectorRef = useRef<WakeWordDetector | null>(null);
+  const wakeDetectorRef = useRef<OpenWakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
   const commandSpeechSeenRef = useRef(false);
   const commandSilenceStartedMsRef = useRef<number | null>(null);
@@ -443,7 +443,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     mediaStreamRef.current = media;
 
     if (ENABLE_LOCAL_WAKE_DETECTOR) {
-      const wakeDetector = new WakeWordDetector({ threshold: 0.5 });
+      const wakeDetector = new OpenWakeWordDetector({ threshold: 0.5 });
       wakeDetector.onWakeWord(onWakeWordDetected);
       try {
         await wakeDetector.start(media);

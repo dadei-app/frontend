@@ -1,4 +1,4 @@
-import { parseApiDateTimeMs } from '@dadei/ui/lib/shared/parseApiDateTime';
+import { parseApiDateTimeMs } from '@dadei/ui/lib/platform/shared/parseApiDateTime';
 
 export type ApprovalCountdownProgress = {
   initialScaleX: number;

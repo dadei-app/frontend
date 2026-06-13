@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { typewriterDelayBeforeChar, typewriterRevealStep } from './typewriterTiming';
+import { typewriterDelayBeforeChar, typewriterRevealStep } from '@dadei/ui/lib/assistant/voice/ui/typewriterTiming';
 
 describe('typewriterTiming', () => {
   it('uses longer delays for spaces than a baseline character', () => {

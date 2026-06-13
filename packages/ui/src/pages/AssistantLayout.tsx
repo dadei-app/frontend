@@ -2,7 +2,7 @@ import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'r
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/platform/query/queryHooks';
 import { Loading } from '@dadei/ui/components/Loading';
 import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
 import {
@@ -11,7 +11,7 @@ import {
   useTutorialEngaged,
   useTutorialSettingsTourActive,
 } from '@dadei/ui/contexts/TutorialContext';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/onboarding/tutorial/constants';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
@@ -21,9 +21,9 @@ import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import MobileInteractionsSheet from '@dadei/ui/components/MobileInteractionsSheet';
 import AssistantSettingsModal from '@dadei/ui/components/settings';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
-import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { Mic } from 'lucide-react';
 
 const ASSISTANT_HINT_ROW =

@@ -7,7 +7,7 @@ import {
   stripLeadingWakeDisfluencies,
   transcriptLikelyContainsWakeWord,
   transcriptStartsWithWakeCommand,
-} from './wakeWordDetection';
+} from '@dadei/ui/lib/assistant/voice/wake/wakeWordDetection';
 
 describe('stripLeadingWakeDisfluencies', () => {
   it('removes a chain of leading fillers', () => {

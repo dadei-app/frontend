@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveMicAppearance } from './micAppearance';
+import { deriveMicAppearance } from '@dadei/ui/lib/assistant/voice/micAppearance';
 
 const base = {
   isServiceEnabled: true,

@@ -3,7 +3,7 @@ import {
   checkRendererPermission,
   requestElectronMicrophonePermission,
   requestRendererPermission,
-} from '@dadei/ui/lib/platform/desktopPermissions';
+} from '@dadei/ui/lib/platform/runtime/desktopPermissions';
 import type { TutorialPlatform } from '@dadei/ui/types/tutorial.types';
 
 type CheckFn = () => Promise<'granted' | 'denied' | 'unknown'>;

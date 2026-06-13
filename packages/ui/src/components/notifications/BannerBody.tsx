@@ -1,8 +1,8 @@
 import {
   formatActionTimeRange,
   formatActionWhen,
-} from '@dadei/ui/utils/actionDisplay';
-import { formatForUser } from '@dadei/ui/utils/time';
+} from '@dadei/ui/lib/workspace/display/actionDisplay';
+import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
 import type { ActionOperation, NetworkAction } from '@dadei/ui/types/models.types';
 
 export type BannerBodyProps = {
@@ -222,7 +222,7 @@ export function bannerBodyFromAction(action: NetworkAction): BannerBodyProps {
     operation: action.operation ?? undefined,
     title: action.title?.trim() || action.action_type,
     body: undefined,
-    toolArgs: action.tool_args,
+    toolArgs: action.tool_args ?? undefined,
     startTime: action.start_time,
     endTime: action.end_time,
   };

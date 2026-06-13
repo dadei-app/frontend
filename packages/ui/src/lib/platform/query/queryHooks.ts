@@ -1,20 +1,22 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { isAxiosError } from 'axios';
-import { conversationsApi } from '@dadei/ui/lib/api/conversations';
-import { authApi } from '@dadei/ui/lib/api/auth';
-import { serviceApi } from '@dadei/ui/lib/api/service';
+import { conversationsApi } from '@dadei/ui/lib/workspace/api/conversations';
+import { authApi } from '@dadei/ui/lib/workspace/api/auth';
+import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { Conversation } from '@dadei/ui/types/models.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import {
+  ASSISTANT_MEMORIES_LIST_LIMIT,
+  AUTH_ME_STALE_MS,
+  INTERACTION_PANEL_RECENT_LIMIT,
+} from '@dadei/ui/lib/platform/query/constants';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { useQuery } from '@tanstack/react-query';
 
-const AUTH_ME_STALE_MS = 5 * 60_000;
-
-/** Recent conversation page size for the interaction panel bootstrap. */
-export const INTERACTION_PANEL_RECENT_LIMIT = 10;
+export { INTERACTION_PANEL_RECENT_LIMIT } from '@dadei/ui/lib/platform/query/constants';
 
 /** Shared options so every code path (useQueries, prefetch, realtime) hits the same cache shape. */
 export function conversationQueryOptions(conversationId: string) {
@@ -32,10 +34,9 @@ export function conversationQueryOptions(conversationId: string) {
 export {
   clearAssistantSessionCaches,
   removeAllConversationQueries,
-} from '@dadei/ui/lib/query/cacheUtils';
+} from '@dadei/ui/lib/platform/query/cacheUtils';
 
-/** Default list sizes for assistant shell + settings (matches interaction panel style scoped keys). */
-export const ASSISTANT_MEMORIES_LIST_LIMIT = 100;
+export { ASSISTANT_MEMORIES_LIST_LIMIT } from '@dadei/ui/lib/platform/query/constants';
 
 export function useAuthMeQuery(enabled = true) {
   return useQuery({

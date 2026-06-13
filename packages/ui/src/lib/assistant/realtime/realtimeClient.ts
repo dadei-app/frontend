@@ -1,5 +1,6 @@
-import { buildRealtimeWebSocketUrl } from '@dadei/ui/lib/api/http/realtime';
-import { dispatchClientAction } from '@dadei/ui/lib/realtime/clientActionHandler';
+import { buildRealtimeWebSocketUrl } from '@dadei/ui/lib/workspace/api/http/realtime';
+import { dispatchClientAction } from '@dadei/ui/lib/assistant/realtime/clientActionHandler';
+import { HEARTBEAT_INTERVAL_MS, HEARTBEAT_TIMEOUT_MS } from '@dadei/ui/lib/assistant/realtime/constants';
 
 export type RealtimeMessage = Record<string, unknown> & {
   event?: string;
@@ -16,8 +17,6 @@ let heartbeatWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = true;
 let reconnectAttempt = 0;
 let connectOpts: { getAccessToken: () => Promise<string | null>; clientId?: string } | null = null;
-const HEARTBEAT_INTERVAL_MS = 20_000;
-const HEARTBEAT_TIMEOUT_MS = 60_000;
 let lastInboundAt = 0;
 let suppressNextCloseReconnect = false;
 

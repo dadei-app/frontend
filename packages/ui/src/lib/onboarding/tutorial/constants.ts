@@ -1,5 +1,5 @@
 import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
-import { TUTORIAL_INTERACTION_TARGET_KEYS } from '@dadei/ui/lib/tutorial/testData';
+import { TUTORIAL_INTERACTION_TARGET_KEYS } from '@dadei/ui/lib/onboarding/tutorial/fixtures';
 
 function settingsSections(isElectron: boolean): { id: string; title: string; body: string }[] {
   return [

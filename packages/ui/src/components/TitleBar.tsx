@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { DESKTOP_TITLEBAR_ATTR, useSystem } from '@dadei/ui/contexts/SystemContext';
-import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS } from '@dadei/ui/lib/platform/electronWindowChrome';
+import { DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS } from '@dadei/ui/lib/platform/runtime/electronWindowChrome';
 
 /**
  * Draggable title-bar region only (Electron custom-title-bar tutorial / WCO pattern).

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { integrationIconTileClass, IntegrationLogo, type LogoDef } from './integrationIcons';
 
 export type IntegrationStatusKind = 'live' | 'on' | 'off' | 'reauth';

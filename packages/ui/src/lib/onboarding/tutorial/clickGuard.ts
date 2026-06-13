@@ -1,5 +1,5 @@
-import { isFinishTutorialStep, isTutorialConversationDeleteStep } from '@dadei/ui/lib/tutorial/constants';
-import { isTutorialTestInteractionTarget } from '@dadei/ui/lib/tutorial/testData';
+import { isFinishTutorialStep, isTutorialConversationDeleteStep } from '@dadei/ui/lib/onboarding/tutorial/constants';
+import { isTutorialTestInteractionTarget } from '@dadei/ui/lib/onboarding/tutorial/fixtures';
 import type { TutorialStep } from '@dadei/ui/types/tutorial.types';
 
 export function stepInteractables(step: TutorialStep): string[] {

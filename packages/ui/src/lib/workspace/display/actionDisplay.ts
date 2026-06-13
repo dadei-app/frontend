@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { formatForUser } from '@dadei/ui/utils/time';
+import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
 import type { ActionOperation, NetworkAction } from '@dadei/ui/types/models.types';
 
 /** Domains that surface approval notification banners. */

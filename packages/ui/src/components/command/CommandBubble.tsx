@@ -9,17 +9,17 @@ import {
 import { AnimatePresence, LayoutGroup, motion } from 'framer-motion';
 import type { CommandState, AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
-import { formatAssistantStatusLine } from '@dadei/ui/lib/voice/labels/commandToolLabels';
+import { formatAssistantStatusLine } from '@dadei/ui/lib/assistant/voice/labels/commandToolLabels';
 import {
   typewriterDelayBeforeChar,
   typewriterRevealStep,
-} from '@dadei/ui/lib/voice/ui/typewriterTiming';
+} from '@dadei/ui/lib/assistant/voice/ui/typewriterTiming';
 import {
   COMMAND_TURN_PAIR_ENTRY_MS,
   COMMAND_TURN_PAIR_LAYOUT_MS,
   COMMAND_TURN_PAIR_SLIDE_PX,
   VOICE_EASE,
-} from '@dadei/ui/lib/voice/session/constants';
+} from '@dadei/ui/lib/assistant/voice/constants';
 
 const STATUS_ELLIPSIS_CYCLE_MS = 480;
 /** Alpha mask fade length at clipped scroll edges (not a visible overlay). */

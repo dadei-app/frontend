@@ -4,10 +4,10 @@ import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
 import { useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
-import { deriveMicAppearance } from '@dadei/ui/lib/voice/micAppearance';
+import { deriveMicAppearance } from '@dadei/ui/lib/assistant/voice/micAppearance';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;

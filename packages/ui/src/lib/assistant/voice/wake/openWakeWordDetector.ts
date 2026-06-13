@@ -1,8 +1,21 @@
 import * as ort from 'onnxruntime-web';
-import melUrl from './models/melspectrogram.onnx?url';
-import embeddingUrl from './models/embedding_model.onnx?url';
-import heyJarvisUrl from './models/hey_jarvis.onnx?url';
-import heyDadeiUrl from './models/hey_dadei.onnx?url';
+import melUrl from '../../audio/models/melspectrogram.onnx?url';
+import embeddingUrl from '../../audio/models/embedding_model.onnx?url';
+import { SAMPLE_RATE } from '@dadei/ui/lib/assistant/audio/constants';
+import {
+  DEFAULT_WAKE_THRESHOLD,
+  DEFAULT_WAKE_WORD_CLASSIFIERS,
+  DETECTION_COOLDOWN_MS,
+  EMBEDDING_SIZE,
+  EMBEDDING_WINDOW_SIZE,
+  MEL_BINS,
+  MEL_FRAMES_PER_AUDIO_FRAME,
+  MEL_HOP_FRAMES,
+  MEL_WINDOW_FRAMES,
+  OPEN_WAKEWORD_FRAME_SAMPLES,
+  ORT_WASM_DIST_URL,
+  PROCESSOR_BUFFER_SAMPLES,
+} from '@dadei/ui/lib/assistant/voice/wake/constants';
 
 export type WakeWordLabel = 'hey_dadei' | 'hey_jarvis';
 
@@ -11,29 +24,13 @@ export interface WakeWordClassifierConfig {
   url: string;
 }
 
-export interface WakeWordDetectorConfig {
+export interface OpenWakeWordDetectorConfig {
   threshold?: number;
   wakeWordClassifiers?: WakeWordClassifierConfig[];
 }
 
-const DEFAULT_WAKE_WORD_CLASSIFIERS: WakeWordClassifierConfig[] = [
-  { label: 'hey_dadei', url: heyDadeiUrl },
-  { label: 'hey_jarvis', url: heyJarvisUrl },
-];
-
-const SAMPLE_RATE = 16000;
-const PROCESSOR_BUFFER_SAMPLES = 2048; // ScriptProcessorNode requires power-of-two
-const OPEN_WAKEWORD_FRAME_SAMPLES = 1280; // 80 ms @ 16 kHz
-const MEL_BINS = 32;
-const MEL_WINDOW_FRAMES = 76;
-const MEL_HOP_FRAMES = 8;
-const MEL_FRAMES_PER_AUDIO_FRAME = 5;
-const EMBEDDING_SIZE = 96;
-const EMBEDDING_WINDOW_SIZE = 16;
-const DEFAULT_THRESHOLD = 0.8;
-const DETECTION_COOLDOWN_MS = 1500;
-const ORT_WEB_VERSION = '1.26.0';
-const ORT_WASM_DIST_URL = `https://cdn.jsdelivr.net/npm/onnxruntime-web@${ORT_WEB_VERSION}/dist/`;
+/** @deprecated Use OpenWakeWordDetectorConfig */
+export type WakeWordDetectorConfig = OpenWakeWordDetectorConfig;
 
 type WakeCallback = (timestampMs: number, wakeWord: WakeWordLabel) => void;
 let wakeWordRuntimeUnavailable = false;
@@ -44,7 +41,7 @@ type WakeClassifierSession = {
   session: ort.InferenceSession;
 };
 
-export class WakeWordDetector {
+export class OpenWakeWordDetector {
   private readonly threshold: number;
   private readonly wakeWordClassifiers: WakeWordClassifierConfig[];
   private readonly callbacks = new Set<WakeCallback>();
@@ -61,8 +58,8 @@ export class WakeWordDetector {
   private inferenceQueue: Promise<void> = Promise.resolve();
   private lastDetectedAtMs = 0;
 
-  constructor(config: WakeWordDetectorConfig = {}) {
-    this.threshold = config.threshold ?? DEFAULT_THRESHOLD;
+  constructor(config: OpenWakeWordDetectorConfig = {}) {
+    this.threshold = config.threshold ?? DEFAULT_WAKE_THRESHOLD;
     this.wakeWordClassifiers = config.wakeWordClassifiers ?? DEFAULT_WAKE_WORD_CLASSIFIERS;
     this.resetPipelineState();
   }
@@ -135,7 +132,7 @@ export class WakeWordDetector {
 
   private async initializeModels(): Promise<void> {
     try {
-      WakeWordDetector.configuredOrtWasmPath();
+      OpenWakeWordDetector.configuredOrtWasmPath();
       const sessionOptions: ort.InferenceSession.SessionOptions = { executionProviders: ['wasm'] };
 
       this.melSession = await ort.InferenceSession.create(melUrl, sessionOptions);
@@ -184,7 +181,6 @@ export class WakeWordDetector {
       return;
     }
 
-    // openWakeWord expects float32 values in int16 magnitude range before mel extraction.
     const scaledFrame = new Float32Array(frame.length);
     for (let i = 0; i < frame.length; i++) {
       const s = Math.max(-1, Math.min(1, frame[i]));
@@ -287,3 +283,6 @@ export class WakeWordDetector {
     void this.stop();
   }
 }
+
+/** @deprecated Use OpenWakeWordDetector */
+export const WakeWordDetector = OpenWakeWordDetector;

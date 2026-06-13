@@ -111,7 +111,7 @@ export function parseHttpResponseBody(body: unknown, status?: number): string {
 /** Primary helper: unknown thrown value → user-facing sentence. */
 export function getUserErrorMessage(
   error: unknown,
-  fallback = ERROR_CODES.request_failed,
+  fallback: string = ERROR_CODES.request_failed,
 ): string {
   if (isAxiosError(error)) {
     const status = error.response?.status;
