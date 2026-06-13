@@ -7,7 +7,14 @@ import {
   useState,
 } from 'react';
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
-import { useService } from '@dadei/ui/contexts/ServiceContext';
+import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
+import {
+  selectIntroductionActive,
+  selectShouldForwardAudioChunks,
+  selectShouldRunAudioPipeline,
+  selectShouldStreamAudio,
+} from '@dadei/ui/lib/assistant/runtime/reducer';
+import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
   notifyVoiceSpeechActivity,
@@ -139,10 +146,10 @@ function buildAudioConstraints(prefs: AudioSettings): MediaTrackConstraints {
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { audioSettings } = useSystem();
-  const { isServiceEnabled, registrationConflict, isConnected, isCommandMode, isCommandOwner } =
-    useService();
-  const { state, startListening, notifyCommandUtteranceEnded, introductionModeActive } =
-    useCommand();
+  const runtime = useAssistantRuntimeState();
+  const sessionId = getRealtimeSessionId();
+  const { state, startListening, notifyCommandUtteranceEnded } = useCommand();
+  const introductionModeActive = selectIntroductionActive(runtime);
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
 
@@ -252,8 +259,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   useEffect(() => {
-    forwardChunksRef.current = CHUNK_FORWARD_STATES.includes(state);
-  }, [state]);
+    forwardChunksRef.current = selectShouldForwardAudioChunks(runtime);
+  }, [runtime]);
 
   useEffect(() => subscribeCommandCaptureCommit(commitCommandCapture), [commitCommandCapture]);
 
@@ -523,14 +530,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [startCommandAudioStream, stopCommandAudioStream]);
 
   useEffect(() => {
-    const shouldListen =
-      (isServiceEnabled || (isCommandMode && isCommandOwner)) &&
-      !registrationConflict &&
-      isConnected;
-    setIsAudioPipelineReady(shouldListen);
-  }, [isServiceEnabled, isCommandMode, isCommandOwner, registrationConflict, isConnected]);
-
-  useEffect(() => {
     const off = subscribeRealtimeMessages(msg => {
       if (msg.event === 'command_transcript_ready') {
         commandStreamReadyRef.current = true;
@@ -540,11 +539,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const shouldListen =
-      (isServiceEnabled || (isCommandMode && isCommandOwner)) &&
-      !registrationConflict &&
-      isConnected;
-    const shouldStream = shouldListen && state !== 'locked';
+    const shouldListen = selectShouldRunAudioPipeline(runtime, sessionId);
+    setIsAudioPipelineReady(shouldListen);
+  }, [runtime, sessionId]);
+
+  useEffect(() => {
+    const shouldListen = selectShouldRunAudioPipeline(runtime, sessionId);
+    const shouldStream = shouldListen && selectShouldStreamAudio(runtime);
     if (shouldStream && !commandStreamActiveRef.current) {
       void startCommandAudioStream().catch(e => {
         console.error('[Audio] command stream start failed', e);
@@ -554,12 +555,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       stopCommandAudioStream(true);
     }
   }, [
-    isServiceEnabled,
-    isCommandMode,
-    isCommandOwner,
-    registrationConflict,
-    isConnected,
-    state,
+    runtime,
+    sessionId,
     startCommandAudioStream,
     stopCommandAudioStream,
   ]);

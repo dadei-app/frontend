@@ -6,6 +6,7 @@ import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { SystemProvider } from '@dadei/ui/contexts/SystemContext';
 import { NotificationProvider } from '@dadei/ui/contexts/NotificationContext';
 import { AuthProvider } from '@dadei/ui/contexts/AuthContext';
+import { AssistantRuntimeProvider } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import { ServiceProvider } from '@dadei/ui/contexts/ServiceContext';
 import { CommandProvider } from '@dadei/ui/contexts/CommandContext';
 import { AudioProvider } from '@dadei/ui/contexts/AudioContext';
@@ -35,13 +36,15 @@ export function App() {
                       <Route
                         path="/assistant"
                         element={
-                          <ServiceProvider>
-                            <CommandProvider>
-                              <AudioProvider>
-                                <AssistantLayout />
-                              </AudioProvider>
-                            </CommandProvider>
-                          </ServiceProvider>
+                          <AssistantRuntimeProvider>
+                            <ServiceProvider>
+                              <CommandProvider>
+                                <AudioProvider>
+                                  <AssistantLayout />
+                                </AudioProvider>
+                              </CommandProvider>
+                            </ServiceProvider>
+                          </AssistantRuntimeProvider>
                         }
                       />
                       <Route path="/app" element={<Navigate to="/assistant" replace />} />

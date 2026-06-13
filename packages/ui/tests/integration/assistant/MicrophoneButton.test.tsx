@@ -14,13 +14,22 @@ vi.mock('@dadei/ui/contexts/SystemContext', () => ({
   }),
 }));
 
+vi.mock('@dadei/ui/contexts/AssistantRuntimeContext', () => ({
+  useAssistantRuntimeState: () => ({
+    service: 'ambient',
+    command: 'idle',
+    submode: 'normal',
+    commandOwnerSessionId: null,
+    commandModeExpiresAt: null,
+    isConnected: true,
+    registrationConflict: false,
+    isTogglingService: false,
+  }),
+}));
+
 vi.mock('@dadei/ui/contexts/ServiceContext', () => ({
   useService: () => ({
-    isServiceEnabled: true,
     toggleService: mockToggleService,
-    isTogglingService: false,
-    registrationConflict: false,
-    isCommandMode: false,
   }),
 }));
 

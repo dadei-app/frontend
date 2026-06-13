@@ -9,6 +9,11 @@ import {
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import {
+  useAssistantRuntimeActions,
+  useAssistantRuntimeState,
+} from '@dadei/ui/contexts/AssistantRuntimeContext';
+import { selectIntroductionActive } from '@dadei/ui/lib/assistant/runtime/reducer';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
@@ -61,7 +66,7 @@ import {
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
-import { COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/assistant/voice/micAppearance';
+import { COMMAND_PROCESSING_PHASES } from '@dadei/ui/lib/assistant/runtime/reducer';
 
 const ASSISTANT_STATUS_THINKING = 'Thinking';
 
@@ -248,8 +253,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     commandModeExpiresAt,
     syncCommandModeFromClaim,
   } = useService();
-  const [introductionModeActive, setIntroductionModeActive] = useState(false);
-  const introductionModeActiveRef = useRef(false);
+  const runtimeActions = useAssistantRuntimeActions();
+  const runtime = useAssistantRuntimeState();
+  const introductionModeActive = selectIntroductionActive(runtime);
+  const introductionModeActiveRef = useRef(introductionModeActive);
 
   useEffect(() => {
     introductionModeActiveRef.current = introductionModeActive;
@@ -257,10 +264,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const endIntroductionMode = useCallback(() => {
     if (!introductionModeActiveRef.current) return;
-    introductionModeActiveRef.current = false;
-    setIntroductionModeActive(false);
+    runtimeActions.setCommandSubmode('normal');
     void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
-  }, [queryClient]);
+  }, [queryClient, runtimeActions]);
 
   const [state, setState] = useState<CommandState>('idle');
   const [userBubbleText, setUserBubbleText] = useState('');
@@ -324,7 +330,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     stateRef.current = state;
-  }, [state]);
+    runtimeActions.setCommandPhase(state);
+  }, [state, runtimeActions]);
 
   useEffect(() => {
     if (state === 'listening') {
@@ -374,12 +381,18 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     try {
       await serviceApi.releaseCommandMode(sessionToken);
       localClaimRef.current = false;
+      runtimeActions.syncCommandMode({
+        active: false,
+        ownerSessionId: null,
+        expiresAt: null,
+      });
+      runtimeActions.setServiceStatus(true);
       return true;
     } catch (error) {
       console.warn('[Command] Failed to release assistant mode', error);
       return false;
     }
-  }, []);
+  }, [runtimeActions]);
 
   const startRequestActivity = useCallback(() => {
     setAssistantStatusLine(formatAssistantStatusLine(ASSISTANT_STATUS_THINKING));
@@ -520,6 +533,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     try {
       const claimed = await serviceApi.claimCommandMode(sessionToken, CLAIM_HOLD_SECONDS);
       syncCommandModeFromClaim(claimed);
+      runtimeActions.setServiceStatus(false);
       localClaimRef.current = true;
       return true;
     } catch (e) {
@@ -531,7 +545,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       console.warn('[Command] claim failed', e);
       return false;
     }
-  }, [resetLiveBubbles, syncCommandModeFromClaim]);
+  }, [resetLiveBubbles, runtimeActions, syncCommandModeFromClaim]);
 
   const scheduleWakeFalsePositiveRelease = useCallback(() => {
     clearWakeTimeout();
@@ -546,7 +560,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [clearWakeTimeout, endIntroductionMode, goIdle, releaseCommandMode]);
 
   const cancelProcessing = useCallback(() => {
-    if (!COMMAND_PROCESSING_STATES.has(stateRef.current)) return;
+    if (!COMMAND_PROCESSING_PHASES.has(stateRef.current)) return;
 
     const inIntroduction = introductionModeActiveRef.current;
     commandProcessingEpochRef.current += 1;
@@ -939,7 +953,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (stateRef.current !== 'idle') return false;
     if (commandStreamInFlightRef.current) return false;
 
-    setIntroductionModeActive(true);
+    runtimeActions.setCommandSubmode('introduction');
     introductionModeActiveRef.current = true;
     startNewTurn();
     clearWakeTimeout();
@@ -1267,7 +1281,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const dismissActiveCommand = useCallback(() => {
     const current = stateRef.current;
     if (current === 'idle' && !localClaimRef.current && !isCommandMode) return;
-    if (COMMAND_PROCESSING_STATES.has(current)) {
+    if (COMMAND_PROCESSING_PHASES.has(current)) {
       cancelProcessing();
       return;
     }
