@@ -62,6 +62,8 @@ import {
 import { isSessionEndUtterance } from '@dadei/ui/lib/assistant/voice/session/sessionEndDetection';
 import {
   notifyCommandCaptureCommit,
+  notifyCommandCaptureRearm,
+  subscribeCommandCaptureSpeech,
   subscribeVoiceSpeechActivity,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
@@ -310,8 +312,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const replaceNextStreamTokensRef = useRef(false);
   /** User clicked mic to cancel — suppress error UI from aborted streams. */
   const userInitiatedCancelRef = useRef(false);
-  /** Drop the next WS final after cancel (server may still finish a discarded decode). */
+  /** Drop the next WS final after cancel while still transcribing (discarded decode). */
   const suppressNextTranscriptFinalRef = useRef(false);
+  /** Bumped when capture is re-armed after cancel; speech must match before utterance end. */
+  const captureRearmGenerationRef = useRef(0);
+  const captureSpeechGenerationRef = useRef(-1);
   const lastServerUtteranceIdRef = useRef<number | null>(null);
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
@@ -342,10 +347,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       utteranceEndNotifiedRef.current = false;
       awaitingTranscriptRef.current = false;
       responseRevealStartedRef.current = false;
+      captureSpeechGenerationRef.current = -1;
     }
     if (state === 'follow_up') {
       utteranceEndNotifiedRef.current = false;
       awaitingTranscriptRef.current = false;
+      captureSpeechGenerationRef.current = -1;
     }
   }, [state]);
 
@@ -406,6 +413,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const current = stateRef.current;
     if (current !== 'listening' && current !== 'follow_up') return;
     if (commandStreamInFlightRef.current) return;
+    if (captureSpeechGenerationRef.current !== captureRearmGenerationRef.current) return;
 
     notifyCommandCaptureCommit();
     utteranceEndNotifiedRef.current = true;
@@ -577,12 +585,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!COMMAND_PROCESSING_PHASES.has(stateRef.current)) return;
 
     const inIntroduction = introductionModeActiveRef.current;
+    const cancellingTranscribing = stateRef.current === 'transcribing';
     userInitiatedCancelRef.current = true;
     streamTerminalErrorRef.current = false;
     replaceNextStreamTokensRef.current = false;
     commandProcessingEpochRef.current += 1;
     activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
-    suppressNextTranscriptFinalRef.current = true;
+    suppressNextTranscriptFinalRef.current = cancellingTranscribing;
 
     if (!inIntroduction) {
       endIntroductionMode();
@@ -601,6 +610,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastToolBubbleSnippetRef.current = '';
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
+    captureRearmGenerationRef.current += 1;
+    captureSpeechGenerationRef.current = -1;
     setCommandPhase(inIntroduction ? 'follow_up' : 'listening');
     if (!inIntroduction) {
       scheduleWakeFalsePositiveRelease();
@@ -611,6 +622,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       ...(sessionId ? { session_id: sessionId } : {}),
     });
     sendRealtimeMessage({ type: 'command_audio_discard' });
+    sendRealtimeMessage({
+      type: 'command_audio_wake',
+      ...(sessionId ? { session_id: sessionId } : {}),
+    });
+    notifyCommandCaptureRearm();
     console.debug('[Voice][Cancel] cancelProcessing', {
       state: stateRef.current,
       epoch: commandProcessingEpochRef.current,
@@ -1131,6 +1147,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           utteranceEndNotifiedRef.current = false;
           awaitingTranscriptRef.current = false;
           transcribeFromFollowUpRef.current = false;
+          suppressNextTranscriptFinalRef.current = false;
           setAssistantStatusLine(null);
           setCommandPhase(fromFollowUp ? 'follow_up' : 'listening');
           return;
@@ -1146,6 +1163,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           utteranceEndNotifiedRef.current = false;
           awaitingTranscriptRef.current = false;
           transcribeFromFollowUpRef.current = false;
+          suppressNextTranscriptFinalRef.current = false;
           setAssistantStatusLine(null);
           setAssistantBubbleTextSynced('');
           setAssistantBubbleStatus('pending');
@@ -1235,6 +1253,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   ]);
 
   useEffect(() => subscribeVoiceSpeechActivity(onFollowUpSpeechActivity), [onFollowUpSpeechActivity]);
+
+  useEffect(() => {
+    return subscribeCommandCaptureSpeech(() => {
+      captureSpeechGenerationRef.current = captureRearmGenerationRef.current;
+    });
+  }, []);
 
   useEffect(() => {
     if (isServiceEnabled) return;

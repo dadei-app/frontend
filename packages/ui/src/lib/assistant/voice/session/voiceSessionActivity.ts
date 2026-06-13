@@ -31,3 +31,33 @@ export function notifyCommandCaptureCommit(): void {
     listener();
   }
 }
+
+type CaptureRearmListener = () => void;
+
+const captureRearmListeners = new Set<CaptureRearmListener>();
+
+export function subscribeCommandCaptureRearm(listener: CaptureRearmListener): () => void {
+  captureRearmListeners.add(listener);
+  return () => captureRearmListeners.delete(listener);
+}
+
+export function notifyCommandCaptureRearm(): void {
+  for (const listener of captureRearmListeners) {
+    listener();
+  }
+}
+
+type CaptureSpeechListener = () => void;
+
+const captureSpeechListeners = new Set<CaptureSpeechListener>();
+
+export function subscribeCommandCaptureSpeech(listener: CaptureSpeechListener): () => void {
+  captureSpeechListeners.add(listener);
+  return () => captureSpeechListeners.delete(listener);
+}
+
+export function notifyCommandCaptureSpeech(): void {
+  for (const listener of captureSpeechListeners) {
+    listener();
+  }
+}

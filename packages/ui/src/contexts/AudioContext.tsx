@@ -17,8 +17,10 @@ import {
 import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
+  notifyCommandCaptureSpeech,
   notifyVoiceSpeechActivity,
   subscribeCommandCaptureCommit,
+  subscribeCommandCaptureRearm,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
@@ -72,13 +74,13 @@ export function clampMicLevel(level: number): number {
   return Math.max(0, Math.min(1, level));
 }
 
-/** Motion targets for MicLevelAura from a normalized mic level. */
+/** Motion targets for MicLevelAura from a normalized mic level (75% of full strength). */
 export function micLevelAuraMotion(level: number, visible: boolean) {
   const clamped = clampMicLevel(level);
   return {
-    opacity: visible ? 0.44 + clamped * 0.56 : 0,
-    scale: visible ? 1.08 + clamped * 0.92 : 0.88,
-    y: visible ? -4 - clamped * 22 : 0,
+    opacity: visible ? 0.33 + clamped * 0.42 : 0,
+    scale: visible ? 1.06 + clamped * 0.69 : 0.91,
+    y: visible ? -3 - clamped * 16.5 : 0,
   };
 }
 
@@ -335,6 +337,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
           const commandSpeaking = level >= commandSpeechRms;
           if (commandSpeaking) {
+            if (!commandSpeechSeenRef.current) {
+              notifyCommandCaptureSpeech();
+            }
             commandSpeechSeenRef.current = true;
             commandSilenceStartedMsRef.current = null;
           } else if (commandSpeechSeenRef.current) {
@@ -442,6 +447,18 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       ...(introductionModeRef.current ? { introduction_mode: true } : {}),
     });
   }, []);
+
+  const rearmCommandCapture = useCallback(() => {
+    commandAudioEndSentRef.current = false;
+    commandSpeechSeenRef.current = false;
+    commandSilenceStartedMsRef.current = null;
+    commandStreamReadyRef.current = false;
+    if (commandStreamActiveRef.current) {
+      ensureCommandSessionStarted(Date.now(), true);
+    }
+  }, [ensureCommandSessionStarted]);
+
+  useEffect(() => subscribeCommandCaptureRearm(rearmCommandCapture), [rearmCommandCapture]);
 
   const startCommandAudioStream = useCallback(async () => {
     if (commandStreamActiveRef.current) return;
