@@ -106,9 +106,8 @@ const CommandContext = createContext<CommandContextValue | undefined>(undefined)
 
 /** Release wake-only capture if user never continues with a command. */
 const WAKE_FALSE_POSITIVE_MS = 12_000;
-/** Minimum interim length before arming a follow-up (filters ASR noise). */
-const MIN_FOLLOW_UP_INTERIM_CHARS = 4;
-const INTERIM_SHRINK_GUARD_RATIO = 0.7;
+/** Minimum follow-up final length (filters brief ASR noise). */
+const MIN_FOLLOW_UP_FINAL_CHARS = 2;
 
 function formatToolSummarySnippet(summary: string, ok: boolean): string {
   const toolErr = formatToolResultUserMessage(summary, ok);
@@ -237,61 +236,6 @@ function cleanTranscript(raw: string): string {
   return cleaned;
 }
 
-function normalizeInterimCaption(text: string): string {
-  return text.trim().toLowerCase().replace(/\s+/g, ' ');
-}
-
-function longestCommonPrefixLen(a: string, b: string): number {
-  const max = Math.min(a.length, b.length);
-  let idx = 0;
-  while (idx < max && a[idx] === b[idx]) idx += 1;
-  return idx;
-}
-
-export interface InterimCaptionState {
-  utteranceId: number | null;
-  interimSeq: number;
-  caption: string;
-}
-
-export function stabilizeInterimCaptionState(
-  prev: InterimCaptionState,
-  rawCaption: string,
-  utteranceId: number | null,
-  interimSeq: number | null,
-): InterimCaptionState {
-  const candidate = rawCaption.trim();
-  if (!candidate) return prev;
-  const seq = typeof interimSeq === 'number' && Number.isFinite(interimSeq) ? interimSeq : null;
-  const hasUtteranceId = typeof utteranceId === 'number' && Number.isFinite(utteranceId);
-  const changedUtterance = hasUtteranceId && prev.utteranceId !== utteranceId;
-  const base: InterimCaptionState = changedUtterance
-    ? { utteranceId: utteranceId!, interimSeq: 0, caption: '' }
-    : {
-        utteranceId: hasUtteranceId ? utteranceId : prev.utteranceId,
-        interimSeq: prev.interimSeq,
-        caption: prev.caption,
-      };
-
-  if (seq != null && seq <= base.interimSeq) return base;
-  const nextSeq = seq ?? base.interimSeq;
-  const prevCaption = base.caption.trim();
-  if (!prevCaption) return { ...base, interimSeq: nextSeq, caption: candidate };
-  const prevNorm = normalizeInterimCaption(prevCaption);
-  const nextNorm = normalizeInterimCaption(candidate);
-  if (!nextNorm || nextNorm === prevNorm) return { ...base, interimSeq: nextSeq };
-  if (nextNorm.startsWith(prevNorm)) return { ...base, interimSeq: nextSeq, caption: candidate };
-  if (prevNorm.startsWith(nextNorm)) {
-    const minAllowed = Math.max(4, Math.floor(prevNorm.length * INTERIM_SHRINK_GUARD_RATIO));
-    if (nextNorm.length < minAllowed) return { ...base, interimSeq: nextSeq };
-  } else {
-    const lcp = longestCommonPrefixLen(prevNorm, nextNorm);
-    const weakAlignment = lcp < Math.max(3, Math.floor(Math.min(prevNorm.length, nextNorm.length) * 0.45));
-    if (weakAlignment && nextNorm.length < prevNorm.length) return { ...base, interimSeq: nextSeq };
-  }
-  return { ...base, interimSeq: nextSeq, caption: candidate };
-}
-
 export function CommandProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const { getAccessToken } = useAuth();
@@ -334,19 +278,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const streamAbortRef = useRef<AbortController | null>(null);
   const localClaimRef = useRef(false);
   const lastSubmittedTextRef = useRef<{ text: string; atMs: number } | null>(null);
-  const lastWakeInterimRef = useRef('');
   const assistantBubbleTextRef = useRef('');
   const userBubbleTextRef = useRef('');
-  const followUpCaptureRef = useRef(false);
   const sessionEndingRef = useRef(false);
   const pendingNewResponseRef = useRef(false);
   const commandStreamInFlightRef = useRef(false);
   const streamHadOutputRef = useRef(false);
   const lastToolBubbleSnippetRef = useRef('');
   const lastCommittedTurnRef = useRef('');
-  const interimCaptionRef = useRef('');
-  const interimSeqRef = useRef<number>(0);
-  const interimUtteranceIdRef = useRef<number | null>(null);
   const utteranceEndNotifiedRef = useRef(false);
   /** True after local end-of-speech until transcript final is handled. */
   const awaitingTranscriptRef = useRef(false);
@@ -493,7 +432,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const resetLiveBubbles = useCallback(() => {
-    followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
     lastToolBubbleSnippetRef.current = '';
     clearLiveTurnId();
@@ -503,42 +441,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setAssistantBubbleStatus('pending');
   }, [clearLiveTurnId, setAssistantBubbleTextSynced]);
 
-  const resetInterimCaptionState = useCallback(() => {
-    interimCaptionRef.current = '';
-    interimSeqRef.current = 0;
-    interimUtteranceIdRef.current = null;
-  }, []);
-
-  const stableInterimCaption = useCallback(
-    (rawCaption: string, utteranceId: number | null, interimSeq: number | null): string => {
-      const prevCaption = interimCaptionRef.current;
-      const next = stabilizeInterimCaptionState(
-        {
-          utteranceId: interimUtteranceIdRef.current,
-          interimSeq: interimSeqRef.current,
-          caption: interimCaptionRef.current,
-        },
-        rawCaption,
-        utteranceId,
-        interimSeq,
-      );
-      interimUtteranceIdRef.current = next.utteranceId;
-      interimSeqRef.current = next.interimSeq;
-      interimCaptionRef.current = next.caption;
-      const accepted = next.caption.trim() !== prevCaption.trim() || !prevCaption.trim();
-      // eslint-disable-next-line no-console
-      console.debug('[Voice][Interim]', {
-        utteranceId: next.utteranceId,
-        interimSeq: next.interimSeq,
-        rawChars: rawCaption.trim().length,
-        stableChars: next.caption.trim().length,
-        accepted,
-      });
-      return next.caption;
-    },
-    [],
-  );
-
   const goIdle = useCallback(() => {
     clearFollowUpTimer();
     clearWakeTimeout();
@@ -546,11 +448,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     sessionEndingRef.current = false;
     lastSubmittedTextRef.current = null;
     lastCommittedTurnRef.current = '';
-    resetInterimCaptionState();
     setBubbleHistory([]);
     setState('idle');
     resetLiveBubbles();
-  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetInterimCaptionState, resetLiveBubbles]);
+  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
 
   const endSession = useCallback(() => {
     endIntroductionMode();
@@ -644,12 +545,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     transcribeFromFollowUpRef.current = false;
     responseRevealStartedRef.current = false;
     revealCompleteHandledRef.current = false;
-    followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
     lastSubmittedTextRef.current = null;
     streamHadOutputRef.current = false;
     lastToolBubbleSnippetRef.current = '';
-    resetInterimCaptionState();
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
     setState(inIntroduction ? 'follow_up' : 'listening');
@@ -670,7 +569,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer,
     clearWakeTimeout,
     endIntroductionMode,
-    resetInterimCaptionState,
     resetLiveBubbles,
     scheduleWakeFalsePositiveRelease,
   ]);
@@ -720,7 +618,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setAssistantBubbleStatus('pending');
     setAssistantStatusLine(null);
     responseRevealStartedRef.current = false;
-    followUpCaptureRef.current = false;
     void claimCommandMode();
     if (introductionModeActiveRef.current) {
       // Introduction stays active until inference ends the session — no follow-up idle timer.
@@ -745,7 +642,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const armWakeListening = useCallback(async (): Promise<boolean> => {
     clearWakeTimeout();
     clearFollowUpTimer();
-    followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
     lastSubmittedTextRef.current = null;
     setAssistantBubbleTextSynced('');
@@ -840,7 +736,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
         case 'done':
           if (stateRef.current === 'idle' || sessionEndingRef.current) break;
-          followUpCaptureRef.current = false;
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
           commandStreamInFlightRef.current = false;
@@ -909,8 +804,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
       clearWakeTimeout();
       clearFollowUpTimer();
-      followUpCaptureRef.current = false;
-      resetInterimCaptionState();
       streamHadOutputRef.current = false;
       lastToolBubbleSnippetRef.current = '';
       setAssistantBubbleTextSynced('');
@@ -1017,7 +910,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       handleStreamEvent,
       isConnected,
       releaseCommandMode,
-      resetInterimCaptionState,
       scheduleFollowUpExpiry,
       setAssistantBubbleTextSynced,
       startNewTurn,
@@ -1034,10 +926,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     startNewTurn();
     clearWakeTimeout();
     clearFollowUpTimer();
-    followUpCaptureRef.current = false;
     pendingNewResponseRef.current = false;
     lastSubmittedTextRef.current = null;
-    resetInterimCaptionState();
     streamHadOutputRef.current = false;
     lastToolBubbleSnippetRef.current = '';
     responseRevealStartedRef.current = false;
@@ -1132,7 +1022,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     getAccessToken,
     handleStreamEvent,
     isConnected,
-    resetInterimCaptionState,
     setAssistantBubbleTextSynced,
     setStateSynced,
     startNewTurn,
@@ -1143,11 +1032,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!suppressNextTranscriptFinalRef.current) return false;
     suppressNextTranscriptFinalRef.current = false;
     return true;
-  }, []);
-
-  const noteServerUtteranceId = useCallback((utteranceId: unknown) => {
-    if (typeof utteranceId !== 'number' || !Number.isFinite(utteranceId)) return;
-    lastServerUtteranceIdRef.current = utteranceId;
   }, []);
 
   useEffect(() => {
@@ -1165,27 +1049,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         setAssistantBubbleStatus('revealing');
         if (current === 'transcribing' || current === 'thinking') {
           setState('responding');
-        }
-        return;
-      }
-
-      if (msg.event === 'command_transcript_interim') {
-        noteServerUtteranceId(msg.utterance_id);
-        if (current === 'transcribing' || current === 'thinking' || current === 'responding') return;
-        const text = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
-        if (!text) return;
-
-        // No live caption — UI updates only on command_transcript_final from the server.
-        if (current === 'listening') {
-          clearWakeFalsePositiveIfCommandInProgress(text);
-          return;
-        }
-
-        if (current === 'follow_up') {
-          if (commandStreamInFlightRef.current) return;
-          if (text.trim().length < MIN_FOLLOW_UP_INTERIM_CHARS) return;
-          onFollowUpSpeechActivity();
-          followUpCaptureRef.current = true;
         }
         return;
       }
@@ -1246,9 +1109,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         if (current === 'responding') return;
 
         const finalRaw = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
-        const text = finalRaw || cleanTranscript(lastWakeInterimRef.current);
-        resetInterimCaptionState();
-        lastWakeInterimRef.current = '';
+        const text = finalRaw;
 
         if (current === 'transcribing' || (current === 'thinking' && awaitingTranscriptRef.current)) {
           const fromFollowUp = transcribeFromFollowUpRef.current;
@@ -1284,21 +1145,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           if (!trimmed) return;
           if (isSessionEndUtterance(trimmed)) {
             console.debug('[Voice][SessionEnd] matched follow-up final', { text: trimmed });
-            followUpCaptureRef.current = false;
             setUserBubbleText(trimmed);
             endSession();
             return;
           }
-          if (!followUpCaptureRef.current) {
-            // Backend may emit only final transcripts when interim decode is disabled.
-            // Do not drop valid follow-up commands just because we never saw interim.
-            if (trimmed.length < 2) {
-              console.debug('[Voice][FollowUp] dropped short final without interim', { text: trimmed });
-              return;
-            }
-            console.debug('[Voice][FollowUp] accepting final without interim', { text: trimmed });
+          if (trimmed.length < MIN_FOLLOW_UP_FINAL_CHARS) {
+            console.debug('[Voice][FollowUp] dropped short final', { text: trimmed });
+            return;
           }
-          followUpCaptureRef.current = false;
           submitVisibleCommandText(text, true);
           return;
         }
@@ -1312,12 +1166,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     endSession,
     goIdle,
     onFollowUpSpeechActivity,
-    resetInterimCaptionState,
     releaseCommandMode,
     scheduleWakeFalsePositiveRelease,
     shouldDropStaleTranscriptFinal,
-    noteServerUtteranceId,
-    stableInterimCaption,
     submitVisibleCommandText,
   ]);
 
@@ -1334,7 +1185,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     abortActiveStream();
     localClaimRef.current = false;
     lastSubmittedTextRef.current = null;
-    resetInterimCaptionState();
     setState('idle');
     resetLiveBubbles();
   }, [
@@ -1344,7 +1194,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     introductionModeActive,
     isCommandMode,
     isServiceEnabled,
-    resetInterimCaptionState,
     resetLiveBubbles,
   ]);
 

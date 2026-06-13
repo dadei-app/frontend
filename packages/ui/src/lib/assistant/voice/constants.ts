@@ -31,7 +31,7 @@ export const COMMAND_TURN_PAIR_LAYOUT_MS = 0.38;
  */
 export const COMMAND_SPEECH_RMS = 0.11;
 /** Sustained silence after speech before ending capture (command + introduction). */
-export const COMMAND_UTTERANCE_END_SILENCE_MS = 3_000;
+export const COMMAND_UTTERANCE_END_SILENCE_MS = 2_500;
 /** Analyser level multiplier while capturing a command (mic aura only). */
 export const COMMAND_MIC_LEVEL_GAIN = 2.45;
 
