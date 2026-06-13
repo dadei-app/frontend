@@ -148,8 +148,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { audioSettings } = useSystem();
   const runtime = useAssistantRuntimeState();
   const sessionId = getRealtimeSessionId();
-  const { state, startListening, notifyCommandUtteranceEnded } = useCommand();
+  const { startListening, notifyCommandUtteranceEnded } = useCommand();
   const introductionModeActive = selectIntroductionActive(runtime);
+  const state = runtime.command as CommandState;
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
 
@@ -458,7 +459,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         if (!wakeDetectorFailureLoggedRef.current) {
           wakeDetectorFailureLoggedRef.current = true;
-          console.error('[Audio] wake-word detector start failed; passive capture continues', error);
+          console.error('[Audio] wake-word detector start failed; ambient capture continues', error);
         } else {
           console.warn('[Audio] wake-word detector unavailable for this session.');
         }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   assistantRuntimeReducer,
+  selectCanClaimCommandMode,
   selectIsAmbientEnabled,
   selectIsCommandMode,
 } from '@dadei/ui/lib/assistant/runtime/reducer';
@@ -51,6 +52,20 @@ describe('assistantRuntimeReducer', () => {
     expect(next.service).toBe('ambient');
     expect(next.command).toBe('idle');
     expect(next.submode).toBe('normal');
+  });
+
+  it('allows claim when ambient is on or this session already owns command', () => {
+    const ambient = { ...INITIAL_ASSISTANT_RUNTIME, service: 'ambient' as const };
+    expect(selectCanClaimCommandMode(ambient, 'sess-a')).toBe(true);
+    expect(selectCanClaimCommandMode(INITIAL_ASSISTANT_RUNTIME, 'sess-a')).toBe(false);
+
+    const owned = {
+      ...INITIAL_ASSISTANT_RUNTIME,
+      service: 'command' as const,
+      commandOwnerSessionId: 'sess-a',
+    };
+    expect(selectCanClaimCommandMode(owned, 'sess-a')).toBe(true);
+    expect(selectCanClaimCommandMode(owned, 'sess-b')).toBe(false);
   });
 
   it('ignores ambient enable while command lock is held', () => {

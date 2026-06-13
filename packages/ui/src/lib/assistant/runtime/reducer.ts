@@ -123,6 +123,13 @@ export function selectIsCommandOwner(
   );
 }
 
+export function selectCanClaimCommandMode(
+  state: AssistantRuntimeState,
+  sessionId: string | null | undefined,
+): boolean {
+  return state.service === 'ambient' || selectIsCommandOwner(state, sessionId);
+}
+
 export function selectIntroductionActive(state: AssistantRuntimeState): boolean {
   return state.service === 'command' && state.submode === 'introduction';
 }

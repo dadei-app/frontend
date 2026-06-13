@@ -1,3 +1,5 @@
+import { formatCommandToolStatusHint } from '@dadei/ui/lib/assistant/voice/labels/commandToolStatusHints';
+
 const TOOL_LABELS: Record<string, string> = {
   // Session & meta
   load_tool_groups: 'Preparing my tools',
@@ -231,7 +233,13 @@ export function commandToolLabel(tool: string): string {
 }
 
 /** Status line body for a tool (no ellipses — UI animates those). */
-export function commandToolStatusLabel(tool: string): string {
+export function commandToolStatusLabel(
+  tool: string,
+  args?: Record<string, unknown> | null,
+  options?: { timeZone?: string },
+): string {
+  const hint = formatCommandToolStatusHint(tool, args, options?.timeZone);
+  if (hint) return normalizeAssistantStatusBase(hint);
   const label = commandToolLabel(tool);
   return label ? normalizeAssistantStatusBase(label) : '';
 }

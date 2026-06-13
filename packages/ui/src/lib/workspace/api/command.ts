@@ -6,7 +6,7 @@ import { getRealtimeSessionToken } from '@dadei/ui/lib/assistant/realtime/realti
 export type CommandSSEEvent =
   | { type: 'transcript'; text: string }
   | { type: 'token'; text: string }
-  | { type: 'tool_call'; tool: string; status: string }
+  | { type: 'tool_call'; tool: string; status: string; args?: Record<string, unknown> }
   | { type: 'tool_result'; tool: string; ok: boolean; summary?: string }
   | { type: 'error'; message: string; code?: string }
   | { type: 'session_end' }

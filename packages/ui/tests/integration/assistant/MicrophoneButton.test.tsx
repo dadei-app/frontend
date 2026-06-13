@@ -67,7 +67,7 @@ describe('MicrophoneButton', () => {
     mockCancelProcessing.mockReset();
   });
 
-  it('toggles passive service when clicked in idle command state', async () => {
+  it('toggles ambient service when clicked in idle command state', async () => {
     const user = userEvent.setup();
     renderMic();
 
