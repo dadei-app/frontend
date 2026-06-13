@@ -26,18 +26,14 @@ export type MicAppearance = {
   action: MicAction;
 };
 
-/**
- * Mic chrome and click behavior derived solely from centralized assistant runtime.
- *
- * Lock hierarchy: service off → ambient → command (+ command phase).
- */
 export function deriveMicAppearanceFromRuntime(
   runtime: AssistantRuntimeState,
   options: {
     tutorialActive: boolean;
+    permissionsGateBlocked?: boolean;
   },
 ): MicAppearance {
-  const { tutorialActive } = options;
+  const { tutorialActive, permissionsGateBlocked = false } = options;
 
   if (tutorialActive) {
     return {
@@ -53,6 +49,17 @@ export function deriveMicAppearanceFromRuntime(
   if (runtime.command === 'locked' || runtime.registrationConflict) {
     return {
       grayChrome: 'locked',
+      tone: 'none',
+      showProcessingSpinner: false,
+      showLiveAura: false,
+      showAmbientRipples: false,
+      action: 'none',
+    };
+  }
+
+  if (permissionsGateBlocked) {
+    return {
+      grayChrome: 'loading',
       tone: 'none',
       showProcessingSpinner: false,
       showLiveAura: false,

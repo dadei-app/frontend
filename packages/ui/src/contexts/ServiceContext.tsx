@@ -20,7 +20,6 @@ import {
 } from '@dadei/ui/lib/assistant/runtime/reducer';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import { ServicePermissionsGate } from '@dadei/ui/components/permissions/ServicePermissionsGate';
 import { parseInteractionDate } from '@dadei/ui/components/interaction-panel/conversationUtils';
 import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/platform/errors/userMessage';
 import { actionsApi } from '@dadei/ui/lib/workspace/api/actions';
@@ -48,6 +47,7 @@ import {
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import {
   areRequiredPermissionsGranted,
+  hasMissingClientPermissions,
   toTutorialPlatform,
 } from '@dadei/ui/lib/onboarding/tutorial/permissionsRegistry';
 import type {
@@ -183,7 +183,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     'enable' | 'active-service' | null
   >(null);
   const permissionsGateIntentRef = useRef<'enable' | 'active-service' | null>(null);
-  const permissionsGateDismissedRef = useRef(false);
   const pendingEnableRef = useRef(false);
 
   const sessionReady = isAuthenticated && isConnected;
@@ -361,9 +360,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const dismissPermissionsGate = useCallback(() => {
-    if (permissionsGateIntentRef.current === 'active-service') {
-      permissionsGateDismissedRef.current = true;
-    }
     pendingEnableRef.current = false;
     permissionsGateIntentRef.current = null;
     setPermissionsGateOpen(false);
@@ -394,14 +390,20 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const maybePromptForActiveServicePermissions = useCallback(
     async (enabled: boolean) => {
-      if (!enabled || permissionsGateDismissedRef.current || permissionsGateOpen) return;
-      const granted = await checkRequiredPermissions();
-      if (!granted) {
+      if (!enabled || permissionsGateOpen) return;
+      const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+      const missing = await hasMissingClientPermissions(tutorialPlatform, isElectron);
+      if (missing) {
         openPermissionsGate('active-service');
       }
     },
-    [checkRequiredPermissions, openPermissionsGate, permissionsGateOpen],
+    [isElectron, openPermissionsGate, permissionsGateOpen, platform],
   );
+
+  useEffect(() => {
+    if (!isServiceEnabled || !sessionReady || permissionsGateOpen) return;
+    void maybePromptForActiveServicePermissions(true);
+  }, [isServiceEnabled, maybePromptForActiveServicePermissions, permissionsGateOpen, sessionReady]);
 
   const syncCommandModeFromClaim = useCallback((state: CommandModeState) => {
     runtimeActions.syncCommandMode({
@@ -436,8 +438,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       stopRealtimeClient();
       runtimeActions.resetRuntime();
       setExtraBootstrapConversationIds([]);
-      permissionsGateDismissedRef.current = false;
-      pendingEnableRef.current = false;
       permissionsGateIntentRef.current = null;
       setPermissionsGateOpen(false);
       setPermissionsGateIntent(null);
@@ -736,6 +736,14 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           runtimeActions.setServiceToggling(false);
           return;
         }
+        const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+        const missingOptional = await hasMissingClientPermissions(tutorialPlatform, isElectron);
+        if (missingOptional) {
+          pendingEnableRef.current = true;
+          openPermissionsGate('enable');
+          runtimeActions.setServiceToggling(false);
+          return;
+        }
         await serviceApi.enable();
         applyServiceStatus(true);
       }
@@ -747,8 +755,10 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, [
     applyServiceStatus,
     checkRequiredPermissions,
+    isElectron,
     isServiceEnabled,
     openPermissionsGate,
+    platform,
     registrationConflict,
     runtimeActions,
     showToast,
@@ -860,7 +870,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
-      <ServicePermissionsGate />
     </ServiceContext.Provider>
   );
 }

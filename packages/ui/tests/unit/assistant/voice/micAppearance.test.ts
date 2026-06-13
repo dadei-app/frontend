@@ -5,6 +5,21 @@ import { INITIAL_ASSISTANT_RUNTIME } from '@dadei/ui/lib/assistant/runtime/types
 const tutorialOff = { tutorialActive: false };
 
 describe('deriveMicAppearanceFromRuntime', () => {
+  it('shows gray loading chrome while the permissions gate is open', () => {
+    const appearance = deriveMicAppearanceFromRuntime(
+      {
+        ...INITIAL_ASSISTANT_RUNTIME,
+        service: 'ambient',
+        command: 'idle',
+      },
+      { ...tutorialOff, permissionsGateBlocked: true },
+    );
+    expect(appearance.grayChrome).toBe('loading');
+    expect(appearance.tone).toBe('none');
+    expect(appearance.action).toBe('none');
+    expect(appearance.showAmbientRipples).toBe(false);
+  });
+
   it('interrupts processing instead of exiting command mode', () => {
     for (const command of ['transcribing', 'thinking', 'responding'] as const) {
       const appearance = deriveMicAppearanceFromRuntime(

@@ -306,6 +306,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const activeCommandStreamEpochRef = useRef(0);
   /** After a terminal stream error, ignore late tokens from the same HTTP response. */
   const streamTerminalErrorRef = useRef(false);
+  /** Replace (do not append) the next spoken tokens after a mid-stream tool failure. */
+  const replaceNextStreamTokensRef = useRef(false);
   /** User clicked mic to cancel — suppress error UI from aborted streams. */
   const userInitiatedCancelRef = useRef(false);
   /** Drop the next WS final after cancel (server may still finish a discarded decode). */
@@ -577,6 +579,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const inIntroduction = introductionModeActiveRef.current;
     userInitiatedCancelRef.current = true;
     streamTerminalErrorRef.current = false;
+    replaceNextStreamTokensRef.current = false;
     commandProcessingEpochRef.current += 1;
     activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
     suppressNextTranscriptFinalRef.current = true;
@@ -737,8 +740,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           setCommandPhase((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('streaming');
           setAssistantBubbleTextSynced((prev) => {
-            if (pendingNewResponseRef.current) {
+            if (pendingNewResponseRef.current || replaceNextStreamTokensRef.current) {
               pendingNewResponseRef.current = false;
+              replaceNextStreamTokensRef.current = false;
               return ev.text;
             }
             return prev + ev.text;
@@ -761,13 +765,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           if (ev.summary) {
             streamHadOutputRef.current = true;
             const snippet = formatToolSummarySnippet(ev.summary, ev.ok);
-            lastToolBubbleSnippetRef.current = snippet;
             if (!ev.ok) {
+              lastToolBubbleSnippetRef.current = snippet;
+              replaceNextStreamTokensRef.current = true;
               setAssistantStatusLine(null);
-              setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
-              setAssistantBubbleStatus('revealing');
-              pendingNewResponseRef.current = false;
-            } else if (snippet && !pendingNewResponseRef.current) {
+              setAssistantBubbleStatus('pending');
+              setCommandPhase((s) => (s === 'thinking' ? 'responding' : s));
+              break;
+            }
+            lastToolBubbleSnippetRef.current = snippet;
+            if (snippet && !pendingNewResponseRef.current) {
               setAssistantBubbleTextSynced((prev) => (prev.trim() ? prev : snippet));
               setAssistantBubbleStatus('streaming');
             } else {
@@ -858,6 +865,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const processingEpoch = commandProcessingEpochRef.current;
       userInitiatedCancelRef.current = false;
       streamTerminalErrorRef.current = false;
+      replaceNextStreamTokensRef.current = false;
       lastSubmittedTextRef.current = { text: submitText, atMs: nowMs };
       responseRevealStartedRef.current = false;
       revealCompleteHandledRef.current = false;

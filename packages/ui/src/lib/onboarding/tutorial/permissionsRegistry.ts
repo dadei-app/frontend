@@ -159,11 +159,27 @@ export function buildPermissionEntries(isElectron: boolean): PermissionEntry[] {
   ];
 }
 
+/** Permission ids needed for this client surface (derived from live client capabilities). */
+export function permissionIdsForClient(
+  platform: TutorialPlatform,
+  isElectron: boolean,
+): string[] {
+  const ids: string[] = ['microphone', 'location', 'notifications'];
+  if (!isElectron) return ids;
+  if (platform === 'desktop-darwin') {
+    ids.push('accessibility', 'screen_recording', 'automation', 'input_monitoring');
+  }
+  return ids;
+}
+
 export function permissionsForPlatform(
   platform: TutorialPlatform,
   isElectron: boolean,
 ): PermissionEntry[] {
-  return buildPermissionEntries(isElectron).filter(perm => perm.platforms.includes(platform));
+  const allowed = new Set(permissionIdsForClient(platform, isElectron));
+  return buildPermissionEntries(isElectron).filter(
+    perm => perm.platforms.includes(platform) && allowed.has(perm.id),
+  );
 }
 
 export const REQUIRED_PERMISSION_IDS = new Set(['microphone']);
@@ -181,6 +197,25 @@ export async function areRequiredPermissionsGranted(
   if (entries.length === 0) return true;
   const results = await Promise.all(entries.map(entry => entry.check()));
   return results.every(result => result === 'granted');
+}
+
+/** True when every client capability permission for this platform is granted. */
+export async function areAllClientPermissionsGranted(
+  platform: TutorialPlatform,
+  isElectron: boolean,
+): Promise<boolean> {
+  const entries = permissionsForPlatform(platform, isElectron);
+  if (entries.length === 0) return true;
+  const results = await Promise.all(entries.map(entry => entry.check()));
+  return results.every(result => result === 'granted');
+}
+
+/** True when at least one client capability permission is not granted. */
+export async function hasMissingClientPermissions(
+  platform: TutorialPlatform,
+  isElectron: boolean,
+): Promise<boolean> {
+  return !(await areAllClientPermissionsGranted(platform, isElectron));
 }
 
 type SystemPlatform = 'darwin' | 'win32' | 'linux' | 'web';

@@ -95,14 +95,18 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const audioContext = useContext(AudioContext);
   const micLevel = audioContext?.micLevel ?? 0;
   const { matchesHotkey } = useSystem();
-  const { toggleService } = useService();
+  const { toggleService, permissionsGateOpen } = useService();
   const { cancelCommandMode, cancelProcessing } = useCommand();
   const runtime = useAssistantRuntimeState();
   const tutorialActive = useTutorialEngaged();
 
   const appearance = useMemo(
-    () => deriveMicAppearanceFromRuntime(runtime, { tutorialActive }),
-    [runtime, tutorialActive],
+    () =>
+      deriveMicAppearanceFromRuntime(runtime, {
+        tutorialActive,
+        permissionsGateBlocked: permissionsGateOpen,
+      }),
+    [permissionsGateOpen, runtime, tutorialActive],
   );
 
   const inputsInert = appearance.action === 'none';
@@ -150,7 +154,10 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   }, []);
 
   useEffect(() => {
-    if (!appearance.showAmbientRipples) return;
+    if (!appearance.showAmbientRipples) {
+      setRings([]);
+      return;
+    }
     emitRing();
     let rhythmIdx = 0;
     let timeoutId: number | null = null;

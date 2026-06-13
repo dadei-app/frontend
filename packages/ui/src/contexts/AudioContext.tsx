@@ -33,6 +33,7 @@ import {
 import type { AudioSettings } from '@dadei/ui/types/electron';
 import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/assistant/audio/audioSettingsEvents';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
+import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 
 const COMMAND_START_RETRY_MS = 500;
@@ -146,6 +147,7 @@ function buildAudioConstraints(prefs: AudioSettings): MediaTrackConstraints {
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { audioSettings } = useSystem();
+  const { permissionsGateOpen } = useService();
   const runtime = useAssistantRuntimeState();
   const sessionId = getRealtimeSessionId();
   const { startListening, notifyCommandUtteranceEnded } = useCommand();
@@ -366,6 +368,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number, wakeWord: WakeWordLabel) => {
+      if (permissionsGateOpen) return;
       if (tutorialEngaged && !tutorial?.wakeWordEnabled) {
         return;
       }
@@ -383,7 +386,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       );
       startListening();
     },
-    [startListening, tutorial, tutorialEngaged],
+    [permissionsGateOpen, startListening, tutorial, tutorialEngaged],
   );
 
   const stopCommandAudioStream = useCallback(
@@ -540,12 +543,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const shouldListen = selectShouldRunAudioPipeline(runtime, sessionId);
+    const shouldListen =
+      selectShouldRunAudioPipeline(runtime, sessionId) && !permissionsGateOpen;
     setIsAudioPipelineReady(shouldListen);
-  }, [runtime, sessionId]);
+  }, [permissionsGateOpen, runtime, sessionId]);
 
   useEffect(() => {
-    const shouldListen = selectShouldRunAudioPipeline(runtime, sessionId);
+    const shouldListen =
+      selectShouldRunAudioPipeline(runtime, sessionId) && !permissionsGateOpen;
     const shouldStream = shouldListen && selectShouldStreamAudio(runtime);
     if (shouldStream && !commandStreamActiveRef.current) {
       void startCommandAudioStream().catch(e => {
@@ -556,6 +561,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       stopCommandAudioStream(true);
     }
   }, [
+    permissionsGateOpen,
     runtime,
     sessionId,
     startCommandAudioStream,

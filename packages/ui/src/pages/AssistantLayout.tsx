@@ -16,6 +16,7 @@ import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandCo
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
+import { ServicePermissionsGate } from '@dadei/ui/components/permissions/ServicePermissionsGate';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
@@ -122,7 +123,7 @@ function assistantLoadingSubtitle(
 function AssistantLayoutShell() {
   const { formatHotkey, viewportFillClass } = useSystem();
   const isMobileAssistant = useMobileAssistant();
-  const { isServiceEnabled } = useService();
+  const { isServiceEnabled, permissionsGateOpen } = useService();
   const { state, introductionModeActive } = useCommand();
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
@@ -132,6 +133,7 @@ function AssistantLayoutShell() {
   const showWakeHint =
     state === 'idle' &&
     isServiceEnabled &&
+    !permissionsGateOpen &&
     !introductionModeActive &&
     (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
@@ -203,6 +205,7 @@ function AssistantLayoutShell() {
               <BannerStackHost />
             </div>
             <div className="relative min-h-0 flex-1 overflow-hidden">
+              <ServicePermissionsGate />
               {/* Mic: geometric center of the left panel; hints are out of flow. */}
               <div
                 className={cn(
@@ -212,7 +215,7 @@ function AssistantLayoutShell() {
               >
                 <div className="pointer-events-auto isolate">
                   <MicrophoneButton
-                    disableSpaceToggle={isPeoplePanelOpen || isMobileAssistant}
+                    disableSpaceToggle={isPeoplePanelOpen || isMobileAssistant || permissionsGateOpen}
                   />
                 </div>
               </div>
@@ -220,7 +223,7 @@ function AssistantLayoutShell() {
               {/* Hints: overlay only — never participate in flex layout. */}
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                animate={{ opacity: permissionsGateOpen ? 0 : 1 }}
                 className="assistant-hint-row pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pt-3 pb-8 text-sm text-zinc-500 font-secondary lg:pb-8"
               >
                 <AnimatePresence initial={false}>

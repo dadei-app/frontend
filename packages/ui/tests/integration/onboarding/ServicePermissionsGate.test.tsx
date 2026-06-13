@@ -1,10 +1,9 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ServicePermissionsGate } from '@dadei/ui/components/permissions/ServicePermissionsGate';
 
 const mockComplete = vi.fn();
-const mockDismiss = vi.fn();
 const mockUseService = vi.fn();
 
 vi.mock('@dadei/ui/contexts/ServiceContext', () => ({
@@ -14,8 +13,10 @@ vi.mock('@dadei/ui/contexts/ServiceContext', () => ({
 vi.mock('@dadei/ui/components/permissions/PermissionsPrompt', () => ({
   PermissionsPrompt: ({
     onRequiredGrantedChange,
+    onAllGrantedChange,
   }: {
     onRequiredGrantedChange: (granted: boolean) => void;
+    onAllGrantedChange?: (granted: boolean) => void;
   }) => (
     <div>
       <button type="button" onClick={() => onRequiredGrantedChange(false)}>
@@ -24,6 +25,9 @@ vi.mock('@dadei/ui/components/permissions/PermissionsPrompt', () => ({
       <button type="button" onClick={() => onRequiredGrantedChange(true)}>
         Mark granted
       </button>
+      <button type="button" onClick={() => onAllGrantedChange?.(true)}>
+        Mark all granted
+      </button>
     </div>
   ),
 }));
@@ -31,7 +35,7 @@ vi.mock('@dadei/ui/components/permissions/PermissionsPrompt', () => ({
 describe('ServicePermissionsGate', () => {
   beforeEach(() => {
     mockComplete.mockReset();
-    mockDismiss.mockReset();
+    vi.useRealTimers();
   });
 
   it('renders nothing when the gate is closed', () => {
@@ -39,51 +43,58 @@ describe('ServicePermissionsGate', () => {
       permissionsGateOpen: false,
       permissionsGateIntent: null,
       completePermissionsGate: mockComplete,
-      dismissPermissionsGate: mockDismiss,
     });
 
     const { container } = render(<ServicePermissionsGate />);
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows enable copy and blocks Continue until required permissions are granted', async () => {
+  it('blocks the confirm checkmark until required permissions are granted', async () => {
     mockUseService.mockReturnValue({
       permissionsGateOpen: true,
       permissionsGateIntent: 'enable',
       completePermissionsGate: mockComplete,
-      dismissPermissionsGate: mockDismiss,
     });
 
     const user = userEvent.setup();
     render(<ServicePermissionsGate />);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Enable the assistant')).toBeInTheDocument();
+    expect(screen.getByText('Turn on listening')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
 
-    const continueBtn = screen.getByRole('button', { name: 'Turn on' });
-    expect(continueBtn).toBeDisabled();
+    const confirmBtn = screen.getByRole('button', { name: 'Turn on listening' });
+    expect(confirmBtn).toBeDisabled();
 
     await user.click(screen.getByRole('button', { name: 'Mark granted' }));
-    expect(continueBtn).toBeEnabled();
+    expect(confirmBtn).toBeEnabled();
 
-    await user.click(continueBtn);
+    await user.click(confirmBtn);
     expect(mockComplete).toHaveBeenCalledOnce();
   });
 
-  it('calls dismiss when Not now is clicked', async () => {
+  it('auto-completes when all permissions are granted', async () => {
+    vi.useFakeTimers();
+
     mockUseService.mockReturnValue({
       permissionsGateOpen: true,
-      permissionsGateIntent: 'mic',
+      permissionsGateIntent: 'active-service',
       completePermissionsGate: mockComplete,
-      dismissPermissionsGate: mockDismiss,
     });
 
-    const user = userEvent.setup();
     render(<ServicePermissionsGate />);
 
-    expect(screen.getByText('Microphone access needed')).toBeInTheDocument();
-    const dialog = screen.getByRole('dialog');
-    await user.click(within(dialog).getByRole('button', { name: 'Not now' }));
-    expect(mockDismiss).toHaveBeenCalledOnce();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Mark granted' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Mark all granted' }));
+    });
+
+    expect(mockComplete).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(480);
+    });
+
+    expect(mockComplete).toHaveBeenCalledOnce();
   });
 });

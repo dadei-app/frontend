@@ -55,7 +55,12 @@ export function sanitizeTechnicalMessage(message: string): string {
   if (/429|resource_exhausted|depleted|quota|billing/i.test(trimmed)) {
     return ERROR_CODES.rate_limited;
   }
-  if (/503|unavailable|overloaded/i.test(trimmed)) {
+  if (
+    /\b503\b/i.test(trimmed) ||
+    /temporarily overloaded/i.test(trimmed) ||
+    /service unavailable/i.test(trimmed) ||
+    /model is overloaded/i.test(trimmed)
+  ) {
     return ERROR_CODES.service_unavailable;
   }
   if (/timeout|timed out/i.test(trimmed)) {
