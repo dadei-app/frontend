@@ -20,6 +20,7 @@ vi.mock('@dadei/ui/contexts/ServiceContext', () => ({
     toggleService: mockToggleService,
     isTogglingService: false,
     registrationConflict: false,
+    isCommandMode: false,
   }),
 }));
 

@@ -299,6 +299,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   /** Drop the next WS final after cancel (server may still finish a discarded decode). */
   const suppressNextTranscriptFinalRef = useRef(false);
   const lastServerUtteranceIdRef = useRef<number | null>(null);
+  const isServiceEnabledRef = useRef(isServiceEnabled);
+
+  useEffect(() => {
+    isServiceEnabledRef.current = isServiceEnabled;
+  }, [isServiceEnabled]);
 
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
@@ -497,6 +502,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   ]);
 
   const claimCommandMode = useCallback(async (): Promise<boolean> => {
+    if (!isServiceEnabledRef.current && !localClaimRef.current) return false;
     const sessionToken = getRealtimeSessionToken();
     if (!sessionToken) return false;
     try {
