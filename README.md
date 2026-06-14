@@ -27,9 +27,11 @@ Domain logic lives under `packages/ui/src/lib/` in four vertical groups (mirrori
 | Group | Path | Purpose |
 |-------|------|---------|
 | **platform** | `lib/platform/` | Auth, query/cache, errors, shared utilities, Electron runtime helpers |
-| **assistant** | `lib/assistant/` | Voice, audio, realtime WebSocket, notifications |
+| **assistant** | `lib/assistant/` | Voice, audio, realtime WebSocket |
 | **workspace** | `lib/workspace/` | REST API clients, action display helpers |
-| **onboarding** | `lib/onboarding/` | Tutorial and introduction flows |
+| **onboarding** | `lib/onboarding/` | Tutorial UI walkthrough (separate from voice enrollment) |
+
+Command/enrollment types and copy live in `types/command.types.ts` (shared with runtime submode and API `mode`).
 
 React contexts and components import from these modules via `@dadei/ui/lib/...`. Constants live in per-subdomain `constants.ts` files where values are shared or tunable.
 

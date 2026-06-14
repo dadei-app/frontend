@@ -54,10 +54,17 @@ describe('assistantRuntimeReducer', () => {
     expect(next.submode).toBe('normal');
   });
 
-  it('allows claim when ambient is on or this session already owns command', () => {
+  it('allows claim when ambient is on, connected while off, or this session owns command', () => {
     const ambient = { ...INITIAL_ASSISTANT_RUNTIME, service: 'ambient' as const };
     expect(selectCanClaimCommandMode(ambient, 'sess-a')).toBe(true);
     expect(selectCanClaimCommandMode(INITIAL_ASSISTANT_RUNTIME, 'sess-a')).toBe(false);
+
+    const connectedOff = {
+      ...INITIAL_ASSISTANT_RUNTIME,
+      isConnected: true,
+      service: 'off' as const,
+    };
+    expect(selectCanClaimCommandMode(connectedOff, 'sess-a')).toBe(true);
 
     const owned = {
       ...INITIAL_ASSISTANT_RUNTIME,

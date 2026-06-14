@@ -25,7 +25,7 @@ import AssistantSettingsModal from '@dadei/ui/components/settings';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
-import { Mic } from 'lucide-react';
+import { ENROLLMENT_TRANSCRIPT_OPENER } from '@dadei/ui/types/command.types';
 
 const ASSISTANT_HINT_ROW =
   'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
@@ -124,17 +124,17 @@ function AssistantLayoutShell() {
   const { formatHotkey, viewportFillClass } = useSystem();
   const isMobileAssistant = useMobileAssistant();
   const { isServiceEnabled, permissionsGateOpen } = useService();
-  const { state, introductionModeActive } = useCommand();
+  const { state, voiceEnrollmentActive } = useCommand();
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
   const needsTutorial = useNeedsTutorial();
   const elevateNotifications = tutorialEngaged && tutorial?.step.id === 'layout_tour';
-  const showTalkHint = introductionModeActive;
+  const showTalkHint = voiceEnrollmentActive;
   const showWakeHint =
     state === 'idle' &&
     isServiceEnabled &&
     !permissionsGateOpen &&
-    !introductionModeActive &&
+    !voiceEnrollmentActive &&
     (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -236,7 +236,7 @@ function AssistantLayoutShell() {
                       transition={{ duration: 0.2 }}
                       className={ASSISTANT_HINT_ROW}
                     >
-                      <span>dadei will guide you — listen and follow along</span>
+                      <span>{ENROLLMENT_TRANSCRIPT_OPENER}</span>
                     </motion.p>
                   ) : null}
                   {showWakeHint ? (

@@ -13,7 +13,7 @@ import {
   useAssistantRuntimeActions,
   useAssistantRuntimeState,
 } from '@dadei/ui/contexts/AssistantRuntimeContext';
-import { selectIntroductionActive, selectCanClaimCommandMode } from '@dadei/ui/lib/assistant/runtime/reducer';
+import { selectCommandStreamMode, selectVoiceEnrollmentActive, selectCanClaimCommandMode } from '@dadei/ui/lib/assistant/runtime/reducer';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
@@ -21,10 +21,14 @@ import axios from 'axios';
 import {
   isAbortError,
   streamCommandFromText,
-  streamIntroductionFromText,
   type CommandSSEEvent,
 } from '@dadei/ui/lib/workspace/api/command';
-import { INTRODUCTION_KICKOFF_TEXT } from '@dadei/ui/lib/onboarding/introduction/constants';
+import {
+  ENROLLMENT_KICKOFF_TEXT,
+  ENROLLMENT_TRANSCRIPT_OPENER,
+  type EnrollmentMode,
+} from '@dadei/ui/types/command.types';
+import type { CommandSubmode } from '@dadei/ui/lib/assistant/runtime/types';
 import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
 import {
   getRealtimeSessionId,
@@ -53,7 +57,6 @@ import {
   CLAIM_HOLD_SECONDS,
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
   computeFollowUpMs,
-  FOLLOW_UP_MIN_MS,
 } from '@dadei/ui/lib/assistant/voice/constants';
 import {
   commandToolStatusLabel,
@@ -97,12 +100,17 @@ interface CommandContextValue {
   cancelProcessing: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
-  /** Introduction handoff: claim assistant mode and stream the canned opener. */
+  /** Tutorial handoff → introduction enrollment on POST /service/command/text. */
   beginIntroduction: () => Promise<boolean>;
-  introductionModeActive: boolean;
+  /** Persons panel → retraining enrollment on the same command endpoint. */
+  beginRetraining: () => Promise<boolean>;
+  /** Runtime submode; matches `mode` sent to POST /service/command/text. */
+  commandSubmode: CommandSubmode;
+  /** Introduction or retraining voice enrollment (not tutorial UI). */
+  voiceEnrollmentActive: boolean;
   /** First typewriter character of the final response (mic → follow-up listen). */
   notifyAssistantRevealStarted: () => void;
-  /** Typewriter finished; start the 7s follow-up window. */
+  /** Typewriter finished; start the length-based follow-up idle window. */
   notifyAssistantRevealComplete: () => void;
 }
 
@@ -254,15 +262,20 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   } = useService();
   const runtimeActions = useAssistantRuntimeActions();
   const runtime = useAssistantRuntimeState();
-  const introductionModeActive = selectIntroductionActive(runtime);
-  const introductionModeActiveRef = useRef(introductionModeActive);
+  const commandSubmode = selectCommandStreamMode(runtime);
+  const voiceEnrollmentActive = selectVoiceEnrollmentActive(runtime);
+  const commandSubmodeRef = useRef(commandSubmode);
+  const voiceEnrollmentActiveRef = useRef(voiceEnrollmentActive);
 
   useEffect(() => {
-    introductionModeActiveRef.current = introductionModeActive;
-  }, [introductionModeActive]);
+    commandSubmodeRef.current = commandSubmode;
+    voiceEnrollmentActiveRef.current = voiceEnrollmentActive;
+  }, [commandSubmode, voiceEnrollmentActive]);
 
-  const endIntroductionMode = useCallback(() => {
-    if (!introductionModeActiveRef.current) return;
+  const endVoiceEnrollmentMode = useCallback(() => {
+    if (!voiceEnrollmentActiveRef.current) return;
+    commandSubmodeRef.current = 'normal';
+    voiceEnrollmentActiveRef.current = false;
     runtimeActions.setCommandSubmode('normal');
     void queryClient.invalidateQueries({ queryKey: queryKeys.persons });
   }, [queryClient, runtimeActions]);
@@ -405,7 +418,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     responseRevealStartedRef.current = true;
     // Introduction: keep mic sealed while the canned opener types out — opening on
     // the first character was buffering ambient audio to the 20s decode cap.
-    if (introductionModeActiveRef.current) return;
+    if (voiceEnrollmentActiveRef.current) return;
     setCommandPhase('follow_up');
   }, []);
 
@@ -459,7 +472,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
 
   const endSession = useCallback(() => {
-    endIntroductionMode();
+    endVoiceEnrollmentMode();
     sessionEndingRef.current = true;
     clearFollowUpTimer();
     clearWakeTimeout();
@@ -475,7 +488,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer,
     clearWakeTimeout,
     goIdle,
-    endIntroductionMode,
+    endVoiceEnrollmentMode,
     releaseCommandMode,
   ]);
 
@@ -485,7 +498,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     commandProcessingEpochRef.current += 1;
     activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
     suppressNextTranscriptFinalRef.current = false;
-    endIntroductionMode();
+    endVoiceEnrollmentMode();
     void (async () => {
       clearFollowUpTimer();
       clearWakeTimeout();
@@ -508,21 +521,21 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearFollowUpTimer,
     clearWakeTimeout,
     goIdle,
-    endIntroductionMode,
+    endVoiceEnrollmentMode,
     releaseCommandMode,
   ]);
 
-  const rollbackIntroductionAttempt = useCallback(async () => {
+  const rollbackVoiceEnrollmentAttempt = useCallback(async () => {
     commandProcessingEpochRef.current += 1;
     suppressNextTranscriptFinalRef.current = true;
-    endIntroductionMode();
+    endVoiceEnrollmentMode();
     abortActiveStream();
     commandStreamInFlightRef.current = false;
     if (ownsCommandSessionRef.current) {
       await releaseCommandMode();
     }
     goIdle();
-  }, [abortActiveStream, endIntroductionMode, goIdle, releaseCommandMode]);
+  }, [abortActiveStream, endVoiceEnrollmentMode, goIdle, releaseCommandMode]);
 
   const claimCommandMode = useCallback(async (): Promise<boolean> => {
     const sessionId = getRealtimeSessionId();
@@ -550,17 +563,17 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     wakeTimeoutRef.current = setTimeout(() => {
       if (stateRef.current !== 'listening') return;
       void (async () => {
-        endIntroductionMode();
+        endVoiceEnrollmentMode();
         await releaseCommandMode();
         goIdle();
       })();
     }, WAKE_FALSE_POSITIVE_MS);
-  }, [clearWakeTimeout, endIntroductionMode, goIdle, releaseCommandMode]);
+  }, [clearWakeTimeout, endVoiceEnrollmentMode, goIdle, releaseCommandMode]);
 
   const cancelProcessing = useCallback(() => {
     if (!COMMAND_PROCESSING_PHASES.has(stateRef.current)) return;
 
-    const inIntroduction = introductionModeActiveRef.current;
+    const inVoiceEnrollment = voiceEnrollmentActiveRef.current;
     const cancellingTranscribing = stateRef.current === 'transcribing';
     userInitiatedCancelRef.current = true;
     streamTerminalErrorRef.current = false;
@@ -569,8 +582,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
     suppressNextTranscriptFinalRef.current = cancellingTranscribing;
 
-    if (!inIntroduction) {
-      endIntroductionMode();
+    if (!inVoiceEnrollment) {
+      endVoiceEnrollmentMode();
     }
     abortActiveStream();
     clearFollowUpTimer();
@@ -586,8 +599,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastToolBubbleSnippetRef.current = '';
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
-    setCommandPhase(inIntroduction ? 'follow_up' : 'listening');
-    if (!inIntroduction) {
+    setCommandPhase(inVoiceEnrollment ? 'follow_up' : 'listening');
+    if (!inVoiceEnrollment) {
       scheduleWakeFalsePositiveRelease();
     }
     const sessionId = getRealtimeSessionId();
@@ -608,7 +621,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [
     clearFollowUpTimer,
     clearWakeTimeout,
-    endIntroductionMode,
+    endVoiceEnrollmentMode,
     resetLiveBubbles,
     scheduleWakeFalsePositiveRelease,
   ]);
@@ -626,24 +639,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const ms = computeFollowUpMs(responseChars);
     followUpTimerRef.current = setTimeout(() => {
       void (async () => {
-        if (introductionModeActiveRef.current) return;
-        endIntroductionMode();
+        if (voiceEnrollmentActiveRef.current) return;
+        endVoiceEnrollmentMode();
         await releaseCommandMode();
         goIdle();
       })();
     }, ms);
-  }, [clearFollowUpTimer, endIntroductionMode, goIdle, releaseCommandMode]);
-
-  const scheduleFollowUpAfterTypewriter = useCallback(() => {
-    clearFollowUpTimer();
-    followUpTimerRef.current = setTimeout(() => {
-      void (async () => {
-        endIntroductionMode();
-        await releaseCommandMode();
-        goIdle();
-      })();
-    }, FOLLOW_UP_MIN_MS);
-  }, [clearFollowUpTimer, endIntroductionMode, goIdle, releaseCommandMode]);
+  }, [clearFollowUpTimer, endVoiceEnrollmentMode, goIdle, releaseCommandMode]);
 
   const notifyAssistantRevealComplete = useCallback(() => {
     if (revealCompleteHandledRef.current) return;
@@ -659,16 +661,16 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     setAssistantStatusLine(null);
     responseRevealStartedRef.current = false;
     void claimCommandMode();
-    if (introductionModeActiveRef.current) {
+    if (voiceEnrollmentActiveRef.current) {
       // Introduction stays active until inference ends the session — no follow-up idle timer.
       setCommandPhase('follow_up');
     } else {
-      scheduleFollowUpAfterTypewriter();
+      scheduleFollowUpExpiry(assistant.length);
     }
   }, [
     claimCommandMode,
     commitLiveTurnToHistory,
-    scheduleFollowUpAfterTypewriter,
+    scheduleFollowUpExpiry,
     setAssistantBubbleTextSynced,
   ]);
 
@@ -803,7 +805,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             const snippet = lastToolBubbleSnippetRef.current.trim();
             const fallback =
               snippet ||
-              (introductionModeActiveRef.current
+              (voiceEnrollmentActiveRef.current
                 ? ERROR_CODES.no_response
                 : ERROR_CODES.tool_reply_failed);
             setAssistantBubbleTextSynced(fallback);
@@ -913,11 +915,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
         try {
           let sawDone = false;
-          const streamText = introductionModeActiveRef.current
-            ? streamIntroductionFromText
-            : streamCommandFromText;
-          for await (const ev of streamText(submitText, accessToken, {
+          const streamMode = commandSubmodeRef.current;
+          for await (const ev of streamCommandFromText(submitText, accessToken, {
             signal: abortController.signal,
+            mode: streamMode,
           })) {
             if (processingEpoch !== commandProcessingEpochRef.current) break;
             if (abortController.signal.aborted) break;
@@ -970,115 +971,131 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  const beginIntroduction = useCallback(async (): Promise<boolean> => {
-    if (stateRef.current !== 'idle') return false;
-    if (commandStreamInFlightRef.current) return false;
+  const beginVoiceEnrollmentKickoff = useCallback(
+    async (enrollmentMode: EnrollmentMode): Promise<boolean> => {
+      if (stateRef.current !== 'idle') return false;
+      if (commandStreamInFlightRef.current) return false;
 
-    runtimeActions.setCommandSubmode('introduction');
-    introductionModeActiveRef.current = true;
-    startNewTurn();
-    clearWakeTimeout();
-    clearFollowUpTimer();
-    pendingNewResponseRef.current = false;
-    lastSubmittedTextRef.current = null;
-    streamHadOutputRef.current = false;
-    lastToolBubbleSnippetRef.current = '';
-    responseRevealStartedRef.current = false;
-    revealCompleteHandledRef.current = false;
-    setAssistantBubbleTextSynced('');
-    setAssistantBubbleStatus('pending');
-    pendingNewResponseRef.current = true;
-    assignLiveTurnId();
-    startRequestActivity();
-    userBubbleTextRef.current = '';
-    awaitingTranscriptRef.current = false;
-    transcribeFromFollowUpRef.current = false;
-    setUserBubbleText('');
-    const introEpoch = commandProcessingEpochRef.current;
-    commandStreamInFlightRef.current = true;
-    activeCommandStreamEpochRef.current = introEpoch;
-    setCommandPhase('thinking');
+      runtimeActions.setCommandSubmode(enrollmentMode);
+      commandSubmodeRef.current = enrollmentMode;
+      voiceEnrollmentActiveRef.current = true;
+      startNewTurn();
+      clearWakeTimeout();
+      clearFollowUpTimer();
+      pendingNewResponseRef.current = false;
+      lastSubmittedTextRef.current = null;
+      streamHadOutputRef.current = false;
+      lastToolBubbleSnippetRef.current = '';
+      responseRevealStartedRef.current = false;
+      revealCompleteHandledRef.current = false;
+      setAssistantBubbleTextSynced('');
+      setAssistantBubbleStatus('pending');
+      pendingNewResponseRef.current = true;
+      assignLiveTurnId();
+      startRequestActivity();
+      userBubbleTextRef.current = ENROLLMENT_TRANSCRIPT_OPENER;
+      awaitingTranscriptRef.current = false;
+      transcribeFromFollowUpRef.current = false;
+      setUserBubbleText(ENROLLMENT_TRANSCRIPT_OPENER);
+      const kickoffEpoch = commandProcessingEpochRef.current;
+      commandStreamInFlightRef.current = true;
+      activeCommandStreamEpochRef.current = kickoffEpoch;
+      setCommandPhase('thinking');
 
-    try {
-      const claimed = await claimCommandMode();
-      if (!claimed) {
-        await rollbackIntroductionAttempt();
+      try {
+        const claimed = await claimCommandMode();
+        if (!claimed) {
+          await rollbackVoiceEnrollmentAttempt();
+          return false;
+        }
+
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          await rollbackVoiceEnrollmentAttempt();
+          return false;
+        }
+
+        if (!isConnected || !getRealtimeSessionToken()) {
+          await rollbackVoiceEnrollmentAttempt();
+          return false;
+        }
+
+        abortActiveStream();
+        const abortController = new AbortController();
+        streamAbortRef.current = abortController;
+
+        let sawDone = false;
+        let kickoffErrored = false;
+        for await (const ev of streamCommandFromText(ENROLLMENT_KICKOFF_TEXT, accessToken, {
+          signal: abortController.signal,
+          mode: enrollmentMode,
+        })) {
+          if (kickoffEpoch !== commandProcessingEpochRef.current) break;
+          if (abortController.signal.aborted) break;
+          if (ev.type === 'error' && abortController.signal.aborted) continue;
+          if (ev.type === 'error') kickoffErrored = true;
+          if (ev.type === 'done') sawDone = true;
+          handleStreamEvent(ev);
+        }
+        if (
+          kickoffEpoch === commandProcessingEpochRef.current &&
+          !sawDone &&
+          !abortController.signal.aborted &&
+          (['responding', 'thinking'] as CommandState[]).includes(stateRef.current as CommandState)
+        ) {
+          handleStreamEvent({ type: 'done' });
+        }
+
+        const kickoffOk =
+          kickoffEpoch === commandProcessingEpochRef.current &&
+          !kickoffErrored &&
+          !abortController.signal.aborted &&
+          (streamHadOutputRef.current || assistantBubbleTextRef.current.trim().length > 0);
+
+        if (!kickoffOk) {
+          await rollbackVoiceEnrollmentAttempt();
+          return false;
+        }
+        return true;
+      } catch (e) {
+        if (isAbortError(e)) {
+          await rollbackVoiceEnrollmentAttempt();
+          return false;
+        }
+        await rollbackVoiceEnrollmentAttempt();
         return false;
+      } finally {
+        streamAbortRef.current = null;
+        commandStreamInFlightRef.current = false;
       }
+    },
+    [
+      abortActiveStream,
+      assignLiveTurnId,
+      claimCommandMode,
+      clearFollowUpTimer,
+      clearWakeTimeout,
+      getAccessToken,
+      handleStreamEvent,
+      isConnected,
+      rollbackVoiceEnrollmentAttempt,
+      runtimeActions,
+      setAssistantBubbleTextSynced,
+      setCommandPhase,
+      startNewTurn,
+      startRequestActivity,
+    ],
+  );
 
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        await rollbackIntroductionAttempt();
-        return false;
-      }
+  const beginIntroduction = useCallback(
+    () => beginVoiceEnrollmentKickoff('introduction'),
+    [beginVoiceEnrollmentKickoff],
+  );
 
-      if (!isConnected || !getRealtimeSessionToken()) {
-        await rollbackIntroductionAttempt();
-        return false;
-      }
-
-      abortActiveStream();
-      const abortController = new AbortController();
-      streamAbortRef.current = abortController;
-
-      let sawDone = false;
-      let introStreamErrored = false;
-      for await (const ev of streamIntroductionFromText(INTRODUCTION_KICKOFF_TEXT, accessToken, {
-        signal: abortController.signal,
-      })) {
-        if (introEpoch !== commandProcessingEpochRef.current) break;
-        if (abortController.signal.aborted) break;
-        if (ev.type === 'error' && abortController.signal.aborted) continue;
-        if (ev.type === 'error') introStreamErrored = true;
-        if (ev.type === 'done') sawDone = true;
-        handleStreamEvent(ev);
-      }
-      if (
-        introEpoch === commandProcessingEpochRef.current &&
-        !sawDone &&
-        !abortController.signal.aborted &&
-        (['responding', 'thinking'] as CommandState[]).includes(stateRef.current as CommandState)
-      ) {
-        handleStreamEvent({ type: 'done' });
-      }
-
-      const introOk =
-        introEpoch === commandProcessingEpochRef.current &&
-        !introStreamErrored &&
-        !abortController.signal.aborted &&
-        (streamHadOutputRef.current || assistantBubbleTextRef.current.trim().length > 0);
-
-      if (!introOk) {
-        await rollbackIntroductionAttempt();
-        return false;
-      }
-      return true;
-    } catch (e) {
-      if (isAbortError(e)) {
-        await rollbackIntroductionAttempt();
-        return false;
-      }
-      await rollbackIntroductionAttempt();
-      return false;
-    } finally {
-      streamAbortRef.current = null;
-      commandStreamInFlightRef.current = false;
-    }
-  }, [
-    abortActiveStream,
-    assignLiveTurnId,
-    claimCommandMode,
-    clearFollowUpTimer,
-    clearWakeTimeout,
-    getAccessToken,
-    handleStreamEvent,
-    isConnected,
-    rollbackIntroductionAttempt,
-    setAssistantBubbleTextSynced,
-    setCommandPhase,
-    startNewTurn,
-    startRequestActivity,
-  ]);
+  const beginRetraining = useCallback(
+    () => beginVoiceEnrollmentKickoff('retraining'),
+    [beginVoiceEnrollmentKickoff],
+  );
 
   const shouldDropStaleTranscriptFinal = useCallback((): boolean => {
     if (!suppressNextTranscriptFinalRef.current) return false;
@@ -1110,7 +1127,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           suppressNextTranscriptFinalRef.current = false;
         }
         if (
-          introductionModeActiveRef.current &&
+          voiceEnrollmentActiveRef.current &&
           (current === 'thinking' || current === 'responding')
         ) {
           return;
@@ -1230,8 +1247,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isServiceEnabled) return;
-    // Ambient service is intentionally off while command mode (or introduction) is active.
-    if (isCommandMode || introductionModeActiveRef.current) return;
+    // Ambient service is intentionally off while command mode (or voice enrollment) is active.
+    if (isCommandMode || voiceEnrollmentActiveRef.current) return;
     const current = stateRef.current;
     if (current === 'idle' || current === 'locked') return;
     clearFollowUpTimer();
@@ -1244,7 +1261,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     abortActiveStream,
     clearFollowUpTimer,
     clearWakeTimeout,
-    introductionModeActive,
+    voiceEnrollmentActive,
     isCommandMode,
     isServiceEnabled,
     resetLiveBubbles,
@@ -1339,7 +1356,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     cancelProcessing,
     startListening,
     beginIntroduction,
-    introductionModeActive,
+    beginRetraining,
+    commandSubmode,
+    voiceEnrollmentActive,
     notifyAssistantRevealStarted,
     notifyAssistantRevealComplete,
   };

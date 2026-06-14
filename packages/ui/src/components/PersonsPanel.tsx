@@ -37,7 +37,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
     deletePerson,
     isDeletingPerson,
   } = useService();
-  const { beginIntroduction } = useCommand();
+  const { beginRetraining } = useCommand();
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
   const displayPersons = useMemo(() => {
@@ -76,7 +76,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
 
   const handleRetrainVoice = async () => {
     onClose();
-    const started = await beginIntroduction();
+    const started = await beginRetraining();
     if (!started) {
       showToast('Could not start voice retraining. Try again.', 'error');
     }

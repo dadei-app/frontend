@@ -127,11 +127,32 @@ export function selectCanClaimCommandMode(
   state: AssistantRuntimeState,
   sessionId: string | null | undefined,
 ): boolean {
-  return state.service === 'ambient' || selectIsCommandOwner(state, sessionId);
+  if (selectIsCommandOwner(state, sessionId)) return true;
+  if (state.service === 'ambient') return true;
+  // Introduction/retraining claim command mode while ambient is off but realtime is connected.
+  if (state.isConnected && state.service === 'off') return true;
+  return false;
+}
+
+/** Active command stream mode for POST /service/command/text (same as runtime submode). */
+export function selectCommandStreamMode(state: AssistantRuntimeState): CommandSubmode {
+  return state.submode;
 }
 
 export function selectIntroductionActive(state: AssistantRuntimeState): boolean {
   return state.service === 'command' && state.submode === 'introduction';
+}
+
+export function selectRetrainingActive(state: AssistantRuntimeState): boolean {
+  return state.service === 'command' && state.submode === 'retraining';
+}
+
+/** Introduction or retraining — conversational voice enrollment sessions. */
+export function selectVoiceEnrollmentActive(state: AssistantRuntimeState): boolean {
+  return (
+    state.service === 'command' &&
+    (state.submode === 'introduction' || state.submode === 'retraining')
+  );
 }
 
 export function selectShouldRunAudioPipeline(state: AssistantRuntimeState, sessionId: string | null): boolean {

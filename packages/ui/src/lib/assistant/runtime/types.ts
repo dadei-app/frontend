@@ -11,7 +11,10 @@ export type CommandPhase =
   | 'follow_up'
   | 'locked';
 
-export type CommandSubmode = 'normal' | 'introduction';
+import type { CommandMode } from '@dadei/ui/types/command.types';
+
+/** @see CommandMode — runtime submode matches POST /service/command/text `mode`. */
+export type CommandSubmode = CommandMode;
 
 export interface AssistantRuntimeState {
   service: ServicePhase;

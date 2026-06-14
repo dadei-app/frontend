@@ -9,7 +9,7 @@ import {
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
 import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import {
-  selectIntroductionActive,
+  selectVoiceEnrollmentActive,
   selectShouldForwardAudioChunks,
   selectShouldRunAudioPipeline,
   selectShouldStreamAudio,
@@ -150,7 +150,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const runtime = useAssistantRuntimeState();
   const sessionId = getRealtimeSessionId();
   const { startListening } = useCommand();
-  const introductionModeActive = selectIntroductionActive(runtime);
+  const voiceEnrollmentActive = selectVoiceEnrollmentActive(runtime);
   const state = runtime.command as CommandState;
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
@@ -183,11 +183,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const commandAudioEndSentRef = useRef(false);
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
-  const introductionModeRef = useRef(false);
-  introductionModeRef.current = introductionModeActive;
+  const voiceEnrollmentRef = useRef(false);
+  voiceEnrollmentRef.current = voiceEnrollmentActive;
 
   const rearmIntroductionCapture = useCallback(() => {
-    if (!introductionModeRef.current || !commandStreamActiveRef.current) return;
+    if (!voiceEnrollmentRef.current || !commandStreamActiveRef.current) return;
     commandAudioEndSentRef.current = false;
     commandStreamReadyRef.current = false;
     sendRealtimeMessage({ type: 'command_audio_discard' });
@@ -270,7 +270,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
       (state === 'follow_up' &&
         ASSISTANT_BUSY_STATES.includes(prev) &&
-        !introductionModeRef.current)
+        !voiceEnrollmentRef.current)
     ) {
       sendRealtimeMessage({ type: 'command_audio_discard' });
     } else if (
@@ -281,7 +281,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       commandStreamReadyRef.current = false;
       lastCommandStartAttemptMsRef.current = 0;
     }
-    if (state === 'follow_up' && prev !== 'follow_up' && introductionModeRef.current) {
+    if (state === 'follow_up' && prev !== 'follow_up' && voiceEnrollmentRef.current) {
       rearmIntroductionCapture();
     }
     prevStateRef.current = state;
@@ -406,7 +406,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     sendRealtimeMessage({
       type: 'command_audio_start',
       sample_rate: audioSettingsRef.current.sampleRate,
-      ...(introductionModeRef.current ? { introduction_mode: true } : {}),
+      ...(voiceEnrollmentRef.current ? { introduction_mode: true } : {}),
     });
   }, []);
 

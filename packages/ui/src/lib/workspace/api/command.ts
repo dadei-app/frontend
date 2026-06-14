@@ -2,6 +2,9 @@ import { API_BASE_URL } from '@dadei/ui/lib/workspace/api/http/client';
 import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
 import { formatCommandStreamError, getUserErrorMessage, parseHttpResponseBody } from '@dadei/ui/lib/platform/errors/userMessage';
 import { getRealtimeSessionToken } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
+import type { CommandMode } from '@dadei/ui/types/command.types';
+
+export type { CommandMode as CommandStreamMode } from '@dadei/ui/types/command.types';
 
 export type CommandSSEEvent =
   | { type: 'transcript'; text: string }
@@ -115,7 +118,6 @@ async function* streamSseFromResponse(
 }
 
 async function* streamCommandSsePost(
-  endpoint: string,
   buildForm: () => FormData,
   accessToken: string,
   options?: { signal?: AbortSignal },
@@ -129,7 +131,7 @@ async function* streamCommandSsePost(
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    response = await fetch(`${API_BASE_URL}${ENDPOINTS.COMMAND_TEXT}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
       body: form,
@@ -150,30 +152,16 @@ async function* streamCommandSsePost(
 export async function* streamCommandFromText(
   text: string,
   accessToken: string,
-  options?: { signal?: AbortSignal },
+  options?: { signal?: AbortSignal; mode?: CommandMode },
 ): AsyncGenerator<CommandSSEEvent> {
+  const mode = options?.mode ?? 'normal';
   yield* streamCommandSsePost(
-    ENDPOINTS.COMMAND_TEXT,
     () => {
       const form = new FormData();
       form.append('text', text);
-      return form;
-    },
-    accessToken,
-    options,
-  );
-}
-
-export async function* streamIntroductionFromText(
-  text: string,
-  accessToken: string,
-  options?: { signal?: AbortSignal },
-): AsyncGenerator<CommandSSEEvent> {
-  yield* streamCommandSsePost(
-    ENDPOINTS.INTRODUCTION_TEXT,
-    () => {
-      const form = new FormData();
-      form.append('text', text);
+      if (mode !== 'normal') {
+        form.append('mode', mode);
+      }
       return form;
     },
     accessToken,
