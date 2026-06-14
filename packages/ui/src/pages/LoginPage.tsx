@@ -6,10 +6,10 @@ import { FcGoogle } from 'react-icons/fc';
 import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
-import { triggerGoogleOAuth } from '@dadei/ui/lib/auth/googleAuth';
-import { cn } from '@dadei/ui/lib/shared/cn';
-import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { triggerGoogleOAuth } from '@dadei/ui/lib/platform/auth/googleAuth';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
+import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 
 const veilEase = [0.22, 1, 0.36, 1] as const;
 

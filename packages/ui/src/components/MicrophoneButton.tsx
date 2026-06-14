@@ -3,11 +3,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
+import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
 import { useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
-import { deriveMicAppearance } from '@dadei/ui/lib/voice/micAppearance';
+import { deriveMicAppearanceFromRuntime } from '@dadei/ui/lib/assistant/voice/micAppearance';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;
@@ -94,34 +95,18 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const audioContext = useContext(AudioContext);
   const micLevel = audioContext?.micLevel ?? 0;
   const { matchesHotkey } = useSystem();
-  const {
-    isServiceEnabled,
-    toggleService,
-    isTogglingService,
-    registrationConflict,
-    isCommandMode,
-  } = useService();
-  const { state, cancelCommandMode, cancelProcessing } = useCommand();
+  const { toggleService, permissionsGateOpen } = useService();
+  const { cancelCommandService, cancelProcessing } = useCommand();
+  const runtime = useAssistantRuntimeState();
   const tutorialActive = useTutorialEngaged();
 
   const appearance = useMemo(
     () =>
-      deriveMicAppearance({
-        state,
-        isServiceEnabled,
-        isCommandMode,
-        isTogglingService,
-        registrationConflict,
+      deriveMicAppearanceFromRuntime(runtime, {
         tutorialActive,
+        permissionsGateBlocked: permissionsGateOpen,
       }),
-    [
-      state,
-      isServiceEnabled,
-      isCommandMode,
-      isTogglingService,
-      registrationConflict,
-      tutorialActive,
-    ],
+    [permissionsGateOpen, runtime, tutorialActive],
   );
 
   const inputsInert = appearance.action === 'none';
@@ -136,12 +121,12 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
       cancelProcessing();
       return;
     }
-    if (appearance.action === 'exit_command_mode') {
-      cancelCommandMode();
+    if (appearance.action === 'exit_command_service') {
+      cancelCommandService();
       return;
     }
     void toggleService();
-  }, [appearance.action, cancelCommandMode, cancelProcessing, toggleService]);
+  }, [appearance.action, cancelCommandService, cancelProcessing, toggleService]);
 
   useEffect(() => {
     if (disableSpaceToggle) return;
@@ -169,7 +154,10 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   }, []);
 
   useEffect(() => {
-    if (!appearance.showPassiveRipples) return;
+    if (!appearance.showAmbientRipples) {
+      setRings([]);
+      return;
+    }
     emitRing();
     let rhythmIdx = 0;
     let timeoutId: number | null = null;
@@ -187,7 +175,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
         window.clearTimeout(timeoutId);
       }
     };
-  }, [appearance.showPassiveRipples, emitRing]);
+  }, [appearance.showAmbientRipples, emitRing]);
 
   useEffect(() => {
     if (!appearance.showLiveAura) {

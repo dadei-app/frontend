@@ -9,32 +9,48 @@ import {
 } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import {
+  useAssistantRuntimeActions,
+  useAssistantRuntimeState,
+} from '@dadei/ui/contexts/AssistantRuntimeContext';
+import {
+  selectIsAmbientEnabled,
+  selectIsCommandService,
+  selectIsCommandOwner,
+} from '@dadei/ui/lib/assistant/assistantRuntime';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
+import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { parseInteractionDate } from '@dadei/ui/components/interaction-panel/conversationUtils';
-import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/errors/userMessage';
-import { actionsApi } from '@dadei/ui/lib/api/actions';
-import { memoriesApi } from '@dadei/ui/lib/api/memories';
-import { personsApi } from '@dadei/ui/lib/api/persons';
-import { conversationsApi } from '@dadei/ui/lib/api/conversations';
-import { interactionsApi } from '@dadei/ui/lib/api/interactions';
-import { serviceApi, type CommandModeState } from '@dadei/ui/lib/api/service';
+import { getUserErrorMessage, ERROR_CODES } from '@dadei/ui/lib/platform/errors/userMessage';
+import { actionsApi } from '@dadei/ui/lib/workspace/api/actions';
+import { memoriesApi } from '@dadei/ui/lib/workspace/api/memories';
+import { personsApi } from '@dadei/ui/lib/workspace/api/persons';
+import { conversationsApi } from '@dadei/ui/lib/workspace/api/conversations';
+import { interactionsApi } from '@dadei/ui/lib/workspace/api/interactions';
+import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
+import type { ServiceModeClaim } from '@dadei/ui/types/service.types';
 import {
   startRealtimeClient,
   stopRealtimeClient,
   subscribeRealtimeMessages,
-} from '@dadei/ui/lib/realtime/realtimeClient';
-import { getRealtimeSessionId } from '@dadei/ui/lib/realtime/realtimeClient';
+} from '@dadei/ui/lib/assistant/realtime/realtimeClient';
+import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
   clearAssistantSessionCaches,
   removePersonFromCaches,
-} from '@dadei/ui/lib/query/cacheUtils';
+} from '@dadei/ui/lib/platform/query/cacheUtils';
 import {
   ASSISTANT_MEMORIES_LIST_LIMIT,
   conversationQueryOptions,
   INTERACTION_PANEL_RECENT_LIMIT,
   useAuthMeQuery,
-} from '@dadei/ui/lib/query/queryHooks';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+} from '@dadei/ui/lib/platform/query/queryHooks';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
+import {
+  areRequiredPermissionsGranted,
+  hasMissingClientPermissions,
+  toTutorialPlatform,
+} from '@dadei/ui/lib/onboarding/tutorial/permissionsRegistry';
 import type {
   Conversation,
   EpisodicMemory,
@@ -94,13 +110,13 @@ interface ServiceContextType {
   clientName: string;
   toggleService: () => Promise<void>;
   isTogglingService: boolean;
-  isCommandMode: boolean;
+  isCommandService: boolean;
   isCommandOwner: boolean;
   commandOwnerSessionId: string | null;
-  commandModeExpiresAt: string | null;
-  commandModeRemainingMs: number;
+  commandServiceExpiresAt: string | null;
+  commandServiceRemainingMs: number;
   /** Apply claim HTTP response immediately (do not wait for the command_mode webhook). */
-  syncCommandModeFromClaim: (state: CommandModeState) => void;
+  syncCommandServiceFromClaim: (state: ServiceModeClaim) => void;
 
   memories: EpisodicMemory[];
   memoriesLoading: boolean;
@@ -126,6 +142,11 @@ interface ServiceContextType {
   conversationIdsKey: string;
   pruneExtraBootstrapConversationId: (conversationId: string) => void;
   clearExtraBootstrapConversationIds: () => void;
+
+  permissionsGateOpen: boolean;
+  permissionsGateIntent: 'enable' | 'active-service' | null;
+  completePermissionsGate: () => Promise<void>;
+  dismissPermissionsGate: () => void;
 }
 
 export const ServiceContext = createContext<ServiceContextType | undefined>(undefined);
@@ -133,6 +154,7 @@ export const ServiceContext = createContext<ServiceContextType | undefined>(unde
 export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading: isAuthLoading, getAccessToken } = useAuth();
   const { showToast } = useNotifications();
+  const { isElectron, platform } = useSystem();
   const queryClient = useQueryClient();
   const getAccessTokenRef = useRef(getAccessToken);
   getAccessTokenRef.current = getAccessToken;
@@ -143,17 +165,26 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   tutorialIncompleteRef.current = tutorialIncomplete;
   const tutorialServiceDisableAttemptedRef = useRef(false);
 
-  const [isServiceEnabled, setIsServiceEnabled] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
-  const [clientName, setClientName] = useState('');
-  const [isTogglingService, setIsTogglingService] = useState(false);
-  const [registrationConflict, setRegistrationConflict] = useState(false);
-  const [isCommandMode, setIsCommandMode] = useState(false);
-  const [commandOwnerSessionId, setCommandOwnerSessionId] = useState<string | null>(null);
-  const [commandModeExpiresAt, setCommandModeExpiresAt] = useState<string | null>(null);
+  const runtimeActions = useAssistantRuntimeActions();
+  const runtime = useAssistantRuntimeState();
 
+  const isServiceEnabled = selectIsAmbientEnabled(runtime);
+  const isConnected = runtime.isConnected;
+  const isTogglingService = runtime.isTogglingService;
+  const registrationConflict = runtime.registrationConflict;
+  const isCommandService = selectIsCommandService(runtime);
+  const commandOwnerSessionId = runtime.commandOwnerSessionId;
+  const commandServiceExpiresAt = runtime.commandServiceExpiresAt;
+
+  const [clientName, setClientName] = useState('');
   const [extraBootstrapConversationIds, setExtraBootstrapConversationIds] = useState<string[]>([]);
   const [actions, setActions] = useState<NetworkAction[]>([]);
+  const [permissionsGateOpen, setPermissionsGateOpen] = useState(false);
+  const [permissionsGateIntent, setPermissionsGateIntent] = useState<
+    'enable' | 'active-service' | null
+  >(null);
+  const permissionsGateIntentRef = useRef<'enable' | 'active-service' | null>(null);
+  const pendingEnableRef = useRef(false);
 
   const sessionReady = isAuthenticated && isConnected;
   const recentIdsRef = useRef<string[]>([]);
@@ -311,19 +342,77 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const applyServiceStatus = useCallback((enabled: boolean) => {
     if (tutorialIncompleteRef.current && enabled) {
-      setIsServiceEnabled(false);
-      setIsTogglingService(false);
+      runtimeActions.setServiceToggling(false);
       return;
     }
-    setIsServiceEnabled(enabled);
-    setIsTogglingService(false);
+    runtimeActions.setServiceStatus(enabled);
+    runtimeActions.setServiceToggling(false);
+  }, [runtimeActions]);
+
+  const checkRequiredPermissions = useCallback(async () => {
+    const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+    return areRequiredPermissionsGranted(tutorialPlatform, isElectron);
+  }, [platform, isElectron]);
+
+  const openPermissionsGate = useCallback((intent: 'enable' | 'active-service') => {
+    permissionsGateIntentRef.current = intent;
+    setPermissionsGateIntent(intent);
+    setPermissionsGateOpen(true);
   }, []);
 
-  const syncCommandModeFromClaim = useCallback((state: CommandModeState) => {
-    setIsCommandMode(state.active);
-    setCommandOwnerSessionId(state.owner_session_id);
-    setCommandModeExpiresAt(state.expires_at);
-  }, []);
+  const dismissPermissionsGate = useCallback(() => {
+    pendingEnableRef.current = false;
+    permissionsGateIntentRef.current = null;
+    setPermissionsGateOpen(false);
+    setPermissionsGateIntent(null);
+    runtimeActions.setServiceToggling(false);
+  }, [runtimeActions]);
+
+  const completePermissionsGate = useCallback(async () => {
+    const intent = permissionsGateIntentRef.current;
+    const shouldEnable = intent === 'enable' || pendingEnableRef.current;
+    pendingEnableRef.current = false;
+    permissionsGateIntentRef.current = null;
+    setPermissionsGateOpen(false);
+    setPermissionsGateIntent(null);
+
+    if (!shouldEnable) return;
+
+    runtimeActions.setServiceToggling(true);
+    try {
+      await serviceApi.enable();
+      applyServiceStatus(true);
+    } catch (error) {
+      console.error('Failed to enable service after permissions:', error);
+      runtimeActions.setServiceToggling(false);
+      showToast(getUserErrorMessage(error, 'Could not enable assistant service.'), 'error');
+    }
+  }, [applyServiceStatus, runtimeActions, showToast]);
+
+  const maybePromptForActiveServicePermissions = useCallback(
+    async (enabled: boolean) => {
+      if (!enabled || permissionsGateOpen) return;
+      const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+      const missing = await hasMissingClientPermissions(tutorialPlatform, isElectron);
+      if (missing) {
+        openPermissionsGate('active-service');
+      }
+    },
+    [isElectron, openPermissionsGate, permissionsGateOpen, platform],
+  );
+
+  useEffect(() => {
+    if (!isServiceEnabled || !sessionReady || permissionsGateOpen) return;
+    void maybePromptForActiveServicePermissions(true);
+  }, [isServiceEnabled, maybePromptForActiveServicePermissions, permissionsGateOpen, sessionReady]);
+
+  const syncCommandServiceFromClaim = useCallback((claim: ServiceModeClaim) => {
+    runtimeActions.syncCommandService({
+      active: claim.active,
+      ownerSessionId: claim.owner_session_id,
+      expiresAt: claim.expires_at,
+    });
+  }, [runtimeActions]);
 
   useEffect(() => {
     if (!tutorialIncomplete) {
@@ -348,20 +437,19 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthenticated) {
       stopRealtimeClient();
-      setIsConnected(false);
-      setRegistrationConflict(false);
-      setIsCommandMode(false);
-      setCommandOwnerSessionId(null);
-      setCommandModeExpiresAt(null);
+      runtimeActions.resetRuntime();
       setExtraBootstrapConversationIds([]);
+      permissionsGateIntentRef.current = null;
+      setPermissionsGateOpen(false);
+      setPermissionsGateIntent(null);
       clearAssistantSessionCaches(queryClient);
     }
-  }, [isAuthenticated, queryClient]);
+  }, [isAuthenticated, queryClient, runtimeActions]);
 
   useEffect(() => {
     if (isAuthLoading) return;
     if (!isAuthenticated) {
-      setIsConnected(false);
+      runtimeActions.setNetworkConnected(false);
       return;
     }
 
@@ -370,14 +458,14 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     const connectRealtime = async () => {
       try {
         if (cancelled) return;
-        setRegistrationConflict(false);
+        runtimeActions.setNetworkConnected(true);
         startRealtimeClient({
           getAccessToken: () => getAccessTokenRef.current(),
         });
       } catch (error: unknown) {
         console.error('Failed to start realtime client:', error);
-        setRegistrationConflict(true);
-        setIsConnected(false);
+        runtimeActions.setRegistrationConflict();
+        runtimeActions.setNetworkConnected(false);
         stopRealtimeClient();
         showToast(getUserErrorMessage(error, ERROR_CODES.invalid_session), 'error');
       }
@@ -388,7 +476,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, isAuthLoading, showToast]);
+  }, [isAuthenticated, isAuthLoading, runtimeActions, showToast]);
 
   useEffect(() => {
     const handleServiceStatusChanged = (status: { enabled: boolean }) => {
@@ -402,15 +490,16 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       }
       console.log('[Service] Status event:', status.enabled ? 'ENABLED' : 'DISABLED');
       applyServiceStatus(status.enabled);
+      if (status.enabled) {
+        void maybePromptForActiveServicePermissions(true);
+      }
     };
-    const handleCommandModeChanged = (payload: {
+    const handleCommandServiceChanged = (payload: {
       active: boolean;
       ownerSessionId: string | null;
       expiresAt: string | null;
     }) => {
-      setIsCommandMode(payload.active);
-      setCommandOwnerSessionId(payload.ownerSessionId);
-      setCommandModeExpiresAt(payload.expiresAt);
+      runtimeActions.syncCommandService(payload);
     };
 
     function handleInteraction(data: unknown) {
@@ -545,7 +634,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           break;
         case 'realtime_status':
           if (typeof msg.connected === 'boolean') {
-            setIsConnected(msg.connected);
+            runtimeActions.setNetworkConnected(msg.connected);
           }
           break;
         case 'session_ready': {
@@ -553,8 +642,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           if (serverClientId) {
             setClientName(serverClientId);
           }
-          setIsConnected(true);
-          setRegistrationConflict(false);
+          runtimeActions.setNetworkConnected(true);
           break;
         }
         case 'service_status':
@@ -566,7 +654,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           const ownerSessionId =
             typeof msg.owner_session_id === 'string' ? msg.owner_session_id : null;
           const expiresAt = typeof msg.expires_at === 'string' ? msg.expires_at : null;
-          handleCommandModeChanged({ active, ownerSessionId, expiresAt });
+          handleCommandServiceChanged({ active, ownerSessionId, expiresAt });
           break;
         }
         default:
@@ -581,10 +669,10 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
     let offNewInteraction: (() => void) | undefined;
     if (window.electronAPI?.onNewInteraction) {
-      offNewInteraction = window.electronAPI.onNewInteraction((payload: { data?: unknown }) => {
-        const interaction = payload.data;
-        if (interaction && typeof interaction === 'object') {
-          trackExtraBootstrapConversation(interaction as Interaction);
+      offNewInteraction = window.electronAPI.onNewInteraction((payload: unknown) => {
+        const data = (payload as { data?: unknown }).data;
+        if (data && typeof data === 'object') {
+          trackExtraBootstrapConversation(data as Interaction);
         }
       });
     }
@@ -594,7 +682,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       if (offElectron) offElectron();
       if (offNewInteraction) offNewInteraction();
     };
-  }, [applyServiceStatus, queryClient, trackExtraBootstrapConversation]);
+  }, [applyServiceStatus, maybePromptForActiveServicePermissions, queryClient, runtimeActions, trackExtraBootstrapConversation]);
 
   useEffect(() => {
     if (!window.electronAPI?.onWebhookAction) return;
@@ -631,15 +719,30 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setIsTogglingService(true);
+    runtimeActions.setServiceToggling(true);
 
     try {
       if (isServiceEnabled) {
         await serviceApi.disable();
-        setIsTogglingService(false);
+        runtimeActions.setServiceToggling(false);
       } else {
         if (tutorialIncomplete) {
-          setIsTogglingService(false);
+          runtimeActions.setServiceToggling(false);
+          return;
+        }
+        const granted = await checkRequiredPermissions();
+        if (!granted) {
+          pendingEnableRef.current = true;
+          openPermissionsGate('enable');
+          runtimeActions.setServiceToggling(false);
+          return;
+        }
+        const tutorialPlatform = toTutorialPlatform(platform, isElectron);
+        const missingOptional = await hasMissingClientPermissions(tutorialPlatform, isElectron);
+        if (missingOptional) {
+          pendingEnableRef.current = true;
+          openPermissionsGate('enable');
+          runtimeActions.setServiceToggling(false);
           return;
         }
         await serviceApi.enable();
@@ -647,10 +750,21 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (error) {
       console.error('Failed to toggle service:', error);
-      setIsTogglingService(false);
+      runtimeActions.setServiceToggling(false);
       showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
     }
-  }, [applyServiceStatus, isServiceEnabled, registrationConflict, showToast, tutorialIncomplete]);
+  }, [
+    applyServiceStatus,
+    checkRequiredPermissions,
+    isElectron,
+    isServiceEnabled,
+    openPermissionsGate,
+    platform,
+    registrationConflict,
+    runtimeActions,
+    showToast,
+    tutorialIncomplete,
+  ]);
 
   const rejectAction = useCallback(
     async (actionId: string) => {
@@ -683,11 +797,10 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, [bootstrapInteractionsQuery, personsQuery, recentConversationsQuery]);
 
   const realtimeSessionId = getRealtimeSessionId();
-  const isCommandOwner =
-    isCommandMode && !!realtimeSessionId && commandOwnerSessionId === realtimeSessionId;
-  const commandModeRemainingMs = (() => {
-    if (!commandModeExpiresAt) return 0;
-    const expiresAtMs = Date.parse(commandModeExpiresAt);
+  const isCommandOwner = selectIsCommandOwner(runtime, realtimeSessionId);
+  const commandServiceRemainingMs = (() => {
+    if (!commandServiceExpiresAt) return 0;
+    const expiresAtMs = Date.parse(commandServiceExpiresAt);
     if (!Number.isFinite(expiresAtMs)) return 0;
     return Math.max(0, expiresAtMs - Date.now());
   })();
@@ -714,12 +827,17 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         clientName,
         toggleService,
         isTogglingService,
-        isCommandMode,
+        isCommandService,
         isCommandOwner,
         commandOwnerSessionId,
-        commandModeExpiresAt,
-        commandModeRemainingMs,
-        syncCommandModeFromClaim,
+        commandServiceExpiresAt,
+        commandServiceRemainingMs,
+        syncCommandServiceFromClaim,
+
+        permissionsGateOpen,
+        permissionsGateIntent,
+        completePermissionsGate,
+        dismissPermissionsGate,
 
         memories: memoriesQuery.data ?? [],
         memoriesLoading: memoriesQuery.isLoading,

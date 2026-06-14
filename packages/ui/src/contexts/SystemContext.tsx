@@ -24,21 +24,21 @@ import {
   dispatchAudioSettingsChanged,
   loadAudioSettings,
   persistAudioSettings,
-} from '@dadei/ui/lib/audio/audioSettingsEvents';
+} from '@dadei/ui/lib/assistant/audio/audioSettingsEvents';
 import {
   enumerateMicInputs,
   micDevicesHaveLabels,
-} from '@dadei/ui/lib/audio/micDevices';
+} from '@dadei/ui/lib/assistant/audio/micDevices';
 import {
   checkElectronMicrophonePermission,
   checkRendererPermission,
   requestElectronMicrophonePermission,
   requestRendererPermission,
-} from '@dadei/ui/lib/platform/desktopPermissions';
+} from '@dadei/ui/lib/platform/runtime/desktopPermissions';
 import {
   DESKTOP_TITLEBAR_STRIP_HEIGHT_CSS,
   isDesktopTitleBarTarget,
-} from '@dadei/ui/lib/platform/electronWindowChrome';
+} from '@dadei/ui/lib/platform/runtime/electronWindowChrome';
 
 const DEFAULT_HOTKEY: Hotkey = { key: 'Space', modifiers: [] };
 
@@ -160,7 +160,7 @@ interface SystemContextValue {
   preventDialogDismissOnTitleBar: (event: {
     preventDefault: () => void;
     target: EventTarget | null;
-    detail?: { originalEvent: PointerEvent };
+    detail?: { originalEvent: Event };
   }) => void;
 }
 
@@ -214,14 +214,14 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     (event: {
       preventDefault: () => void;
       target: EventTarget | null;
-      detail?: { originalEvent: PointerEvent };
+      detail?: { originalEvent: Event };
     }) => {
       if (!isElectron) return;
       if (isDesktopTitleBarTarget(event.target)) {
         event.preventDefault();
         return;
       }
-      const y = event.detail?.originalEvent?.clientY;
+      const y = (event.detail?.originalEvent as PointerEvent | undefined)?.clientY;
       if (y != null && y < titleBarOffsetPxRef.current) {
         event.preventDefault();
       }
@@ -353,7 +353,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     if (api.getBootstrapState) {
       void api.getBootstrapState().then(setBootstrapState).catch(() => {});
     }
-    return api.onBootstrapState(setBootstrapState);
+    return api.onBootstrapState?.(setBootstrapState);
   }, [isElectron]);
 
   useEffect(() => {

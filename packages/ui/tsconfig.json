@@ -18,5 +18,5 @@
       "@dadei/ui/*": ["./src/*"]
     }
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*", "tests/**/*"]
 }

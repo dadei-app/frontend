@@ -8,7 +8,7 @@ import {
   SiGooglesheets,
   SiGoogletasks,
 } from 'react-icons/si';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 /** Google Calendar product mark is too busy at 14px; Lucide reads clearly and tints via currentColor. */
 function CalendarLogo({ className, 'aria-hidden': ariaHidden }: IntegrationLogoProps) {

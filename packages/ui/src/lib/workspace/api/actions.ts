@@ -1,0 +1,13 @@
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
+import type { NetworkAction } from '@dadei/ui/types/models.types';
+
+import { buildEndpoint } from './utils';
+
+export const actionsApi = {
+  async reject(actionId: string): Promise<NetworkAction> {
+    const endpoint = `${buildEndpoint(ENDPOINTS.ACTION_BY_ID, { actionId })}/reject`;
+    const { data } = await api.post<NetworkAction>(endpoint);
+    return data;
+  },
+};

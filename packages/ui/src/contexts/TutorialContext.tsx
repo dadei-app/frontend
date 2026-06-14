@@ -8,32 +8,27 @@ import {
   type ReactNode,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@dadei/ui/lib/api/http/client';
-import { ENDPOINTS } from '@dadei/ui/lib/api/http/constants';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import {
   adjacentTutorialStepIndex,
   buildTutorialSteps,
   isSettingsTutorialStep,
-  TUTORIAL_PERMISSIONS_STEP_ID,
   TUTORIAL_STEP_EVENT,
-} from '@dadei/ui/lib/tutorial/constants';
+} from '@dadei/ui/lib/onboarding/tutorial/constants';
 import { preloadAmbientShader } from '@dadei/ui/components/settings/AmbientShader';
-import { isTutorialTargetInteractive } from '@dadei/ui/lib/tutorial/clickGuard';
-import {
-  areAllTutorialPermissionsGranted,
-  toTutorialPlatform,
-} from '@dadei/ui/lib/tutorial/permissionsRegistry';
+import { isTutorialTargetInteractive } from '@dadei/ui/lib/onboarding/tutorial/clickGuard';
 import {
   buildTutorialFixtures,
   isTutorialTestId,
-} from '@dadei/ui/lib/tutorial/testData';
+} from '@dadei/ui/lib/onboarding/tutorial/fixtures';
 import type { ActionTrigger, TutorialStep } from '@dadei/ui/types/tutorial.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { Conversation, Interaction, Person } from '@dadei/ui/types/models.types';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { useNeedsTutorial } from '@dadei/ui/lib/platform/query/queryHooks';
 
 export interface TutorialContextValue {
   isActive: boolean;
@@ -44,8 +39,6 @@ export interface TutorialContextValue {
   next: () => void;
   back: () => void;
   markActionFired: (trigger: ActionTrigger) => void;
-  acknowledgePermissions: () => void;
-  permissionsResolved: boolean;
   isCurrentStepActionComplete: boolean;
   tutorialPersons: Person[];
   tutorialInteractions: Interaction[];
@@ -67,7 +60,6 @@ function isTriggerComplete(
   trigger: ActionTrigger,
   step: TutorialStep,
   flags: {
-    permissionsResolved: boolean;
     expandConversationDone: boolean;
     removedInteractionIds: Set<string>;
     personRemoved: boolean;
@@ -77,8 +69,6 @@ function isTriggerComplete(
   },
 ): boolean {
   switch (trigger) {
-    case 'permission-resolved':
-      return flags.permissionsResolved;
     case 'expand-conversation':
       return flags.expandConversationDone;
     case 'delete-conversation':
@@ -99,7 +89,6 @@ function isTriggerComplete(
 function isStepActionComplete(
   step: TutorialStep | undefined,
   flags: {
-    permissionsResolved: boolean;
     expandConversationDone: boolean;
     removedInteractionIds: Set<string>;
     personRemoved: boolean;
@@ -120,18 +109,16 @@ export function TutorialProvider({
   children: ReactNode;
   forceInactive?: boolean;
 }) {
-  const { isElectron, platform } = useSystem();
+  const { isElectron } = useSystem();
   const { persons } = useService();
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [tutorialFinished, setTutorialFinished] = useState(false);
-  const [skipPermissionsStep, setSkipPermissionsStep] = useState(false);
   const [removedInteractionIds, setRemovedInteractionIds] = useState<Set<string>>(
     () => new Set(),
   );
   const [conversationRemoved, setConversationRemoved] = useState(false);
   const [personRemoved, setPersonRemoved] = useState(false);
   const [tutorialInteractionCount, setTutorialInteractionCount] = useState(0);
-  const [permissionsResolved, setPermissionsResolved] = useState(false);
   const [expandConversationDone, setExpandConversationDone] = useState(false);
   const [serviceEnabledFired, setServiceEnabledFired] = useState(false);
   const [openSettingsForTutorial, setOpenSettingsForTutorial] = useState(false);
@@ -148,7 +135,6 @@ export function TutorialProvider({
 
   const actionFlags = useMemo(
     () => ({
-      permissionsResolved,
       expandConversationDone,
       removedInteractionIds,
       personRemoved,
@@ -157,7 +143,6 @@ export function TutorialProvider({
       conversationRemoved,
     }),
     [
-      permissionsResolved,
       expandConversationDone,
       removedInteractionIds,
       personRemoved,
@@ -182,19 +167,6 @@ export function TutorialProvider({
     preloadAmbientShader();
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    const tutorialPlatform = toTutorialPlatform(platform, isElectron);
-    void areAllTutorialPermissionsGranted(tutorialPlatform, isElectron).then(granted => {
-      if (cancelled || !granted) return;
-      setPermissionsResolved(true);
-      setSkipPermissionsStep(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [platform, isElectron]);
-
   const finishTutorial = useCallback(() => {
     setTutorialFinished(true);
   }, []);
@@ -205,39 +177,19 @@ export function TutorialProvider({
       if (current?.actionTriggers?.length && !isStepActionComplete(current, actionFlags)) {
         return prev;
       }
-      const nextIndex = adjacentTutorialStepIndex(steps, prev, 1, {
-        skipPermissions: skipPermissionsStep,
-      });
+      const nextIndex = adjacentTutorialStepIndex(steps, prev, 1);
       publishStep(nextIndex);
       return nextIndex;
     });
-  }, [steps, actionFlags, publishStep, skipPermissionsStep]);
+  }, [steps, actionFlags, publishStep]);
 
   const back = useCallback(() => {
     setCurrentStepIndex(prev => {
-      const nextIndex = adjacentTutorialStepIndex(steps, prev, -1, {
-        skipPermissions: skipPermissionsStep,
-      });
+      const nextIndex = adjacentTutorialStepIndex(steps, prev, -1);
       publishStep(nextIndex);
       return nextIndex;
     });
-  }, [publishStep, skipPermissionsStep, steps]);
-
-  const acknowledgePermissions = useCallback(() => {
-    setPermissionsResolved(true);
-  }, []);
-
-  useEffect(() => {
-    if (!skipPermissionsStep || step.id !== TUTORIAL_PERMISSIONS_STEP_ID) return;
-    setCurrentStepIndex(prev => {
-      const nextIndex = adjacentTutorialStepIndex(steps, prev, 1, {
-        skipPermissions: true,
-      });
-      if (nextIndex === prev) return prev;
-      publishStep(nextIndex);
-      return nextIndex;
-    });
-  }, [skipPermissionsStep, step.id, steps, publishStep]);
+  }, [publishStep, steps]);
 
   const markActionFired = useCallback(
     (trigger: ActionTrigger) => {
@@ -246,7 +198,6 @@ export function TutorialProvider({
         ? isStepActionComplete(current, actionFlags)
         : false;
 
-      if (trigger === 'permission-resolved') setPermissionsResolved(true);
       if (trigger === 'expand-conversation') setExpandConversationDone(true);
       if (trigger === 'delete-conversation') setConversationRemoved(true);
       if (trigger === 'service-enabled') setServiceEnabledFired(true);
@@ -329,8 +280,6 @@ export function TutorialProvider({
       next,
       back,
       markActionFired,
-      acknowledgePermissions,
-      permissionsResolved,
       isCurrentStepActionComplete,
       tutorialPersons,
       tutorialInteractions,
@@ -355,8 +304,6 @@ export function TutorialProvider({
       next,
       back,
       markActionFired,
-      acknowledgePermissions,
-      permissionsResolved,
       isCurrentStepActionComplete,
       tutorialPersons,
       tutorialInteractions,

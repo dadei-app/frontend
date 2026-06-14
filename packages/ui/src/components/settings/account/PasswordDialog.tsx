@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 import {
   useChangePasswordMutation,
   useSetPasswordMutation,
-} from '@dadei/ui/lib/query/queryHooks';
+} from '@dadei/ui/lib/platform/query/queryHooks';
 import {
   settingsInputClass,
   settingsPrimaryButtonClass,
 } from '@dadei/ui/components/settings/layout';
-import { veilEase } from '@dadei/ui/lib/shared/motion';
+import { veilEase } from '@dadei/ui/lib/platform/shared/motion';
 
 export type PasswordDialogMode = 'set' | 'change';
 

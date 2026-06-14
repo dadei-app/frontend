@@ -5,7 +5,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import PersonsPanel from '@dadei/ui/components/PersonsPanel';
 import Tooltip from '@dadei/ui/components/ui/Tooltip';
 import { ToolbarButton, ToolbarDivider, ToolbarShell } from '@dadei/ui/components/ui/Toolbar';
-import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
+import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
 
 function HeaderTooltip({ label, children }: { label: string; children: ReactNode }) {
   const mobile = useMobileAssistant();

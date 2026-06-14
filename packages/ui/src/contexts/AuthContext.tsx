@@ -3,13 +3,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { isAxiosError } from 'axios';
 import { useMutation } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
-import { api } from '@dadei/ui/lib/api/http/client';
-import { authApi } from '@dadei/ui/lib/api/auth';
-import { networkApi, type NetworkUpdate } from '@dadei/ui/lib/api/network';
-import { webTokenStore } from '@dadei/ui/lib/auth/webTokenStore';
+import { api } from '@dadei/ui/lib/workspace/api/http/client';
+import { authApi } from '@dadei/ui/lib/workspace/api/auth';
+import { networkApi, type NetworkUpdate } from '@dadei/ui/lib/workspace/api/network';
+import { webTokenStore } from '@dadei/ui/lib/platform/auth/webTokenStore';
 import { AuthTokens, LoginCredentials, RegisterData, UserMe } from '@dadei/ui/types/auth.types';
-import { clearAssistantSessionCaches } from '@dadei/ui/lib/query/cacheUtils';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
+import { clearAssistantSessionCaches } from '@dadei/ui/lib/platform/query/cacheUtils';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 
 interface AuthContextType {
   isAuthenticated: boolean;

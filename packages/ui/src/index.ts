@@ -3,6 +3,12 @@ export { default as LoginPage } from './pages/LoginPage';
 export { default as OAuthCallback } from './pages/OAuthCallback';
 
 export { AuthProvider, AuthContext, useAuth } from './contexts/AuthContext';
+export {
+  AssistantRuntimeProvider,
+  useAssistantRuntime,
+  useAssistantRuntimeActions,
+  useAssistantRuntimeState,
+} from './contexts/AssistantRuntimeContext';
 export { ServiceProvider, ServiceContext, useService } from './contexts/ServiceContext';
 export { AudioProvider, AudioContext, useAudio } from './contexts/AudioContext';
 export {
@@ -10,7 +16,9 @@ export {
   useCommand,
   CommandBubbleStackHost,
 } from './contexts/CommandContext';
-export type { CommandState, CommandMode } from './contexts/CommandContext';
+export type { CommandMode, CommandState, AssistantBubbleStatus } from './types/command.types';
+export type { ServiceMode, ServiceModeClaim } from './types/service.types';
+export type { AssistantState, AssistantAction } from './types/assistant.types';
 export { default as CommandBubble } from './components/command/CommandBubble';
 export {
   NotificationProvider,

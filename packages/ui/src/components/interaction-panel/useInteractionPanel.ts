@@ -3,27 +3,27 @@ import { isAxiosError } from 'axios';
 import { useReducedMotion } from 'framer-motion';
 import { useQueries, useQueryClient } from '@tanstack/react-query';
 import type { Conversation, Interaction } from '@dadei/ui/types/models.types';
-import { interactionsApi } from '@dadei/ui/lib/api/interactions';
-import { conversationsApi } from '@dadei/ui/lib/api/conversations';
+import { interactionsApi } from '@dadei/ui/lib/workspace/api/interactions';
+import { conversationsApi } from '@dadei/ui/lib/workspace/api/conversations';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import {
   conversationQueryOptions,
   INTERACTION_PANEL_RECENT_LIMIT,
   removeAllConversationQueries,
-} from '@dadei/ui/lib/query/queryHooks';
-import { patchInteractionCaches } from '@dadei/ui/lib/query/cacheUtils';
-import { queryKeys } from '@dadei/ui/lib/query/queryKeys';
-import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
+} from '@dadei/ui/lib/platform/query/queryHooks';
+import { patchInteractionCaches } from '@dadei/ui/lib/platform/query/cacheUtils';
+import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
+import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 import {
   TUTORIAL_COLLAPSE_CONVERSATION_STEP_IDS,
   TUTORIAL_FORCE_EXPAND_CONVERSATION_STEP_IDS,
-} from '@dadei/ui/lib/tutorial/constants';
+} from '@dadei/ui/lib/onboarding/tutorial/constants';
 import {
   isTutorialTestId,
   TUTORIAL_TEST_CONVERSATION_ID,
-} from '@dadei/ui/lib/tutorial/testData';
+} from '@dadei/ui/lib/onboarding/tutorial/fixtures';
 import { ORPHAN_KEY } from './constants';
 
 const PERSON_COLOR_SHADES = [

@@ -3,14 +3,14 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Person } from '@dadei/ui/types/models.types';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
-import { getUserErrorMessage } from '@dadei/ui/lib/errors/userMessage';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import SplitDeleteToolbar from '@dadei/ui/components/ui/SplitDeleteToolbar';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
-import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
-import { isTutorialTestId } from '@dadei/ui/lib/tutorial/testData';
+import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
+import { isTutorialTestId } from '@dadei/ui/lib/onboarding/tutorial/fixtures';
 
 /** Below client tooltip (195); above main chrome. Raised during tutorial persons step. */
 const PERSONS_DRAWER_Z = 170;
@@ -37,7 +37,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
     deletePerson,
     isDeletingPerson,
   } = useService();
-  const { beginIntroduction } = useCommand();
+  const { beginRetraining } = useCommand();
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
   const displayPersons = useMemo(() => {
@@ -76,7 +76,7 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
 
   const handleRetrainVoice = async () => {
     onClose();
-    const started = await beginIntroduction();
+    const started = await beginRetraining();
     if (!started) {
       showToast('Could not start voice retraining. Try again.', 'error');
     }
@@ -333,6 +333,9 @@ export default function PersonsPanel({ isOpen, onClose, excludeElement }: Person
                                     }}
                                     idleTitle="Delete person"
                                     idleAriaLabel="Delete person"
+                                    idleVisibleClassName={
+                                      !isMobileAssistant ? 'group-hover/person:opacity-100' : undefined
+                                    }
                                     {...(isMobileAssistant
                                       ? {
                                           containerClassName: 'h-7 self-auto',

@@ -21,12 +21,12 @@ import { MemoriesPanel } from './memories/MemoriesPanel';
 import { StartupPanel } from './startup/StartupPanel';
 import { SubscriptionPanel } from './subscription/SubscriptionPanel';
 import type { SettingsPanelProps } from './layout';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import SettingsGuide from '@dadei/ui/components/tutorial/SettingsGuide';
 import { useTutorialContext, useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
-import { veilEase } from '@dadei/ui/lib/shared/motion';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/onboarding/tutorial/constants';
+import { veilEase } from '@dadei/ui/lib/platform/shared/motion';
 
 type AssistantSettingsModalProps = {
   open: boolean;
@@ -247,7 +247,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                           tutorialSettingsStep && 'relative',
                         )}
                       >
-                        <nav className="settings-shell-nav-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
+                        <nav className="settings-shell-nav-list min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-none px-1 py-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
                           {views.map(({ id, label, Icon }) => {
                             const isActiveSection = view === id;
                             const isTutorialHighlight =
@@ -272,13 +272,13 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                                     !isTutorialHighlight &&
                                     'opacity-45',
                                   isTutorialHighlight &&
-                                    'bg-emerald-500/15 text-emerald-100 opacity-100 ring-2 ring-emerald-400/45 ring-offset-1 ring-offset-zinc-950/80',
+                                    'bg-emerald-500/15 text-emerald-100 opacity-100 shadow-[inset_0_0_0_2px_rgba(52,211,153,0.45)]',
                                 )}
                               >
                                 {isTutorialHighlight ? (
                                   <span
                                     aria-hidden
-                                    className="absolute -left-4 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)]"
+                                    className="absolute left-0 top-1/2 h-8 w-1 -translate-y-1/2 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.55)]"
                                   />
                                 ) : null}
                                 <Icon className="h-5 w-5 shrink-0" />

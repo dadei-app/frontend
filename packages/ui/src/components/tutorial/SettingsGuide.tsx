@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useTutorialContext, useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/onboarding/tutorial/constants';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { CardNav } from './Card';
 
 function settingsStepsFrom(steps: { id: string }[]) {

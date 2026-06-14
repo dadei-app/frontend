@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "../../../packages/ui/src/components/settings/glass.css";
+@import "../../../packages/ui/src/styles/index.css";
 
 @layer utilities {
   .font-primary {

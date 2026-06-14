@@ -1,0 +1,170 @@
+import { API_BASE_URL } from '@dadei/ui/lib/workspace/api/http/client';
+import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
+import { formatCommandStreamError, getUserErrorMessage, parseHttpResponseBody } from '@dadei/ui/lib/platform/errors/userMessage';
+import { getRealtimeSessionToken } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
+import type { CommandMode } from '@dadei/ui/types/command.types';
+
+export type { CommandMode as CommandStreamMode } from '@dadei/ui/types/command.types';
+
+export type CommandSSEEvent =
+  | { type: 'transcript'; text: string }
+  | { type: 'token'; text: string }
+  | { type: 'tool_call'; tool: string; status: string; args?: Record<string, unknown> }
+  | { type: 'tool_result'; tool: string; ok: boolean; summary?: string }
+  | { type: 'error'; message: string; code?: string }
+  | { type: 'session_end' }
+  | { type: 'done' };
+
+/** Fetch / ReadableStream abort — browsers vary (AbortError vs "body stream buffer was aborted"). */
+export function isAbortError(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === 'AbortError') return true;
+  if (e instanceof Error && /abort/i.test(e.message)) return true;
+  return false;
+}
+
+function parseDataLine(line: string): CommandSSEEvent | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith('data:')) return null;
+  const jsonPart = trimmed.slice(5).trim();
+  if (!jsonPart) return null;
+  try {
+    return JSON.parse(jsonPart) as CommandSSEEvent;
+  } catch {
+    return null;
+  }
+}
+
+function appendSessionFields(form: FormData): boolean {
+  const clientTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (clientTimeZone && clientTimeZone.trim()) {
+    form.append('client_timezone', clientTimeZone.trim());
+  }
+  const sessionToken = getRealtimeSessionToken();
+  if (!sessionToken) return false;
+  form.append('session_token', sessionToken);
+  return true;
+}
+
+async function* streamSseFromResponse(
+  response: Response,
+  options?: { signal?: AbortSignal },
+): AsyncGenerator<CommandSSEEvent> {
+  if (!response.ok || !response.body) {
+    let message = `HTTP ${response.status}`;
+    let code: string | undefined;
+    try {
+      const t = await response.text();
+      if (t) {
+        try {
+          const parsed = JSON.parse(t) as { detail?: unknown };
+          message = parseHttpResponseBody(parsed, response.status);
+          if (parsed.detail && typeof parsed.detail === 'object' && parsed.detail !== null) {
+            const detailObj = parsed.detail as { code?: unknown };
+            if (typeof detailObj.code === 'string') code = detailObj.code;
+          }
+        } catch {
+          message = t.slice(0, 240);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    yield { type: 'error', message: formatCommandStreamError(message, code), code };
+    yield { type: 'done' };
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let sawDone = false;
+
+  try {
+    for (;;) {
+      if (options?.signal?.aborted) return;
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const ev = parseDataLine(line);
+        if (ev) {
+          if (ev.type === 'done') sawDone = true;
+          yield ev;
+        }
+      }
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) {
+      for (const line of buffer.split('\n')) {
+        const ev = parseDataLine(line);
+        if (ev) {
+          if (ev.type === 'done') sawDone = true;
+          yield ev;
+        }
+      }
+    }
+    if (!sawDone) {
+      yield { type: 'done' };
+    }
+  } catch (e) {
+    if (isAbortError(e) || options?.signal?.aborted) {
+      return;
+    }
+    yield { type: 'error', message: getUserErrorMessage(e, 'Stream read failed') };
+    yield { type: 'done' };
+  }
+}
+
+async function* streamCommandSsePost(
+  buildForm: () => FormData,
+  accessToken: string,
+  options?: { signal?: AbortSignal },
+): AsyncGenerator<CommandSSEEvent> {
+  const form = buildForm();
+  if (!appendSessionFields(form)) {
+    yield { type: 'error', message: 'Not connected to the assistant service yet' };
+    yield { type: 'done' };
+    return;
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${ENDPOINTS.COMMAND_TEXT}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: form,
+      signal: options?.signal,
+    });
+  } catch (e) {
+    if (isAbortError(e) || options?.signal?.aborted) {
+      return;
+    }
+    yield { type: 'error', message: getUserErrorMessage(e, 'Network error') };
+    yield { type: 'done' };
+    return;
+  }
+
+  yield* streamSseFromResponse(response, options);
+}
+
+export async function* streamCommandFromText(
+  text: string,
+  accessToken: string,
+  options?: { signal?: AbortSignal; mode?: CommandMode },
+): AsyncGenerator<CommandSSEEvent> {
+  const mode = options?.mode ?? 'normal';
+  yield* streamCommandSsePost(
+    () => {
+      const form = new FormData();
+      form.append('text', text);
+      if (mode !== 'normal') {
+        form.append('mode', mode);
+      }
+      return form;
+    },
+    accessToken,
+    options,
+  );
+}

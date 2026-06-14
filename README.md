@@ -20,6 +20,43 @@ Dadei Frontend is an npm workspaces monorepo that ships two production surfaces 
 - **Electron process model:** main process owns window lifecycle, OAuth handoff, updates, and compatibility checks; preload exposes a narrow IPC surface; renderer stays a standard React app with `contextIsolation` and without broad Node exposure.
 - **Desktop-specific concerns:** OS-backed secret storage for credentials, optional auto-update flow, and packaging via **electron-builder** with CI producing Windows and macOS artifacts.
 
+## `@dadei/ui` library layout
+
+Domain logic lives under `packages/ui/src/lib/` in four vertical groups (mirroring the backend `app/lib/` structure):
+
+| Group | Path | Purpose |
+|-------|------|---------|
+| **platform** | `lib/platform/` | Auth, query/cache, errors, shared utilities, Electron runtime helpers |
+| **assistant** | `lib/assistant/` | Voice, audio, realtime WebSocket |
+| **workspace** | `lib/workspace/` | REST API clients, action display helpers |
+| **onboarding** | `lib/onboarding/` | Tutorial UI walkthrough (separate from voice enrollment) |
+
+Command, service, and assistant state types live under `packages/ui/src/types/` (`command.types.ts`, `service.types.ts`, `assistant.types.ts`).
+
+React contexts and components import from these modules via `@dadei/ui/lib/...`. Constants live in per-subdomain `constants.ts` files where values are shared or tunable.
+
+## Testing
+
+Tests live under `packages/ui/tests/` (not co-located with source):
+
+```
+tests/
+├── unit/           # Pure logic (wake parsing, notifications, display helpers)
+├── integration/    # Component behavior via Testing Library + mocked providers
+└── support/        # setup, fixtures, render helpers
+```
+
+- **Unit** tests run in Node (`npm run test:unit`).
+- **Integration** tests run in happy-dom and assert user-visible behavior (roles, labels, state)—not Tailwind classes or live API calls.
+- **CI** runs the full suite plus TypeScript typecheck on every PR.
+
+```bash
+npm run test --workspace=@dadei/ui
+npm run test:unit --workspace=@dadei/ui
+npm run test:integration --workspace=@dadei/ui
+npm run typecheck --workspace=@dadei/ui
+```
+
 ## Voice and Audio
 
 All voice behavior lives in `@dadei/ui` and is identical in the website and desktop renderer. There are **no per-app `public/` folders** for audio assets — models and runtime wiring are centralized so nothing is duplicated between apps.
@@ -28,27 +65,28 @@ All voice behavior lives in `@dadei/ui` and is identical in the website and desk
 
 Local wake-word detection uses the [openWakeWord](https://github.com/dscripka/openWakeWord) pipeline via `onnxruntime-web`:
 
-- **Implementation:** `packages/ui/src/renderer/audio/wakeWordDetector.ts`
-- **Models:** `packages/ui/src/renderer/audio/models/` (bundled by Vite with `?url` imports)
+- **Implementation:** `packages/ui/src/lib/assistant/voice/wake/openWakeWordDetector.ts`
+- **Models:** `packages/ui/src/lib/assistant/audio/models/` (bundled by Vite with `?url` imports)
   - `melspectrogram.onnx` — mel feature extractor
   - `embedding_model.onnx` — embedding network
-  - `hey_jarvis.onnx` — wake classifier (placeholder until a custom `dadei.onnx` is trained and dropped in)
+  - `hey_dadei.onnx` — wake classifier for "Dadei"
+  - `hey_jarvis.onnx` — wake classifier for "Jarvis"
 - **ORT WASM:** loaded from jsDelivr CDN (`onnxruntime-web@1.26.0`), not self-hosted in the repo
 - **Behavior:** runs on the mic stream in parallel with command capture; on detection it transitions to `listening` — transcription is **WebSocket-only** on the server
 
-To swap in a custom wake word, replace the classifier ONNX in `models/` and update the import in `wakeWordDetector.ts`. No changes needed in `apps/website` or `apps/desktop`.
+To swap in a custom wake word, replace the classifier ONNX in `models/` and update `lib/assistant/voice/wake/constants.ts`. No changes needed in `apps/website` or `apps/desktop`.
 
 ### Command capture and end-of-utterance
 
 After wake (or manual start), PCM16 chunks stream to the backend over the realtime WebSocket. The client does **not** run Silero VAD or any other neural speech-activity model.
 
 - **Streaming:** `AudioContext` downsamples to 16 kHz mono and sends `command_audio_*` messages
-- **End-of-utterance:** RMS threshold on the mic analyser (`COMMAND_SPEECH_RMS` + `COMMAND_UTTERANCE_END_SILENCE_MS` in `packages/ui/src/lib/voice/session/constants.ts`)
+- **End-of-utterance:** RMS threshold on the mic analyser (`COMMAND_SPEECH_RMS` + `COMMAND_UTTERANCE_END_SILENCE_MS` in `packages/ui/src/lib/assistant/voice/constants.ts`)
 - **Follow-up window:** after the assistant responds, a timed follow-up state lets the user continue without saying the wake word again
 
 ### Transcript wake-word fallback
 
-Server-side ASR can also recognize spoken wake phrases. `packages/ui/src/lib/wakeWordDetection.ts` normalizes transcripts (handles “Dadei” spelling variants, “Assistant”, “Jarvis”, leading disfluencies) and strips wake tokens from submitted command text.
+Server-side ASR can also recognize spoken wake phrases. `packages/ui/src/lib/assistant/voice/wake/wakeWordDetection.ts` normalizes transcripts (handles “Dadei” spelling variants, “Assistant”, “Jarvis”, leading disfluencies) and strips wake tokens from submitted command text.
 
 ### Removed: client-side Silero VAD
 
@@ -69,8 +107,8 @@ The old setup copied Silero VAD worklets, VAD ONNX models, and self-hosted ORT W
 
 - **Typed client boundaries:** API and realtime URL composition live in shared modules so both apps agree on how to reach the backend.
 - **Defensive UI patterns:** deduplication, ordering, and conflict-aware updates reduce impossible states in conversation and session views.
-- **Graceful wake-word degradation:** if the local wake detector fails to initialize, passive mic capture and manual command start still work.
-- **CI/CD for desktop:** GitHub Actions workflows under `.github/workflows` build and package installers, including the native-module and cross-platform concerns desktop shipping implies.
+- **Graceful wake-word degradation:** if the local wake detector fails to initialize, ambient mic capture and manual command start still work.
+- **CI/CD for desktop:** GitHub Actions runs UI unit + integration tests, TypeScript typecheck, then builds and packages installers.
 - **Modern toolchain:** React 19, Vite 7, TypeScript 5, Tailwind CSS 4, and ESLint-backed consistency on the website side.
 
 ## Impact

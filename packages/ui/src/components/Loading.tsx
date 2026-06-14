@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { BootstrapPhase } from '@dadei/ui/types/electron';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 const PHASE_LABELS: Record<BootstrapPhase, string> = {
   booting: 'Starting dadei…',

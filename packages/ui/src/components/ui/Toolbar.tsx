@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 const buttonBase =
   'inline-flex shrink-0 items-center justify-center rounded-lg transition-[color,background-color,box-shadow] duration-150 ease-out emerald-glow disabled:cursor-not-allowed disabled:opacity-40';

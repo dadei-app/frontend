@@ -7,22 +7,32 @@ import {
   useState,
 } from 'react';
 import { useCommand, type CommandState } from '@dadei/ui/contexts/CommandContext';
-import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/realtime/realtimeClient';
+import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
+import {
+  selectVoiceEnrollmentActive,
+  selectShouldForwardAudioChunks,
+  selectShouldRunAudioPipeline,
+  selectShouldStreamAudio,
+} from '@dadei/ui/lib/assistant/assistantRuntime';
+import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
+import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
   notifyVoiceSpeechActivity,
   subscribeCommandCaptureCommit,
-} from '@dadei/ui/lib/voice/session/voiceSessionActivity';
+  subscribeCommandCaptureRearm,
+} from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
-  COMMAND_SPEECH_RMS,
-  COMMAND_UTTERANCE_END_SILENCE_MS,
   FOLLOW_UP_SPEECH_RMS,
-} from '@dadei/ui/lib/voice/session/constants';
-import { WakeWordDetector } from '@dadei/ui/renderer/audio/wakeWordDetector';
+} from '@dadei/ui/lib/assistant/voice/constants';
+import {
+  OpenWakeWordDetector,
+  type WakeWordLabel,
+} from '@dadei/ui/lib/assistant/voice/wake/openWakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
-import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/audio/audioSettingsEvents';
+import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/assistant/audio/audioSettingsEvents';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
+import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 
 const COMMAND_START_RETRY_MS = 500;
@@ -44,8 +54,8 @@ const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['transcribing', 'thinking', 'responding'];
 
 /** Normalized 0–1 level from a time-domain analyser (command aura + settings meter). */
-export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint8Array): number {
-  analyser.getByteTimeDomainData(buffer);
+export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint8Array<ArrayBufferLike>): number {
+  analyser.getByteTimeDomainData(buffer as Uint8Array<ArrayBuffer>);
   let sumSq = 0;
   for (let i = 0; i < buffer.length; i++) {
     const v = (buffer[i] - 128) / 128;
@@ -61,13 +71,13 @@ export function clampMicLevel(level: number): number {
   return Math.max(0, Math.min(1, level));
 }
 
-/** Motion targets for MicLevelAura from a normalized mic level. */
+/** Motion targets for MicLevelAura from a normalized mic level (75% of full strength). */
 export function micLevelAuraMotion(level: number, visible: boolean) {
   const clamped = clampMicLevel(level);
   return {
-    opacity: visible ? 0.44 + clamped * 0.56 : 0,
-    scale: visible ? 1.08 + clamped * 0.92 : 0.88,
-    y: visible ? -4 - clamped * 22 : 0,
+    opacity: visible ? 0.33 + clamped * 0.42 : 0,
+    scale: visible ? 1.06 + clamped * 0.69 : 0.91,
+    y: visible ? -3 - clamped * 16.5 : 0,
   };
 }
 
@@ -136,10 +146,12 @@ function buildAudioConstraints(prefs: AudioSettings): MediaTrackConstraints {
 
 export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { audioSettings } = useSystem();
-  const { isServiceEnabled, registrationConflict, isConnected, isCommandMode, isCommandOwner } =
-    useService();
-  const { state, startListening, notifyCommandUtteranceEnded, introductionModeActive } =
-    useCommand();
+  const { permissionsGateOpen } = useService();
+  const runtime = useAssistantRuntimeState();
+  const sessionId = getRealtimeSessionId();
+  const { startListening } = useCommand();
+  const voiceEnrollmentActive = selectVoiceEnrollmentActive(runtime);
+  const state = runtime.commandState;
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
 
@@ -166,18 +178,16 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const previewCtxRef = useRef<globalThis.AudioContext | null>(null);
   const previewAnalyserRef = useRef<AnalyserNode | null>(null);
 
-  const wakeDetectorRef = useRef<WakeWordDetector | null>(null);
+  const wakeDetectorRef = useRef<OpenWakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
-  const commandSpeechSeenRef = useRef(false);
-  const commandSilenceStartedMsRef = useRef<number | null>(null);
   const commandAudioEndSentRef = useRef(false);
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
-  const introductionModeRef = useRef(false);
-  introductionModeRef.current = introductionModeActive;
+  const voiceEnrollmentRef = useRef(false);
+  voiceEnrollmentRef.current = voiceEnrollmentActive;
 
   const rearmIntroductionCapture = useCallback(() => {
-    if (!introductionModeRef.current || !commandStreamActiveRef.current) return;
+    if (!voiceEnrollmentRef.current || !commandStreamActiveRef.current) return;
     commandAudioEndSentRef.current = false;
     commandStreamReadyRef.current = false;
     sendRealtimeMessage({ type: 'command_audio_discard' });
@@ -237,8 +247,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const commitCommandCapture = useCallback(() => {
     forwardChunksRef.current = false;
-    commandSpeechSeenRef.current = false;
-    commandSilenceStartedMsRef.current = null;
     if (!commandStreamActiveRef.current || commandAudioEndSentRef.current) return;
     commandAudioEndSentRef.current = true;
     sendRealtimeMessage({ type: 'command_audio_end' });
@@ -249,8 +257,8 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   useEffect(() => {
-    forwardChunksRef.current = CHUNK_FORWARD_STATES.includes(state);
-  }, [state]);
+    forwardChunksRef.current = selectShouldForwardAudioChunks(runtime);
+  }, [runtime]);
 
   useEffect(() => subscribeCommandCaptureCommit(commitCommandCapture), [commitCommandCapture]);
 
@@ -262,7 +270,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
       (state === 'follow_up' &&
         ASSISTANT_BUSY_STATES.includes(prev) &&
-        !introductionModeRef.current)
+        !voiceEnrollmentRef.current)
     ) {
       sendRealtimeMessage({ type: 'command_audio_discard' });
     } else if (
@@ -273,7 +281,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       commandStreamReadyRef.current = false;
       lastCommandStartAttemptMsRef.current = 0;
     }
-    if (state === 'follow_up' && prev !== 'follow_up' && introductionModeRef.current) {
+    if (state === 'follow_up' && prev !== 'follow_up' && voiceEnrollmentRef.current) {
       rearmIntroductionCapture();
     }
     prevStateRef.current = state;
@@ -282,8 +290,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state === 'listening' || state === 'follow_up') {
       commandAudioEndSentRef.current = false;
-      commandSpeechSeenRef.current = false;
-      commandSilenceStartedMsRef.current = null;
     }
   }, [state]);
 
@@ -310,34 +316,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const inCapture =
           stateRef.current === 'listening' || stateRef.current === 'follow_up';
         if (inCapture) {
-          const followUpSpeechRms = FOLLOW_UP_SPEECH_RMS;
-          const commandSpeechRms = COMMAND_SPEECH_RMS;
-          const utteranceEndSilenceMs = COMMAND_UTTERANCE_END_SILENCE_MS;
-
-          const speaking = level >= followUpSpeechRms;
+          const speaking = level >= FOLLOW_UP_SPEECH_RMS;
           if (speaking && !speechActive && stateRef.current === 'follow_up') {
             notifyVoiceSpeechActivity();
           }
           speechActive = speaking;
-
-          const commandSpeaking = level >= commandSpeechRms;
-          if (commandSpeaking) {
-            commandSpeechSeenRef.current = true;
-            commandSilenceStartedMsRef.current = null;
-          } else if (commandSpeechSeenRef.current) {
-            const now = performance.now();
-            if (commandSilenceStartedMsRef.current === null) {
-              commandSilenceStartedMsRef.current = now;
-            } else if (now - commandSilenceStartedMsRef.current >= utteranceEndSilenceMs) {
-              commandSpeechSeenRef.current = false;
-              commandSilenceStartedMsRef.current = null;
-              notifyCommandUtteranceEnded();
-            }
-          }
         } else {
           speechActive = false;
-          commandSpeechSeenRef.current = false;
-          commandSilenceStartedMsRef.current = null;
         }
       }
 
@@ -346,15 +331,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [
-    streamAnalyserReady,
-    previewAnalyserReady,
-    state,
-    notifyCommandUtteranceEnded,
-  ]);
+  }, [streamAnalyserReady, previewAnalyserReady, state]);
 
   const onWakeWordDetected = useCallback(
-    (_timestampMs: number) => {
+    (_timestampMs: number, wakeWord: WakeWordLabel) => {
+      if (permissionsGateOpen) return;
       if (tutorialEngaged && !tutorial?.wakeWordEnabled) {
         return;
       }
@@ -367,10 +348,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       // armWakeListening sends command_audio_wake before claim.
-      console.debug('[Voice][Wake] detected — entering listening (server will transcribe)');
+      console.debug(
+        `[Voice][Wake] detected ${wakeWord} — entering listening (server will transcribe)`,
+      );
       startListening();
     },
-    [startListening, tutorial, tutorialEngaged],
+    [permissionsGateOpen, startListening, tutorial, tutorialEngaged],
   );
 
   const stopCommandAudioStream = useCallback(
@@ -423,9 +406,19 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     sendRealtimeMessage({
       type: 'command_audio_start',
       sample_rate: audioSettingsRef.current.sampleRate,
-      ...(introductionModeRef.current ? { introduction_mode: true } : {}),
+      ...(voiceEnrollmentRef.current ? { introduction_mode: true } : {}),
     });
   }, []);
+
+  const rearmCommandCapture = useCallback(() => {
+    commandAudioEndSentRef.current = false;
+    commandStreamReadyRef.current = false;
+    if (commandStreamActiveRef.current) {
+      ensureCommandSessionStarted(Date.now(), true);
+    }
+  }, [ensureCommandSessionStarted]);
+
+  useEffect(() => subscribeCommandCaptureRearm(rearmCommandCapture), [rearmCommandCapture]);
 
   const startCommandAudioStream = useCallback(async () => {
     if (commandStreamActiveRef.current) return;
@@ -438,7 +431,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     mediaStreamRef.current = media;
 
     if (ENABLE_LOCAL_WAKE_DETECTOR) {
-      const wakeDetector = new WakeWordDetector({ threshold: 0.5 });
+      const wakeDetector = new OpenWakeWordDetector({ threshold: 0.5 });
       wakeDetector.onWakeWord(onWakeWordDetected);
       try {
         await wakeDetector.start(media);
@@ -446,7 +439,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       } catch (error) {
         if (!wakeDetectorFailureLoggedRef.current) {
           wakeDetectorFailureLoggedRef.current = true;
-          console.error('[Audio] wake-word detector start failed; passive capture continues', error);
+          console.error('[Audio] wake-word detector start failed; ambient capture continues', error);
         } else {
           console.warn('[Audio] wake-word detector unavailable for this session.');
         }
@@ -518,14 +511,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [startCommandAudioStream, stopCommandAudioStream]);
 
   useEffect(() => {
-    const shouldListen =
-      (isServiceEnabled || (isCommandMode && isCommandOwner)) &&
-      !registrationConflict &&
-      isConnected;
-    setIsAudioPipelineReady(shouldListen);
-  }, [isServiceEnabled, isCommandMode, isCommandOwner, registrationConflict, isConnected]);
-
-  useEffect(() => {
     const off = subscribeRealtimeMessages(msg => {
       if (msg.event === 'command_transcript_ready') {
         commandStreamReadyRef.current = true;
@@ -536,10 +521,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const shouldListen =
-      (isServiceEnabled || (isCommandMode && isCommandOwner)) &&
-      !registrationConflict &&
-      isConnected;
-    const shouldStream = shouldListen && state !== 'locked';
+      selectShouldRunAudioPipeline(runtime, sessionId) && !permissionsGateOpen;
+    setIsAudioPipelineReady(shouldListen);
+  }, [permissionsGateOpen, runtime, sessionId]);
+
+  useEffect(() => {
+    const shouldListen =
+      selectShouldRunAudioPipeline(runtime, sessionId) && !permissionsGateOpen;
+    const shouldStream = shouldListen && selectShouldStreamAudio(runtime);
     if (shouldStream && !commandStreamActiveRef.current) {
       void startCommandAudioStream().catch(e => {
         console.error('[Audio] command stream start failed', e);
@@ -549,12 +538,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       stopCommandAudioStream(true);
     }
   }, [
-    isServiceEnabled,
-    isCommandMode,
-    isCommandOwner,
-    registrationConflict,
-    isConnected,
-    state,
+    permissionsGateOpen,
+    runtime,
+    sessionId,
     startCommandAudioStream,
     stopCommandAudioStream,
   ]);

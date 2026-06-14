@@ -18,7 +18,7 @@ import type {
 
 } from '@dadei/ui/types/electron';
 
-import { cn } from '@dadei/ui/lib/shared/cn';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
 
 

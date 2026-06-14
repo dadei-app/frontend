@@ -151,6 +151,17 @@ declare global {
   interface Window {
     electronAPI?: ElectronAPI;
   }
+
+  interface Navigator {
+    windowControlsOverlay?: {
+      visible: boolean;
+      height: number;
+      width: number;
+      getTitlebarAreaRect: () => DOMRect;
+      addEventListener: (type: string, listener: EventListener) => void;
+      removeEventListener: (type: string, listener: EventListener) => void;
+    };
+  }
 }
 
 export {};

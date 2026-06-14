@@ -2,7 +2,7 @@ import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'r
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/query/queryHooks';
+import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/platform/query/queryHooks';
 import { Loading } from '@dadei/ui/components/Loading';
 import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
 import {
@@ -11,20 +11,21 @@ import {
   useTutorialEngaged,
   useTutorialSettingsTourActive,
 } from '@dadei/ui/contexts/TutorialContext';
-import { isSettingsTutorialStep } from '@dadei/ui/lib/tutorial/constants';
+import { isSettingsTutorialStep } from '@dadei/ui/lib/onboarding/tutorial/constants';
 import { CommandBubbleStackHost, useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
+import { ServicePermissionsGate } from '@dadei/ui/components/permissions/ServicePermissionsGate';
 import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/NotificationContext';
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import MobileInteractionsSheet from '@dadei/ui/components/MobileInteractionsSheet';
 import AssistantSettingsModal from '@dadei/ui/components/settings';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/assistantPaths';
-import { useMobileAssistant } from '@dadei/ui/lib/hooks/useMobileAssistant';
-import { cn } from '@dadei/ui/lib/shared/cn';
-import { Mic } from 'lucide-react';
+import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
+import { cn } from '@dadei/ui/lib/platform/shared/cn';
+import { ENROLLMENT_TRANSCRIPT_OPENER } from '@dadei/ui/types/command.types';
 
 const ASSISTANT_HINT_ROW =
   'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
@@ -122,17 +123,18 @@ function assistantLoadingSubtitle(
 function AssistantLayoutShell() {
   const { formatHotkey, viewportFillClass } = useSystem();
   const isMobileAssistant = useMobileAssistant();
-  const { isServiceEnabled } = useService();
-  const { state, introductionModeActive } = useCommand();
+  const { isServiceEnabled, permissionsGateOpen } = useService();
+  const { state, voiceEnrollmentActive } = useCommand();
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
   const needsTutorial = useNeedsTutorial();
   const elevateNotifications = tutorialEngaged && tutorial?.step.id === 'layout_tour';
-  const showTalkHint = introductionModeActive;
+  const showTalkHint = voiceEnrollmentActive;
   const showWakeHint =
     state === 'idle' &&
     isServiceEnabled &&
-    !introductionModeActive &&
+    !permissionsGateOpen &&
+    !voiceEnrollmentActive &&
     (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -203,6 +205,7 @@ function AssistantLayoutShell() {
               <BannerStackHost />
             </div>
             <div className="relative min-h-0 flex-1 overflow-hidden">
+              <ServicePermissionsGate />
               {/* Mic: geometric center of the left panel; hints are out of flow. */}
               <div
                 className={cn(
@@ -212,7 +215,7 @@ function AssistantLayoutShell() {
               >
                 <div className="pointer-events-auto isolate">
                   <MicrophoneButton
-                    disableSpaceToggle={isPeoplePanelOpen || isMobileAssistant}
+                    disableSpaceToggle={isPeoplePanelOpen || isMobileAssistant || permissionsGateOpen}
                   />
                 </div>
               </div>
@@ -220,7 +223,7 @@ function AssistantLayoutShell() {
               {/* Hints: overlay only — never participate in flex layout. */}
               <motion.div
                 initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
+                animate={{ opacity: permissionsGateOpen ? 0 : 1 }}
                 className="assistant-hint-row pointer-events-none absolute inset-x-0 bottom-0 z-10 flex select-none flex-col items-center gap-2.5 px-2 pt-3 pb-8 text-sm text-zinc-500 font-secondary lg:pb-8"
               >
                 <AnimatePresence initial={false}>
@@ -233,7 +236,7 @@ function AssistantLayoutShell() {
                       transition={{ duration: 0.2 }}
                       className={ASSISTANT_HINT_ROW}
                     >
-                      <span>dadei will guide you — listen and follow along</span>
+                      <span>{ENROLLMENT_TRANSCRIPT_OPENER}</span>
                     </motion.p>
                   ) : null}
                   {showWakeHint ? (

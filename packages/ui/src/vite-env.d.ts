@@ -1,6 +1,11 @@
 /// <reference types="vite/client" />
 
-declare module '*.png' {
+declare module '*.onnx' {
+  const src: string;
+  export default src;
+}
+
+declare module '*.onnx?url' {
   const src: string;
   export default src;
 }
