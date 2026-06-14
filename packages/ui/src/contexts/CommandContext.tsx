@@ -63,7 +63,6 @@ import { isSessionEndUtterance } from '@dadei/ui/lib/assistant/voice/session/ses
 import {
   notifyCommandCaptureCommit,
   notifyCommandCaptureRearm,
-  subscribeCommandCaptureSpeech,
   subscribeVoiceSpeechActivity,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import CommandBubble from '@dadei/ui/components/command/CommandBubble';
@@ -101,8 +100,6 @@ interface CommandContextValue {
   /** Introduction handoff: claim assistant mode and stream the canned opener. */
   beginIntroduction: () => Promise<boolean>;
   introductionModeActive: boolean;
-  /** User finished speaking; mic spinner only until transcript arrives. */
-  notifyCommandUtteranceEnded: () => void;
   /** First typewriter character of the final response (mic → follow-up listen). */
   notifyAssistantRevealStarted: () => void;
   /** Typewriter finished; start the 7s follow-up window. */
@@ -314,9 +311,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const userInitiatedCancelRef = useRef(false);
   /** Drop the next WS final after cancel while still transcribing (discarded decode). */
   const suppressNextTranscriptFinalRef = useRef(false);
-  /** Bumped when capture is re-armed after cancel; speech must match before utterance end. */
-  const captureRearmGenerationRef = useRef(0);
-  const captureSpeechGenerationRef = useRef(-1);
   const lastServerUtteranceIdRef = useRef<number | null>(null);
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
@@ -347,12 +341,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       utteranceEndNotifiedRef.current = false;
       awaitingTranscriptRef.current = false;
       responseRevealStartedRef.current = false;
-      captureSpeechGenerationRef.current = -1;
     }
     if (state === 'follow_up') {
       utteranceEndNotifiedRef.current = false;
       awaitingTranscriptRef.current = false;
-      captureSpeechGenerationRef.current = -1;
     }
   }, [state]);
 
@@ -407,22 +399,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const startRequestActivity = useCallback(() => {
     setAssistantStatusLine(formatAssistantStatusLine(ASSISTANT_STATUS_THINKING));
   }, []);
-
-  const notifyCommandUtteranceEnded = useCallback(() => {
-    if (utteranceEndNotifiedRef.current) return;
-    const current = stateRef.current;
-    if (current !== 'listening' && current !== 'follow_up') return;
-    if (commandStreamInFlightRef.current) return;
-    if (captureSpeechGenerationRef.current !== captureRearmGenerationRef.current) return;
-
-    notifyCommandCaptureCommit();
-    utteranceEndNotifiedRef.current = true;
-    awaitingTranscriptRef.current = true;
-    transcribeFromFollowUpRef.current = current === 'follow_up';
-    clearWakeTimeout();
-    clearFollowUpTimer();
-    setCommandPhase('transcribing');
-  }, [clearFollowUpTimer, clearWakeTimeout]);
 
   const notifyAssistantRevealStarted = useCallback(() => {
     if (responseRevealStartedRef.current) return;
@@ -610,8 +586,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastToolBubbleSnippetRef.current = '';
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
-    captureRearmGenerationRef.current += 1;
-    captureSpeechGenerationRef.current = -1;
     setCommandPhase(inIntroduction ? 'follow_up' : 'listening');
     if (!inIntroduction) {
       scheduleWakeFalsePositiveRelease();
@@ -1255,12 +1229,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   useEffect(() => subscribeVoiceSpeechActivity(onFollowUpSpeechActivity), [onFollowUpSpeechActivity]);
 
   useEffect(() => {
-    return subscribeCommandCaptureSpeech(() => {
-      captureSpeechGenerationRef.current = captureRearmGenerationRef.current;
-    });
-  }, []);
-
-  useEffect(() => {
     if (isServiceEnabled) return;
     // Ambient service is intentionally off while command mode (or introduction) is active.
     if (isCommandMode || introductionModeActiveRef.current) return;
@@ -1372,7 +1340,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     startListening,
     beginIntroduction,
     introductionModeActive,
-    notifyCommandUtteranceEnded,
     notifyAssistantRevealStarted,
     notifyAssistantRevealComplete,
   };

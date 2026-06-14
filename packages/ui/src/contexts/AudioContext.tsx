@@ -17,16 +17,12 @@ import {
 import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
-  notifyCommandCaptureSpeech,
   notifyVoiceSpeechActivity,
   subscribeCommandCaptureCommit,
   subscribeCommandCaptureRearm,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
-  COMMAND_MIN_SPEECH_MS,
-  COMMAND_SPEECH_RMS,
-  COMMAND_UTTERANCE_END_SILENCE_MS,
   FOLLOW_UP_SPEECH_RMS,
 } from '@dadei/ui/lib/assistant/voice/constants';
 import {
@@ -153,7 +149,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const { permissionsGateOpen } = useService();
   const runtime = useAssistantRuntimeState();
   const sessionId = getRealtimeSessionId();
-  const { startListening, notifyCommandUtteranceEnded } = useCommand();
+  const { startListening } = useCommand();
   const introductionModeActive = selectIntroductionActive(runtime);
   const state = runtime.command as CommandState;
   const tutorial = useTutorialContext();
@@ -184,9 +180,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const wakeDetectorRef = useRef<OpenWakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
-  const commandSpeechSeenRef = useRef(false);
-  const commandSpeechAboveSinceRef = useRef<number | null>(null);
-  const commandSilenceStartedMsRef = useRef<number | null>(null);
   const commandAudioEndSentRef = useRef(false);
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
@@ -254,9 +247,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const commitCommandCapture = useCallback(() => {
     forwardChunksRef.current = false;
-    commandSpeechSeenRef.current = false;
-    commandSpeechAboveSinceRef.current = null;
-    commandSilenceStartedMsRef.current = null;
     if (!commandStreamActiveRef.current || commandAudioEndSentRef.current) return;
     commandAudioEndSentRef.current = true;
     sendRealtimeMessage({ type: 'command_audio_end' });
@@ -300,9 +290,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state === 'listening' || state === 'follow_up') {
       commandAudioEndSentRef.current = false;
-      commandSpeechSeenRef.current = false;
-      commandSpeechAboveSinceRef.current = null;
-      commandSilenceStartedMsRef.current = null;
     }
   }, [state]);
 
@@ -329,47 +316,13 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const inCapture =
           stateRef.current === 'listening' || stateRef.current === 'follow_up';
         if (inCapture) {
-          const followUpSpeechRms = FOLLOW_UP_SPEECH_RMS;
-          const commandSpeechRms = COMMAND_SPEECH_RMS;
-          const utteranceEndSilenceMs = COMMAND_UTTERANCE_END_SILENCE_MS;
-
-          const speaking = level >= followUpSpeechRms;
+          const speaking = level >= FOLLOW_UP_SPEECH_RMS;
           if (speaking && !speechActive && stateRef.current === 'follow_up') {
             notifyVoiceSpeechActivity();
           }
           speechActive = speaking;
-
-          const commandSpeaking = level >= commandSpeechRms;
-          if (commandSpeaking) {
-            const now = performance.now();
-            if (commandSpeechAboveSinceRef.current === null) {
-              commandSpeechAboveSinceRef.current = now;
-            } else if (
-              !commandSpeechSeenRef.current &&
-              now - commandSpeechAboveSinceRef.current >= COMMAND_MIN_SPEECH_MS
-            ) {
-              commandSpeechSeenRef.current = true;
-              notifyCommandCaptureSpeech();
-            }
-            commandSilenceStartedMsRef.current = null;
-          } else {
-            commandSpeechAboveSinceRef.current = null;
-            if (commandSpeechSeenRef.current) {
-              const now = performance.now();
-              if (commandSilenceStartedMsRef.current === null) {
-                commandSilenceStartedMsRef.current = now;
-              } else if (now - commandSilenceStartedMsRef.current >= utteranceEndSilenceMs) {
-                commandSpeechSeenRef.current = false;
-                commandSilenceStartedMsRef.current = null;
-                notifyCommandUtteranceEnded();
-              }
-            }
-          }
         } else {
           speechActive = false;
-          commandSpeechSeenRef.current = false;
-          commandSpeechAboveSinceRef.current = null;
-          commandSilenceStartedMsRef.current = null;
         }
       }
 
@@ -378,12 +331,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [
-    streamAnalyserReady,
-    previewAnalyserReady,
-    state,
-    notifyCommandUtteranceEnded,
-  ]);
+  }, [streamAnalyserReady, previewAnalyserReady, state]);
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number, wakeWord: WakeWordLabel) => {
@@ -464,9 +412,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const rearmCommandCapture = useCallback(() => {
     commandAudioEndSentRef.current = false;
-    commandSpeechSeenRef.current = false;
-    commandSpeechAboveSinceRef.current = null;
-    commandSilenceStartedMsRef.current = null;
     commandStreamReadyRef.current = false;
     if (commandStreamActiveRef.current) {
       ensureCommandSessionStarted(Date.now(), true);
