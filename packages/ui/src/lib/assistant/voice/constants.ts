@@ -29,7 +29,9 @@ export const COMMAND_TURN_PAIR_LAYOUT_MS = 0.38;
  * Client-side command capture (listening / follow-up). Separate from wake-word threshold.
  * Lower RMS = quieter speech counts as active (aura + end-of-utterance timing).
  */
-export const COMMAND_SPEECH_RMS = 0.11;
+export const COMMAND_SPEECH_RMS = 0.12;
+/** Minimum sustained voicing before end-of-utterance can fire (filters coughs/clicks). */
+export const COMMAND_MIN_SPEECH_MS = 600;
 /** Sustained silence after speech before ending capture (command + introduction). */
 export const COMMAND_UTTERANCE_END_SILENCE_MS = 2_500;
 /** Analyser level multiplier while capturing a command (mic aura only). */

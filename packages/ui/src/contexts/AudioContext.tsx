@@ -24,6 +24,7 @@ import {
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
+  COMMAND_MIN_SPEECH_MS,
   COMMAND_SPEECH_RMS,
   COMMAND_UTTERANCE_END_SILENCE_MS,
   FOLLOW_UP_SPEECH_RMS,
@@ -184,6 +185,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const wakeDetectorRef = useRef<OpenWakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
   const commandSpeechSeenRef = useRef(false);
+  const commandSpeechAboveSinceRef = useRef<number | null>(null);
   const commandSilenceStartedMsRef = useRef<number | null>(null);
   const commandAudioEndSentRef = useRef(false);
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
@@ -253,6 +255,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const commitCommandCapture = useCallback(() => {
     forwardChunksRef.current = false;
     commandSpeechSeenRef.current = false;
+    commandSpeechAboveSinceRef.current = null;
     commandSilenceStartedMsRef.current = null;
     if (!commandStreamActiveRef.current || commandAudioEndSentRef.current) return;
     commandAudioEndSentRef.current = true;
@@ -298,6 +301,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     if (state === 'listening' || state === 'follow_up') {
       commandAudioEndSentRef.current = false;
       commandSpeechSeenRef.current = false;
+      commandSpeechAboveSinceRef.current = null;
       commandSilenceStartedMsRef.current = null;
     }
   }, [state]);
@@ -337,24 +341,34 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
           const commandSpeaking = level >= commandSpeechRms;
           if (commandSpeaking) {
-            if (!commandSpeechSeenRef.current) {
+            const now = performance.now();
+            if (commandSpeechAboveSinceRef.current === null) {
+              commandSpeechAboveSinceRef.current = now;
+            } else if (
+              !commandSpeechSeenRef.current &&
+              now - commandSpeechAboveSinceRef.current >= COMMAND_MIN_SPEECH_MS
+            ) {
+              commandSpeechSeenRef.current = true;
               notifyCommandCaptureSpeech();
             }
-            commandSpeechSeenRef.current = true;
             commandSilenceStartedMsRef.current = null;
-          } else if (commandSpeechSeenRef.current) {
-            const now = performance.now();
-            if (commandSilenceStartedMsRef.current === null) {
-              commandSilenceStartedMsRef.current = now;
-            } else if (now - commandSilenceStartedMsRef.current >= utteranceEndSilenceMs) {
-              commandSpeechSeenRef.current = false;
-              commandSilenceStartedMsRef.current = null;
-              notifyCommandUtteranceEnded();
+          } else {
+            commandSpeechAboveSinceRef.current = null;
+            if (commandSpeechSeenRef.current) {
+              const now = performance.now();
+              if (commandSilenceStartedMsRef.current === null) {
+                commandSilenceStartedMsRef.current = now;
+              } else if (now - commandSilenceStartedMsRef.current >= utteranceEndSilenceMs) {
+                commandSpeechSeenRef.current = false;
+                commandSilenceStartedMsRef.current = null;
+                notifyCommandUtteranceEnded();
+              }
             }
           }
         } else {
           speechActive = false;
           commandSpeechSeenRef.current = false;
+          commandSpeechAboveSinceRef.current = null;
           commandSilenceStartedMsRef.current = null;
         }
       }
@@ -451,6 +465,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const rearmCommandCapture = useCallback(() => {
     commandAudioEndSentRef.current = false;
     commandSpeechSeenRef.current = false;
+    commandSpeechAboveSinceRef.current = null;
     commandSilenceStartedMsRef.current = null;
     commandStreamReadyRef.current = false;
     if (commandStreamActiveRef.current) {
