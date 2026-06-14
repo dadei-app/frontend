@@ -16,7 +16,15 @@ export {
   useCommand,
   CommandBubbleStackHost,
 } from './contexts/CommandContext';
-export type { CommandState, CommandMode } from './contexts/CommandContext';
+export type {
+  CommandMode,
+  CommandState,
+  AssistantBubbleStatus,
+  ServiceMode,
+  ServiceModeClaim,
+  AssistantState,
+  AssistantAction,
+} from './types';
 export { default as CommandBubble } from './components/command/CommandBubble';
 export {
   NotificationProvider,

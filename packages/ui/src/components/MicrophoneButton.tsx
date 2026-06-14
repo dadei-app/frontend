@@ -96,7 +96,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const micLevel = audioContext?.micLevel ?? 0;
   const { matchesHotkey } = useSystem();
   const { toggleService, permissionsGateOpen } = useService();
-  const { cancelCommandMode, cancelProcessing } = useCommand();
+  const { cancelCommandService, cancelProcessing } = useCommand();
   const runtime = useAssistantRuntimeState();
   const tutorialActive = useTutorialEngaged();
 
@@ -121,12 +121,12 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
       cancelProcessing();
       return;
     }
-    if (appearance.action === 'exit_command_mode') {
-      cancelCommandMode();
+    if (appearance.action === 'exit_command_service') {
+      cancelCommandService();
       return;
     }
     void toggleService();
-  }, [appearance.action, cancelCommandMode, cancelProcessing, toggleService]);
+  }, [appearance.action, cancelCommandService, cancelProcessing, toggleService]);
 
   useEffect(() => {
     if (disableSpaceToggle) return;

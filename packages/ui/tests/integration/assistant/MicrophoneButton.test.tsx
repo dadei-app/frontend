@@ -5,7 +5,7 @@ import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 
 const mockToggleService = vi.fn();
-const mockExitCommandMode = vi.fn();
+const mockExitCommandService = vi.fn();
 const mockCancelProcessing = vi.fn();
 
 vi.mock('@dadei/ui/contexts/SystemContext', () => ({
@@ -16,11 +16,11 @@ vi.mock('@dadei/ui/contexts/SystemContext', () => ({
 
 vi.mock('@dadei/ui/contexts/AssistantRuntimeContext', () => ({
   useAssistantRuntimeState: () => ({
-    service: 'ambient',
-    command: 'idle',
-    submode: 'normal',
+    serviceMode: 'ambient',
+    commandState: 'idle',
+    commandMode: 'normal',
     commandOwnerSessionId: null,
-    commandModeExpiresAt: null,
+    commandServiceExpiresAt: null,
     isConnected: true,
     registrationConflict: false,
     isTogglingService: false,
@@ -36,8 +36,7 @@ vi.mock('@dadei/ui/contexts/ServiceContext', () => ({
 vi.mock('@dadei/ui/contexts/CommandContext', () => ({
   useCommand: () => ({
     state: 'idle',
-    isCommandMode: false,
-    cancelCommandMode: mockExitCommandMode,
+    cancelCommandService: mockExitCommandService,
     cancelProcessing: mockCancelProcessing,
   }),
 }));
@@ -63,7 +62,7 @@ function renderMic(extra?: { disableSpaceToggle?: boolean }) {
 describe('MicrophoneButton', () => {
   beforeEach(() => {
     mockToggleService.mockReset();
-    mockExitCommandMode.mockReset();
+    mockExitCommandService.mockReset();
     mockCancelProcessing.mockReset();
   });
 

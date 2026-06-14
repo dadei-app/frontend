@@ -1,10 +1,10 @@
 import {
-  COMMAND_CAPTURE_PHASES,
-  COMMAND_PROCESSING_PHASES,
+  COMMAND_CAPTURE_STATES,
+  COMMAND_PROCESSING_STATES,
   selectIsAmbientEnabled,
-  selectIsCommandMode,
-} from '@dadei/ui/lib/assistant/runtime/reducer';
-import type { AssistantRuntimeState } from '@dadei/ui/lib/assistant/runtime/types';
+  selectIsCommandService,
+} from '@dadei/ui/lib/assistant/assistantRuntime';
+import type { AssistantState } from '@dadei/ui/types/assistant.types';
 
 export type MicTone = 'blue' | 'red' | 'green' | 'none';
 
@@ -13,7 +13,7 @@ export type MicGrayChrome = 'none' | 'locked' | 'loading';
 export type MicAction =
   | 'none'
   | 'toggle_service'
-  | 'exit_command_mode'
+  | 'exit_command_service'
   | 'cancel_processing';
 
 export type MicAppearance = {
@@ -27,7 +27,7 @@ export type MicAppearance = {
 };
 
 export function deriveMicAppearanceFromRuntime(
-  runtime: AssistantRuntimeState,
+  runtime: AssistantState,
   options: {
     tutorialActive: boolean;
     permissionsGateBlocked?: boolean;
@@ -46,7 +46,7 @@ export function deriveMicAppearanceFromRuntime(
     };
   }
 
-  if (runtime.command === 'locked' || runtime.registrationConflict) {
+  if (runtime.commandState === 'locked' || runtime.registrationConflict) {
     return {
       grayChrome: 'locked',
       tone: 'none',
@@ -79,16 +79,16 @@ export function deriveMicAppearanceFromRuntime(
     };
   }
 
-  if (selectIsCommandMode(runtime)) {
-    const processing = COMMAND_PROCESSING_PHASES.has(runtime.command);
-    const capturing = COMMAND_CAPTURE_PHASES.has(runtime.command);
+  if (selectIsCommandService(runtime)) {
+    const processing = COMMAND_PROCESSING_STATES.has(runtime.commandState);
+    const capturing = COMMAND_CAPTURE_STATES.has(runtime.commandState);
     return {
       grayChrome: 'none',
       tone: 'blue',
       showProcessingSpinner: processing,
       showLiveAura: capturing && !processing,
       showAmbientRipples: false,
-      action: processing ? 'cancel_processing' : 'exit_command_mode',
+      action: processing ? 'cancel_processing' : 'exit_command_service',
     };
   }
 
@@ -115,4 +115,3 @@ export function deriveMicAppearanceFromRuntime(
 
 /** @deprecated Use deriveMicAppearanceFromRuntime — kept for gradual migration. */
 export { deriveMicAppearanceFromRuntime as deriveMicAppearance };
-export { COMMAND_PROCESSING_PHASES as COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/assistant/runtime/reducer';

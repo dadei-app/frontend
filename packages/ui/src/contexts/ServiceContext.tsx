@@ -15,9 +15,9 @@ import {
 } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import {
   selectIsAmbientEnabled,
-  selectIsCommandMode,
+  selectIsCommandService,
   selectIsCommandOwner,
-} from '@dadei/ui/lib/assistant/runtime/reducer';
+} from '@dadei/ui/lib/assistant/assistantRuntime';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { parseInteractionDate } from '@dadei/ui/components/interaction-panel/conversationUtils';
@@ -27,7 +27,8 @@ import { memoriesApi } from '@dadei/ui/lib/workspace/api/memories';
 import { personsApi } from '@dadei/ui/lib/workspace/api/persons';
 import { conversationsApi } from '@dadei/ui/lib/workspace/api/conversations';
 import { interactionsApi } from '@dadei/ui/lib/workspace/api/interactions';
-import { serviceApi, type CommandModeState } from '@dadei/ui/lib/workspace/api/service';
+import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
+import type { ServiceModeClaim } from '@dadei/ui/types/service.types';
 import {
   startRealtimeClient,
   stopRealtimeClient,
@@ -109,13 +110,13 @@ interface ServiceContextType {
   clientName: string;
   toggleService: () => Promise<void>;
   isTogglingService: boolean;
-  isCommandMode: boolean;
+  isCommandService: boolean;
   isCommandOwner: boolean;
   commandOwnerSessionId: string | null;
-  commandModeExpiresAt: string | null;
-  commandModeRemainingMs: number;
+  commandServiceExpiresAt: string | null;
+  commandServiceRemainingMs: number;
   /** Apply claim HTTP response immediately (do not wait for the command_mode webhook). */
-  syncCommandModeFromClaim: (state: CommandModeState) => void;
+  syncCommandServiceFromClaim: (state: ServiceModeClaim) => void;
 
   memories: EpisodicMemory[];
   memoriesLoading: boolean;
@@ -171,9 +172,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const isConnected = runtime.isConnected;
   const isTogglingService = runtime.isTogglingService;
   const registrationConflict = runtime.registrationConflict;
-  const isCommandMode = selectIsCommandMode(runtime);
+  const isCommandService = selectIsCommandService(runtime);
   const commandOwnerSessionId = runtime.commandOwnerSessionId;
-  const commandModeExpiresAt = runtime.commandModeExpiresAt;
+  const commandServiceExpiresAt = runtime.commandServiceExpiresAt;
 
   const [clientName, setClientName] = useState('');
   const [extraBootstrapConversationIds, setExtraBootstrapConversationIds] = useState<string[]>([]);
@@ -405,11 +406,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     void maybePromptForActiveServicePermissions(true);
   }, [isServiceEnabled, maybePromptForActiveServicePermissions, permissionsGateOpen, sessionReady]);
 
-  const syncCommandModeFromClaim = useCallback((state: CommandModeState) => {
-    runtimeActions.syncCommandMode({
-      active: state.active,
-      ownerSessionId: state.owner_session_id,
-      expiresAt: state.expires_at,
+  const syncCommandServiceFromClaim = useCallback((claim: ServiceModeClaim) => {
+    runtimeActions.syncCommandService({
+      active: claim.active,
+      ownerSessionId: claim.owner_session_id,
+      expiresAt: claim.expires_at,
     });
   }, [runtimeActions]);
 
@@ -493,12 +494,12 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         void maybePromptForActiveServicePermissions(true);
       }
     };
-    const handleCommandModeChanged = (payload: {
+    const handleCommandServiceChanged = (payload: {
       active: boolean;
       ownerSessionId: string | null;
       expiresAt: string | null;
     }) => {
-      runtimeActions.syncCommandMode(payload);
+      runtimeActions.syncCommandService(payload);
     };
 
     function handleInteraction(data: unknown) {
@@ -653,7 +654,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           const ownerSessionId =
             typeof msg.owner_session_id === 'string' ? msg.owner_session_id : null;
           const expiresAt = typeof msg.expires_at === 'string' ? msg.expires_at : null;
-          handleCommandModeChanged({ active, ownerSessionId, expiresAt });
+          handleCommandServiceChanged({ active, ownerSessionId, expiresAt });
           break;
         }
         default:
@@ -797,9 +798,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const realtimeSessionId = getRealtimeSessionId();
   const isCommandOwner = selectIsCommandOwner(runtime, realtimeSessionId);
-  const commandModeRemainingMs = (() => {
-    if (!commandModeExpiresAt) return 0;
-    const expiresAtMs = Date.parse(commandModeExpiresAt);
+  const commandServiceRemainingMs = (() => {
+    if (!commandServiceExpiresAt) return 0;
+    const expiresAtMs = Date.parse(commandServiceExpiresAt);
     if (!Number.isFinite(expiresAtMs)) return 0;
     return Math.max(0, expiresAtMs - Date.now());
   })();
@@ -826,12 +827,12 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         clientName,
         toggleService,
         isTogglingService,
-        isCommandMode,
+        isCommandService,
         isCommandOwner,
         commandOwnerSessionId,
-        commandModeExpiresAt,
-        commandModeRemainingMs,
-        syncCommandModeFromClaim,
+        commandServiceExpiresAt,
+        commandServiceRemainingMs,
+        syncCommandServiceFromClaim,
 
         permissionsGateOpen,
         permissionsGateIntent,

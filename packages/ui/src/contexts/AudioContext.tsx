@@ -13,7 +13,7 @@ import {
   selectShouldForwardAudioChunks,
   selectShouldRunAudioPipeline,
   selectShouldStreamAudio,
-} from '@dadei/ui/lib/assistant/runtime/reducer';
+} from '@dadei/ui/lib/assistant/assistantRuntime';
 import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
@@ -151,7 +151,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const sessionId = getRealtimeSessionId();
   const { startListening } = useCommand();
   const voiceEnrollmentActive = selectVoiceEnrollmentActive(runtime);
-  const state = runtime.command as CommandState;
+  const state = runtime.commandState;
   const tutorial = useTutorialContext();
   const tutorialEngaged = useTutorialEngaged();
 

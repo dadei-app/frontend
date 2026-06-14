@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { deriveMicAppearanceFromRuntime } from '@dadei/ui/lib/assistant/voice/micAppearance';
-import { INITIAL_ASSISTANT_RUNTIME } from '@dadei/ui/lib/assistant/runtime/types';
+import { INITIAL_ASSISTANT_STATE } from '@dadei/ui/types/assistant.types';
 
 const tutorialOff = { tutorialActive: false };
 
@@ -8,9 +8,9 @@ describe('deriveMicAppearanceFromRuntime', () => {
   it('shows gray loading chrome while the permissions gate is open', () => {
     const appearance = deriveMicAppearanceFromRuntime(
       {
-        ...INITIAL_ASSISTANT_RUNTIME,
-        service: 'ambient',
-        command: 'idle',
+        ...INITIAL_ASSISTANT_STATE,
+        serviceMode: 'ambient',
+        commandState: 'idle',
       },
       { ...tutorialOff, permissionsGateBlocked: true },
     );
@@ -20,13 +20,13 @@ describe('deriveMicAppearanceFromRuntime', () => {
     expect(appearance.showAmbientRipples).toBe(false);
   });
 
-  it('interrupts processing instead of exiting command mode', () => {
-    for (const command of ['transcribing', 'thinking', 'responding'] as const) {
+  it('interrupts processing instead of exiting command service', () => {
+    for (const commandState of ['transcribing', 'thinking', 'responding'] as const) {
       const appearance = deriveMicAppearanceFromRuntime(
         {
-          ...INITIAL_ASSISTANT_RUNTIME,
-          service: 'command',
-          command,
+          ...INITIAL_ASSISTANT_STATE,
+          serviceMode: 'command',
+          commandState,
           commandOwnerSessionId: 'sess-1',
         },
         tutorialOff,
@@ -37,13 +37,13 @@ describe('deriveMicAppearanceFromRuntime', () => {
     }
   });
 
-  it('exits command mode while listening or during readout', () => {
-    for (const command of ['listening', 'follow_up'] as const) {
+  it('exits command service while listening or during readout', () => {
+    for (const commandState of ['listening', 'follow_up'] as const) {
       const appearance = deriveMicAppearanceFromRuntime(
         {
-          ...INITIAL_ASSISTANT_RUNTIME,
-          service: 'command',
-          command,
+          ...INITIAL_ASSISTANT_STATE,
+          serviceMode: 'command',
+          commandState,
           commandOwnerSessionId: 'sess-1',
         },
         tutorialOff,
@@ -51,16 +51,16 @@ describe('deriveMicAppearanceFromRuntime', () => {
       expect(appearance.tone).toBe('blue');
       expect(appearance.showProcessingSpinner).toBe(false);
       expect(appearance.showLiveAura).toBe(true);
-      expect(appearance.action).toBe('exit_command_mode');
+      expect(appearance.action).toBe('exit_command_service');
     }
   });
 
-  it('toggles ambient service when command mode is inactive', () => {
+  it('toggles ambient service when command service is inactive', () => {
     const appearance = deriveMicAppearanceFromRuntime(
       {
-        ...INITIAL_ASSISTANT_RUNTIME,
-        service: 'ambient',
-        command: 'idle',
+        ...INITIAL_ASSISTANT_STATE,
+        serviceMode: 'ambient',
+        commandState: 'idle',
       },
       tutorialOff,
     );
@@ -69,12 +69,12 @@ describe('deriveMicAppearanceFromRuntime', () => {
     expect(appearance.action).toBe('toggle_service');
   });
 
-  it('does not show command chrome when local phase is active but service lock is ambient', () => {
+  it('does not show command chrome when command state is active but service mode is ambient', () => {
     const appearance = deriveMicAppearanceFromRuntime(
       {
-        ...INITIAL_ASSISTANT_RUNTIME,
-        service: 'ambient',
-        command: 'listening',
+        ...INITIAL_ASSISTANT_STATE,
+        serviceMode: 'ambient',
+        commandState: 'listening',
       },
       tutorialOff,
     );

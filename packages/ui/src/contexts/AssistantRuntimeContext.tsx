@@ -7,22 +7,22 @@ import {
   type Dispatch,
   type ReactNode,
 } from 'react';
-import { assistantRuntimeReducer } from '@dadei/ui/lib/assistant/runtime/reducer';
+import { assistantRuntimeReducer } from '@dadei/ui/lib/assistant/assistantRuntime';
 import {
-  INITIAL_ASSISTANT_RUNTIME,
-  type AssistantRuntimeAction,
-  type AssistantRuntimeState,
-} from '@dadei/ui/lib/assistant/runtime/types';
+  INITIAL_ASSISTANT_STATE,
+  type AssistantAction,
+  type AssistantState,
+} from '@dadei/ui/types/assistant.types';
 
 interface AssistantRuntimeContextValue {
-  state: AssistantRuntimeState;
-  dispatch: Dispatch<AssistantRuntimeAction>;
+  state: AssistantState;
+  dispatch: Dispatch<AssistantAction>;
 }
 
 const AssistantRuntimeContext = createContext<AssistantRuntimeContextValue | undefined>(undefined);
 
 export function AssistantRuntimeProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(assistantRuntimeReducer, INITIAL_ASSISTANT_RUNTIME);
+  const [state, dispatch] = useReducer(assistantRuntimeReducer, INITIAL_ASSISTANT_STATE);
 
   const value = useMemo(() => ({ state, dispatch }), [state]);
 
@@ -39,11 +39,11 @@ export function useAssistantRuntime(): AssistantRuntimeContextValue {
   return ctx;
 }
 
-export function useAssistantRuntimeDispatch(): Dispatch<AssistantRuntimeAction> {
+export function useAssistantRuntimeDispatch(): Dispatch<AssistantAction> {
   return useAssistantRuntime().dispatch;
 }
 
-export function useAssistantRuntimeState(): AssistantRuntimeState {
+export function useAssistantRuntimeState(): AssistantState {
   return useAssistantRuntime().state;
 }
 
@@ -60,7 +60,7 @@ export function useAssistantRuntimeActions() {
       setServiceToggling: (toggling: boolean) =>
         dispatch({ type: 'service/toggling', toggling }),
       setServiceStatus: (enabled: boolean) => dispatch({ type: 'service/status', enabled }),
-      syncCommandMode: (payload: {
+      syncCommandService: (payload: {
         active: boolean;
         ownerSessionId: string | null;
         expiresAt: string | null;
@@ -71,10 +71,10 @@ export function useAssistantRuntimeActions() {
           ownerSessionId: payload.ownerSessionId,
           expiresAt: payload.expiresAt,
         }),
-      setCommandPhase: (phase: AssistantRuntimeState['command']) =>
-        dispatch({ type: 'command/phase', phase }),
-      setCommandSubmode: (submode: AssistantRuntimeState['submode']) =>
-        dispatch({ type: 'command/submode', submode }),
+      setCommandState: (commandState: AssistantState['commandState']) =>
+        dispatch({ type: 'command/state', commandState }),
+      setCommandMode: (commandMode: AssistantState['commandMode']) =>
+        dispatch({ type: 'command/mode', commandMode }),
       resetRuntime: () => dispatch({ type: 'runtime/reset' }),
     }),
     [dispatch],

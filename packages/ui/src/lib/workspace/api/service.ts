@@ -1,6 +1,7 @@
 import { api } from '@dadei/ui/lib/workspace/api/http/client';
 import { API_CONFIG, ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
+import type { ServiceModeClaim } from '@dadei/ui/types/service.types';
 import { buildEndpoint, getClientIpAddresses, retryWithBackoff } from './utils';
 
 interface ClientRegistration {
@@ -14,11 +15,7 @@ export interface ClientResponse {
   metadata?: Record<string, unknown>;
 }
 
-export interface CommandModeState {
-  active: boolean;
-  owner_session_id: string | null;
-  expires_at: string | null;
-}
+export type { ServiceModeClaim };
 
 export const serviceApi = {
   /**
@@ -79,11 +76,11 @@ export const serviceApi = {
   },
 
   /**
-   * Attempt to claim command mode ownership for a short conversational window.
+   * Claim command service phase for a short conversational window.
    * PATCH /api/v1/service/network/command-mode/claim
    */
-  async claimCommandMode(sessionToken: string, holdSeconds = 5): Promise<CommandModeState> {
-    const { data } = await api.patch<CommandModeState>(
+  async claimCommandService(sessionToken: string, holdSeconds = 5): Promise<ServiceModeClaim> {
+    const { data } = await api.patch<ServiceModeClaim>(
       ENDPOINTS.SERVICE_COMMAND_MODE_CLAIM,
       {
         session_token: sessionToken,
@@ -95,10 +92,10 @@ export const serviceApi = {
   },
 
   /**
-   * Release command mode ownership.
+   * Release command service phase ownership.
    * PATCH /api/v1/service/network/command-mode/release
    */
-  async releaseCommandMode(sessionToken: string): Promise<void> {
+  async releaseCommandService(sessionToken: string): Promise<void> {
     await api.patch(
       ENDPOINTS.SERVICE_COMMAND_MODE_RELEASE,
       {

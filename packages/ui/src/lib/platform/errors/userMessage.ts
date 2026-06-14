@@ -6,8 +6,8 @@ import { isAxiosError } from 'axios';
 
 export const ERROR_CODES = {
   invalid_session: 'Connect to the assistant service and try again.',
-  command_mode_not_owner: 'Another device is using command mode right now.',
-  command_mode_owned: 'Command mode is already active on another session.',
+  command_mode_not_owner: 'Another device is using the assistant session right now.',
+  command_mode_owned: 'The assistant session is already active on another device.',
   service_disabled: 'Turn on the assistant service in settings, then try again.',
   network_not_found: 'Your workspace could not be found. Sign in again.',
   validation_error: 'That request was not valid. Check your input and try again.',

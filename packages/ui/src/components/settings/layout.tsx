@@ -63,7 +63,7 @@ const tileShell =
   'settings-tile relative flex flex-col overflow-hidden rounded-xl border border-white/10 bg-zinc-950/55 p-4';
 
 /**
- * Panel grid — CSS-driven layouts use `layout` + `data-tile` ids (settings-responsive.css).
+ * Panel grid — CSS-driven layouts use `layout` + `data-tile` ids (styles/settings.css).
  * Account keeps the reference inline 4×4 grid from col/row placement (no `layout` prop).
  */
 export function SettingsGrid4({
