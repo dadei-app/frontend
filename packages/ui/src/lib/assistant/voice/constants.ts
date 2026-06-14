@@ -27,7 +27,7 @@ export const COMMAND_TURN_PAIR_LAYOUT_MS = 0.38;
 
 /**
  * Mic aura gain while capturing a command (listening / follow-up).
- * End-of-utterance timing is server-side (same segmentation as passive ambient).
+ * End-of-utterance timing is server-side (same segmentation as ambient pipeline).
  */
 export const COMMAND_MIC_LEVEL_GAIN = 2.45;
 

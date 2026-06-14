@@ -31,7 +31,7 @@ Domain logic lives under `packages/ui/src/lib/` in four vertical groups (mirrori
 | **workspace** | `lib/workspace/` | REST API clients, action display helpers |
 | **onboarding** | `lib/onboarding/` | Tutorial UI walkthrough (separate from voice enrollment) |
 
-Command/enrollment types and copy live in `types/command.types.ts` (shared with runtime submode and API `mode`).
+Command, service, and assistant state types live under `packages/ui/src/types/` (`command.types.ts`, `service.types.ts`, `assistant.types.ts`).
 
 React contexts and components import from these modules via `@dadei/ui/lib/...`. Constants live in per-subdomain `constants.ts` files where values are shared or tunable.
 
@@ -107,7 +107,7 @@ The old setup copied Silero VAD worklets, VAD ONNX models, and self-hosted ORT W
 
 - **Typed client boundaries:** API and realtime URL composition live in shared modules so both apps agree on how to reach the backend.
 - **Defensive UI patterns:** deduplication, ordering, and conflict-aware updates reduce impossible states in conversation and session views.
-- **Graceful wake-word degradation:** if the local wake detector fails to initialize, passive mic capture and manual command start still work.
+- **Graceful wake-word degradation:** if the local wake detector fails to initialize, ambient mic capture and manual command start still work.
 - **CI/CD for desktop:** GitHub Actions runs UI unit + integration tests, TypeScript typecheck, then builds and packages installers.
 - **Modern toolchain:** React 19, Vite 7, TypeScript 5, Tailwind CSS 4, and ESLint-backed consistency on the website side.
 
