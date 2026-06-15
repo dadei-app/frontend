@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import * as AlertDialog from '@radix-ui/react-alert-dialog';
+import { Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { authApi } from '@dadei/ui/lib/workspace/api/auth';
@@ -23,6 +23,7 @@ import { useAuthMeQuery } from '@dadei/ui/lib/platform/query/queryHooks';
 import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import { buildPopularTimezoneOptions } from './timezonePicker';
 import { AccountSessionActions } from './AccountSessionActions';
+import { GlassAlertModal } from '@dadei/ui/components/ui/GlassModal';
 import { PasswordDialog } from './PasswordDialog';
 
 function CenteredField({ children }: { children: ReactNode }) {
@@ -273,48 +274,36 @@ export function AccountPanel() {
       <PasswordDialog mode="set" open={showSetPassword} onOpenChange={setShowSetPassword} />
       <PasswordDialog mode="change" open={showChangePassword} onOpenChange={setShowChangePassword} />
 
-      <AlertDialog.Root open={alertOpen} onOpenChange={setAlertOpen}>
-        <AlertDialog.Portal>
-          <AlertDialog.Overlay className="fixed inset-0 z-300 bg-black/60 backdrop-blur-sm" />
-          <AlertDialog.Content
-            className="fixed inset-0 z-310 flex items-center justify-center border-0 bg-transparent p-4 shadow-none outline-none"
-            style={{ top: 0, left: 0, transform: 'none' }}
-          >
-            <div className="glass-panel relative w-[min(92vw,28rem)] rounded-2xl border border-rose-500/25 p-6">
-              <AlertDialog.Title className="text-lg font-semibold text-zinc-50">
-                Delete account?
-              </AlertDialog.Title>
-              <AlertDialog.Description className="mt-2 text-base text-zinc-400 font-secondary">
-                This permanently removes your network and related data. Type your email{' '}
-                <span className="font-medium text-zinc-300">{email}</span> to confirm.
-              </AlertDialog.Description>
-              <input
-                type="text"
-                value={deletePhrase}
-                onChange={e => setDeletePhrase(e.target.value)}
-                placeholder="Your email"
-                className={cn(settingsInputClass, 'mt-4')}
-                autoComplete="off"
-              />
-              <div className="mt-6 flex justify-end gap-3">
-                <AlertDialog.Cancel asChild>
-                  <button type="button" className="rounded-xl px-4 py-2.5 text-base text-zinc-400">
-                    Cancel
-                  </button>
-                </AlertDialog.Cancel>
-                <button
-                  type="button"
-                  disabled={!canDelete || deleting}
-                  onClick={() => void handleDeleteAccount()}
-                  className="rounded-xl border border-rose-500/50 bg-rose-600/90 px-4 py-2.5 text-base font-semibold text-white disabled:opacity-40"
-                >
-                  {deleting ? 'Deleting…' : 'Delete forever'}
-                </button>
-              </div>
-            </div>
-          </AlertDialog.Content>
-        </AlertDialog.Portal>
-      </AlertDialog.Root>
+      <GlassAlertModal
+        open={alertOpen}
+        onOpenChange={open => {
+          setAlertOpen(open);
+          if (!open) setDeletePhrase('');
+        }}
+        variant="destructive"
+        icon={Trash2}
+        title="Delete account?"
+        description={
+          <>
+            This permanently removes your network and related data. Type your email{' '}
+            <span className="font-medium text-zinc-300">{email}</span> to confirm.
+          </>
+        }
+        confirmLabel="Delete forever"
+        confirmingLabel="Deleting…"
+        confirming={deleting}
+        confirmDisabled={!canDelete}
+        onConfirm={handleDeleteAccount}
+      >
+        <input
+          type="text"
+          value={deletePhrase}
+          onChange={e => setDeletePhrase(e.target.value)}
+          placeholder="Your email"
+          className={settingsInputClass}
+          autoComplete="off"
+        />
+      </GlassAlertModal>
     </>
   );
 }

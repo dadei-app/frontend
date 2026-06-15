@@ -19,7 +19,7 @@ export {
 export type { CommandMode, CommandState, AssistantBubbleStatus } from './types/command.types';
 export type { ServiceMode, ServiceModeClaim } from './types/service.types';
 export type { AssistantState, AssistantAction } from './types/assistant.types';
-export { default as CommandBubble } from './components/command/CommandBubble';
+export { default as CommandBubble, CommandBubbleStack } from './components/command/CommandBubble';
 export {
   NotificationProvider,
   useNotifications,

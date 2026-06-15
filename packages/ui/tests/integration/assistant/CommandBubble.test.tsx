@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import CommandBubble from '@dadei/ui/components/command/CommandBubble';
+import { CommandBubbleStack } from '@dadei/ui/components/command/CommandBubble';
 
 const mockUseCommand = vi.fn();
 
@@ -8,7 +8,7 @@ vi.mock('@dadei/ui/contexts/CommandContext', () => ({
   useCommand: () => mockUseCommand(),
 }));
 
-describe('CommandBubble', () => {
+describe('CommandBubbleStack', () => {
   beforeEach(() => {
     mockUseCommand.mockReturnValue({
       state: 'listening',
@@ -18,13 +18,14 @@ describe('CommandBubble', () => {
       assistantBubbleText: '',
       assistantBubbleStatus: 'pending',
       assistantStatusLine: null,
+      userCaptionInterim: false,
       notifyAssistantRevealStarted: vi.fn(),
       notifyAssistantRevealComplete: vi.fn(),
     });
   });
 
   it('shows the live user caption while listening', () => {
-    render(<CommandBubble />);
+    render(<CommandBubbleStack />);
     expect(screen.getByText('Dadei, what time is it?')).toBeInTheDocument();
     expect(screen.getByText('You')).toBeInTheDocument();
   });
@@ -38,11 +39,12 @@ describe('CommandBubble', () => {
       assistantBubbleText: '',
       assistantBubbleStatus: 'pending',
       assistantStatusLine: 'Thinking',
+      userCaptionInterim: false,
       notifyAssistantRevealStarted: vi.fn(),
       notifyAssistantRevealComplete: vi.fn(),
     });
 
-    render(<CommandBubble />);
+    render(<CommandBubbleStack />);
     expect(screen.getByText(/Thinking/)).toBeInTheDocument();
   });
 
@@ -55,11 +57,12 @@ describe('CommandBubble', () => {
       assistantBubbleText: 'Hi there — how can I help?',
       assistantBubbleStatus: 'streaming',
       assistantStatusLine: null,
+      userCaptionInterim: false,
       notifyAssistantRevealStarted: vi.fn(),
       notifyAssistantRevealComplete: vi.fn(),
     });
 
-    render(<CommandBubble />);
+    render(<CommandBubbleStack />);
     expect(screen.getByText('Hi there — how can I help?')).toBeInTheDocument();
     expect(screen.getAllByText('dadei').length).toBeGreaterThan(0);
   });

@@ -68,7 +68,7 @@ import {
   notifyCommandCaptureRearm,
   subscribeVoiceSpeechActivity,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
-import CommandBubble from '@dadei/ui/components/command/CommandBubble';
+import { CommandBubbleStack } from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
 import { COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/assistant/assistantRuntime';
 
@@ -87,6 +87,8 @@ export interface CommandTurnHistory {
 interface CommandContextValue {
   state: CommandState;
   userBubbleText: string;
+  /** True while caption text is provisional (streaming interim from ASR). */
+  userCaptionInterim: boolean;
   assistantBubbleText: string;
   assistantBubbleStatus: AssistantBubbleStatus;
   /** Single in-bubble status while processing (Thinking… / current tool); cleared when text streams. */
@@ -282,6 +284,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const state = runtime.commandState;
   const [userBubbleText, setUserBubbleText] = useState('');
+  const [userCaptionInterim, setUserCaptionInterim] = useState(false);
   const [assistantBubbleText, setAssistantBubbleText] = useState('');
   const [assistantBubbleStatus, setAssistantBubbleStatus] =
     useState<AssistantBubbleStatus>('pending');
@@ -455,6 +458,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearLiveTurnId();
     setAssistantStatusLine(null);
     setUserBubbleText('');
+    setUserCaptionInterim(false);
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
   }, [clearLiveTurnId, setAssistantBubbleTextSynced]);
@@ -696,6 +700,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const claimed = await claimCommandService();
     if (!claimed) return false;
 
+    if (!liveTurnIdRef.current) {
+      assignLiveTurnId();
+    }
     setCommandState('listening');
     scheduleWakeFalsePositiveRelease();
     return true;
@@ -705,6 +712,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearWakeTimeout,
     scheduleWakeFalsePositiveRelease,
     setAssistantBubbleTextSynced,
+    assignLiveTurnId,
   ]);
 
   const startListening = useCallback(() => {
@@ -874,6 +882,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       userBubbleTextRef.current = displayText;
       awaitingTranscriptRef.current = false;
       transcribeFromFollowUpRef.current = false;
+      setUserCaptionInterim(false);
       setUserBubbleText(displayText);
       if (processingEpoch !== commandProcessingEpochRef.current) return;
       setCommandState('thinking');
@@ -1163,6 +1172,44 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      if (msg.event === 'command_transcript_interim') {
+        if (current === 'idle' || current === 'locked' || current === 'responding') return;
+        if (shouldDropStaleTranscriptFinal()) return;
+
+        const utteranceId =
+          typeof msg.utterance_id === 'number' && Number.isFinite(msg.utterance_id)
+            ? msg.utterance_id
+            : null;
+        if (
+          utteranceId != null &&
+          lastServerUtteranceIdRef.current != null &&
+          utteranceId < lastServerUtteranceIdRef.current
+        ) {
+          return;
+        }
+
+        const raw = typeof msg.text === 'string' ? msg.text : '';
+        if (!liveTurnIdRef.current) {
+          assignLiveTurnId();
+        }
+
+        if (current === 'listening' || current === 'follow_up') {
+          if (!utteranceEndNotifiedRef.current) {
+            utteranceEndNotifiedRef.current = true;
+            awaitingTranscriptRef.current = true;
+            transcribeFromFollowUpRef.current = current === 'follow_up';
+            setCommandState('transcribing');
+          }
+        } else if (current === 'thinking' && awaitingTranscriptRef.current) {
+          setCommandState('transcribing');
+        }
+
+        userBubbleTextRef.current = raw;
+        setUserCaptionInterim(true);
+        setUserBubbleText(raw);
+        return;
+      }
+
       if (msg.event === 'command_transcript_final') {
         const utteranceId =
           typeof msg.utterance_id === 'number' && Number.isFinite(msg.utterance_id)
@@ -1239,6 +1286,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     onFollowUpSpeechActivity,
     releaseCommandService,
     scheduleWakeFalsePositiveRelease,
+    assignLiveTurnId,
     shouldDropStaleTranscriptFinal,
     submitVisibleCommandText,
   ]);
@@ -1347,6 +1395,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const value: CommandContextValue = {
     state,
     userBubbleText,
+    userCaptionInterim,
     assistantBubbleText,
     assistantBubbleStatus,
     assistantStatusLine,
@@ -1378,20 +1427,19 @@ export function useCommand(): CommandContextValue {
 export function CommandBubbleStackHost({ className = '' }: { className?: string }) {
   const ctx = useContext(CommandContext);
   if (!ctx) return null;
-  const { state, bubbleHistory } = ctx;
+  const { state } = ctx;
   if (state === 'idle' || state === 'locked') return null;
-  if (state === 'transcribing' && bubbleHistory.length === 0) return null;
 
   return (
     <div
-      className={`command-bubble-stack-host pointer-events-none absolute left-1/2 z-30 flex min-h-0 w-full max-w-[min(640px,calc(100vw-8rem))] -translate-x-1/2 flex-col overflow-hidden ${className}`}
+      className={`command-bubble-stack-host pointer-events-none absolute left-1/2 z-30 flex min-h-0 w-full max-w-[min(520px,calc(100vw-3rem))] -translate-x-1/2 flex-col overflow-visible ${className}`}
       style={{
         top: 'calc(50% + var(--assistant-mic-half, 5rem) + var(--assistant-dock-gap, 0.75rem))',
         bottom: 0,
       }}
     >
       <div className="pointer-events-auto h-full min-h-0 min-w-0">
-        <CommandBubble />
+        <CommandBubbleStack />
       </div>
     </div>
   );

@@ -43,7 +43,7 @@ export default function Header({
       </div>
 
       <ToolbarShell>
-        <HeaderTooltip label="People">
+        <HeaderTooltip label="Persons">
           <ToolbarButton
             ref={peopleButtonRef}
             variant={isPeoplePanelOpen ? 'active' : 'ghost'}
