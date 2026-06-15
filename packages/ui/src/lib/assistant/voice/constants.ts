@@ -22,12 +22,12 @@ export const VOICE_EASE = [0.22, 1, 0.36, 1] as const;
 
 /** User + assistant pair slides up into the stack on entry. */
 export const COMMAND_TURN_PAIR_SLIDE_PX = 32;
-export const COMMAND_TURN_PAIR_ENTRY_MS = 0.4;
-export const COMMAND_TURN_PAIR_LAYOUT_MS = 0.38;
+export const COMMAND_TURN_PAIR_ENTRY_MS = 0.58;
+export const COMMAND_TURN_PAIR_LAYOUT_MS = 0.62;
 
 /**
- * Mic aura gain while capturing a command (listening / follow-up).
- * End-of-utterance timing is server-side (same segmentation as ambient pipeline).
+ * Mic level gain while capturing a command (listening / follow-up).
+ * End-of-utterance is Deepgram utterance_end_ms only — no client silence VAD.
  */
 export const COMMAND_MIC_LEVEL_GAIN = 2.45;
 

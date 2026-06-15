@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
@@ -30,22 +30,16 @@ import { ENROLLMENT_TRANSCRIPT_OPENER } from '@dadei/ui/types/command.types';
 const ASSISTANT_HINT_ROW =
   'flex flex-wrap items-center justify-center gap-2 text-sm text-zinc-500 font-secondary';
 
-const WAKE_WORD_COLOR = {
-  dadei: 'text-emerald-400',
-  jarvis: 'text-sky-400',
-} as const;
+const WAKE_PHONETIC = 'dah-dee';
 
-function SpokenWakeWord({
-  variant,
-  children,
-}: {
-  variant: keyof typeof WAKE_WORD_COLOR;
-  children: ReactNode;
-}) {
+function WakeWordHint() {
   return (
-    <span className={WAKE_WORD_COLOR[variant]}>
-      &ldquo;{children}&rdquo;
-    </span>
+    <div className="text-center font-secondary">
+      <p className="text-sm text-zinc-500">
+        Say <span className="text-emerald-400/90">hey dadei</span>
+      </p>
+      <p className="mt-1 text-[0.6875rem] tracking-wide text-zinc-600">{WAKE_PHONETIC}</p>
+    </div>
   );
 }
 
@@ -172,14 +166,7 @@ function AssistantLayoutShell() {
         } as CSSProperties
       }
     >
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 100% 60% at 50% -10%, rgba(16,185,129,0.14), transparent 55%), radial-gradient(circle at 100% 20%, rgba(6,182,212,0.08), transparent 45%), linear-gradient(180deg, rgba(9,9,11,0.97) 0%, rgba(24,24,27,0.99) 100%)',
-        }}
-        aria-hidden
-      />
+      <div className="pointer-events-none absolute inset-0 assistant-shell-atmosphere" aria-hidden />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">
         <Header
@@ -189,13 +176,7 @@ function AssistantLayoutShell() {
         />
 
         <main className="assistant-shell-main relative z-0 flex min-h-0 flex-1 min-w-0 overscroll-none">
-          <div
-            className="assistant-shell-mic-pane relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible px-4 pt-4 pb-6 sm:px-6 lg:px-10 lg:pt-6 lg:pb-10"
-            style={{
-              background:
-                'linear-gradient(145deg, rgba(24,24,27,0.35) 0%, rgba(9,9,11,0.55) 100%)',
-            }}
-          >
+          <div className="assistant-shell-mic-pane relative flex min-h-0 min-w-0 flex-1 flex-col overflow-visible px-4 pt-4 pb-6 sm:px-6 lg:px-10 lg:pt-6 lg:pb-10">
             <div
               className={cn(
                 'pointer-events-none absolute top-4 left-4 w-[calc(100%-2rem)] sm:left-6 sm:w-[calc(100%-3rem)] lg:left-10 lg:w-[calc(100%-5rem)]',
@@ -204,9 +185,24 @@ function AssistantLayoutShell() {
             >
               <BannerStackHost />
             </div>
-            <div className="relative min-h-0 flex-1 overflow-hidden">
-              <ServicePermissionsGate />
+            <ServicePermissionsGate />
+            <div className="relative min-h-0 flex-1 overflow-visible">
               {/* Mic: geometric center of the left panel; hints are out of flow. */}
+              <AnimatePresence initial={false}>
+                {showWakeHint ? (
+                  <motion.div
+                    key="wake-hint"
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: permissionsGateOpen ? 0 : 1, y: 0 }}
+                    exit={{ opacity: 0, y: 4 }}
+                    transition={{ duration: 0.2 }}
+                    className="assistant-wake-hint-slot"
+                  >
+                    <WakeWordHint />
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
               <div
                 className={cn(
                   'pointer-events-none absolute z-10 flex items-center justify-center',
@@ -220,7 +216,7 @@ function AssistantLayoutShell() {
                 </div>
               </div>
 
-              {/* Hints: overlay only — never participate in flex layout. */}
+              {/* Bottom hints: overlay only — never participate in flex layout. */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: permissionsGateOpen ? 0 : 1 }}
@@ -239,22 +235,6 @@ function AssistantLayoutShell() {
                       <span>{ENROLLMENT_TRANSCRIPT_OPENER}</span>
                     </motion.p>
                   ) : null}
-                  {showWakeHint ? (
-                    <motion.p
-                      key="wake-hint"
-                      initial={{ opacity: 0, y: 4 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 4 }}
-                      transition={{ duration: 0.2 }}
-                      className={ASSISTANT_HINT_ROW}
-                    >
-                      <span>Say</span>
-                      <SpokenWakeWord variant="dadei">hey dadei</SpokenWakeWord>
-                      <span>or</span>
-                      <SpokenWakeWord variant="jarvis">hey jarvis</SpokenWakeWord>
-                      <span>to begin a command</span>
-                    </motion.p>
-                  ) : null}
                 </AnimatePresence>
                 <p className={cn(ASSISTANT_HINT_ROW, 'assistant-hint-kbd-row')}>
                   <kbd className="assistant-hint-kbd rounded-md border border-white/10 bg-zinc-900/80 px-4 py-1 font-mono text-base text-zinc-300 shadow-inner shadow-black/40">
@@ -269,7 +249,7 @@ function AssistantLayoutShell() {
           </div>
 
           {!isMobileAssistant ? (
-            <div className="assistant-shell-interactions flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-white/7 bg-zinc-950/40 backdrop-blur-sm">
+            <div className="assistant-shell-interactions atmosphere-grain flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden border-l border-white/7 bg-zinc-950/78">
               <InteractionPanel />
             </div>
           ) : null}

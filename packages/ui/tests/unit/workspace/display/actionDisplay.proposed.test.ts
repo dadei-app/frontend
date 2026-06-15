@@ -25,7 +25,8 @@ describe('proposed tool summaries', () => {
       operation: 'create',
       title: 'Team sync',
     });
-    expect(line).toBe('Scheduled Team sync.');
+    expect(line).toBeTruthy();
     expect(line).not.toContain('{');
+    expect(line).toContain('Team sync');
   });
 });

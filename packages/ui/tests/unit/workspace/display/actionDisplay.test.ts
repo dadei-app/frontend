@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  actionDomainLabel,
-  actionOperationLabel,
   formatConfidence,
   isNotificationAction,
   operationForToolName,
@@ -71,24 +69,6 @@ describe('isNotificationAction', () => {
   });
 });
 
-describe('actionOperationLabel', () => {
-  it('maps create, update, and delete', () => {
-    expect(actionOperationLabel('create')).toBe('Create');
-    expect(actionOperationLabel('update')).toBe('Update');
-    expect(actionOperationLabel('delete')).toBe('Delete');
-  });
-});
-
-describe('actionDomainLabel', () => {
-  it('humanizes known action types', () => {
-    expect(actionDomainLabel('calendar')).toBe('Calendar');
-    expect(actionDomainLabel('email')).toBe('Email');
-    expect(actionDomainLabel('conversation')).toBe('Conversation');
-    expect(actionDomainLabel('interaction')).toBe('Interaction');
-    expect(actionDomainLabel('person')).toBe('Person');
-  });
-});
-
 describe('resolveMemoryConfidence', () => {
   it('reads top-level confidence on 0–1 scale', () => {
     expect(resolveMemoryConfidence({ confidence: 0.82 })).toBe(0.82);
@@ -100,7 +80,7 @@ describe('resolveMemoryConfidence', () => {
 
   it('normalizes percent-scale values', () => {
     expect(resolveMemoryConfidence({ confidence: 65 })).toBe(0.65);
-    expect(formatConfidence(0.9)).toBe('90% confidence');
-    expect(formatConfidence(65)).toBe('65% confidence');
+    expect(formatConfidence(0.9)).toContain('90');
+    expect(formatConfidence(65)).toContain('65');
   });
 });

@@ -7,15 +7,15 @@
  *   - ambient → service_enabled, no active command claim
  *   - command → assistant_mode_active (direct session claimed)
  *
- * Wire/API still uses legacy name `command_mode` for the claim lock — see
- * `ServiceModeClaim` (backend: `CommandModeStateResponse`, webhook `command_mode`).
+ * Wire/API uses `assistant_state` websocket snapshots with monotonic `revision`.
  */
 
 export type ServiceMode = 'off' | 'ambient' | 'command';
 
-/** PATCH …/command-mode/* response and `command_mode` webhook payload fields. */
+/** PATCH …/command-mode/* response and `assistant_state` webhook fields. */
 export interface ServiceModeClaim {
   active: boolean;
   owner_session_id: string | null;
   expires_at: string | null;
+  revision: number;
 }

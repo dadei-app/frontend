@@ -19,7 +19,7 @@ export const ERROR_CODES = {
   internal_error: 'Something went wrong on our side. Please try again.',
   no_response: 'The assistant did not respond. Please try again.',
   duplicate_command: 'That command was already sent.',
-  empty_query: 'Say or type a command first.',
+  empty_query: "Say what you'd like help with.",
   no_speech: 'No speech was detected. Try again.',
   gemini_unavailable: 'The assistant AI is not configured. Try again later.',
   tool_reply_failed: 'I completed the lookup but could not phrase the result. Please try again.',

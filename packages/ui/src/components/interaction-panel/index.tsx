@@ -350,7 +350,7 @@ export default function InteractionPanel({ embedded = false }: { embedded?: bool
 
         {!isMobileEmbedded ? (
 
-          <div className="assistant-interactions-header flex items-center justify-between gap-4 border-b border-white/6 bg-zinc-950/95 px-4 py-4 sm:px-6 sm:py-5 backdrop-blur-sm">
+          <div className="assistant-interactions-header flex items-center justify-between gap-4 border-b border-white/6 bg-zinc-950/95 px-4 py-4 sm:px-6 sm:py-5">
 
             <div className="min-w-0">
 
@@ -406,7 +406,7 @@ export default function InteractionPanel({ embedded = false }: { embedded?: bool
 
             ref={containerRef}
 
-            className="flex-1 space-y-3 overflow-y-auto overscroll-none px-4 py-4 sm:px-6 sm:py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-none px-4 py-4 sm:px-6 sm:py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0"
 
           >
 

@@ -1,0 +1,33 @@
+/**
+ * Atmospheric backgrounds with extra gradient stops + film grain to reduce
+ * 8-bit banding on near-black surfaces (desktop Electron + web).
+ */
+
+.atmosphere-grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='4' stitchTiles='stitch'/></filter><rect width='256' height='256' filter='url(%23n)' opacity='0.45'/></svg>");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  opacity: 0.028;
+  mix-blend-mode: soft-light;
+}
+
+.assistant-shell-atmosphere {
+  background:
+    radial-gradient(
+      ellipse 120% 85% at 50% 0%,
+      rgba(16, 185, 129, 0.055) 0%,
+      rgba(16, 185, 129, 0.018) 42%,
+      transparent 68%
+    ),
+    linear-gradient(180deg, #09090b 0%, #0d0d0f 55%, #121214 100%);
+}
+
+/** Mic pane stays clear — shell atmosphere shows through without extra grain or banded overlays. */
+.assistant-shell-mic-pane {
+  background: transparent;
+}

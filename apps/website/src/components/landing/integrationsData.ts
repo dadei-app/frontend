@@ -280,8 +280,8 @@ export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
         short: 'fresh public information',
         Icon: Globe,
         scopes: [
-          { label: 'instant answers', detail: 'DuckDuckGo abstract text' },
-          { label: 'related topics', detail: 'linked follow-up queries' },
+          { label: 'web results', detail: 'Brave Search title, URL, and snippet' },
+          { label: 'top matches', detail: 'ranked result list for the query' },
           { label: 'public web', detail: 'no Google account required' },
           { label: 'news & facts', detail: 'time-sensitive public info' },
         ],

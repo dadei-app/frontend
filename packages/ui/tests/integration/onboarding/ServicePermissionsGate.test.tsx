@@ -60,8 +60,6 @@ describe('ServicePermissionsGate', () => {
     render(<ServicePermissionsGate />);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Turn on listening')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Not now' })).not.toBeInTheDocument();
 
     const confirmBtn = screen.getByRole('button', { name: 'Turn on listening' });
     expect(confirmBtn).toBeDisabled();

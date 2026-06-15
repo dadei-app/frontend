@@ -4,13 +4,17 @@ import userEvent from '@testing-library/user-event';
 import MicrophoneButton from '@dadei/ui/components/MicrophoneButton';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 
-const mockToggleService = vi.fn();
-const mockExitCommandService = vi.fn();
-const mockCancelProcessing = vi.fn();
+const mockSubmitMicIntent = vi.fn();
 
 vi.mock('@dadei/ui/contexts/SystemContext', () => ({
   useSystem: () => ({
     matchesHotkey: (event: KeyboardEvent) => event.code === 'Space',
+  }),
+}));
+
+vi.mock('@dadei/ui/contexts/ServiceContext', () => ({
+  useService: () => ({
+    permissionsGateOpen: false,
   }),
 }));
 
@@ -23,32 +27,31 @@ vi.mock('@dadei/ui/contexts/AssistantRuntimeContext', () => ({
     commandServiceExpiresAt: null,
     isConnected: true,
     registrationConflict: false,
-    isTogglingService: false,
+    serviceStateSyncPending: false,
+    serviceStateSyncBaselineRevision: null,
+    serviceStateRevision: 1,
+    commandThinkingActive: false,
   }),
 }));
 
-vi.mock('@dadei/ui/contexts/ServiceContext', () => ({
-  useService: () => ({
-    toggleService: mockToggleService,
-  }),
-}));
-
-vi.mock('@dadei/ui/contexts/CommandContext', () => ({
-  useCommand: () => ({
-    state: 'idle',
-    cancelCommandService: mockExitCommandService,
-    cancelProcessing: mockCancelProcessing,
+vi.mock('@dadei/ui/lib/assistant/lifecycle/useMicIntent', () => ({
+  useMicIntent: () => ({
+    submitMicIntent: mockSubmitMicIntent,
+    inputsInert: false,
+    appearance: {
+      grayChrome: 'none',
+      tone: 'red',
+      showThinkingSpinner: false,
+      modulateGlassGlow: false,
+      showAmbientRipples: true,
+      action: 'toggle_service',
+    },
   }),
 }));
 
 vi.mock('@dadei/ui/contexts/TutorialContext', () => ({
   useTutorialEngaged: () => false,
 }));
-
-vi.mock('@dadei/ui/components/command/MicLevelAura', () => ({
-  default: () => null,
-}));
-
 function renderMic(extra?: { disableSpaceToggle?: boolean }) {
   return render(
     <AudioContext.Provider
@@ -61,17 +64,15 @@ function renderMic(extra?: { disableSpaceToggle?: boolean }) {
 
 describe('MicrophoneButton', () => {
   beforeEach(() => {
-    mockToggleService.mockReset();
-    mockExitCommandService.mockReset();
-    mockCancelProcessing.mockReset();
+    mockSubmitMicIntent.mockReset();
   });
 
-  it('toggles ambient service when clicked in idle command state', async () => {
+  it('submits mic intent when clicked', async () => {
     const user = userEvent.setup();
     renderMic();
 
     await user.click(screen.getByRole('button'));
-    expect(mockToggleService).toHaveBeenCalledOnce();
+    expect(mockSubmitMicIntent).toHaveBeenCalledOnce();
   });
 
   it('responds to space hotkey when enabled', async () => {
@@ -79,15 +80,14 @@ describe('MicrophoneButton', () => {
     renderMic();
 
     await user.keyboard(' ');
-    expect(mockToggleService).toHaveBeenCalled();
+    expect(mockSubmitMicIntent).toHaveBeenCalledOnce();
   });
 
-  it('does not respond to space when hotkey is disabled', async () => {
+  it('ignores space when disableSpaceToggle is set', async () => {
     const user = userEvent.setup();
     renderMic({ disableSpaceToggle: true });
 
-    mockToggleService.mockClear();
     await user.keyboard(' ');
-    expect(mockToggleService).not.toHaveBeenCalled();
+    expect(mockSubmitMicIntent).not.toHaveBeenCalled();
   });
 });

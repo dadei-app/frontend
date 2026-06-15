@@ -4,27 +4,48 @@ import {
   useContext,
   useMemo,
   useReducer,
+  useRef,
   type Dispatch,
   type ReactNode,
 } from 'react';
 import { assistantRuntimeReducer } from '@dadei/ui/lib/assistant/assistantRuntime';
 import {
+  applyAssistantStateSnapshot,
+  beginServiceStateSyncPending,
+  clearServiceStateSyncPending,
+  resetAssistantLifecycle,
+  runServiceStateMutation,
+  waitForServiceStateRevisionAfter,
+  type AssistantStateSnapshot,
+} from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
+import {
   INITIAL_ASSISTANT_STATE,
   type AssistantAction,
   type AssistantState,
 } from '@dadei/ui/types/assistant.types';
+import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';
 
 interface AssistantRuntimeContextValue {
   state: AssistantState;
   dispatch: Dispatch<AssistantAction>;
+  applyAuthoritativeState: (snapshot: AssistantStateSnapshot) => boolean;
 }
 
 const AssistantRuntimeContext = createContext<AssistantRuntimeContextValue | undefined>(undefined);
 
 export function AssistantRuntimeProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(assistantRuntimeReducer, INITIAL_ASSISTANT_STATE);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+  const applyAuthoritativeState = useCallback((snapshot: AssistantStateSnapshot) => {
+    return applyAssistantStateSnapshot(dispatch, snapshot, stateRef.current);
+  }, []);
+
+  const value = useMemo(
+    () => ({ state, dispatch, applyAuthoritativeState }),
+    [applyAuthoritativeState, state],
+  );
 
   return (
     <AssistantRuntimeContext.Provider value={value}>{children}</AssistantRuntimeContext.Provider>
@@ -47,6 +68,10 @@ export function useAssistantRuntimeState(): AssistantState {
   return useAssistantRuntime().state;
 }
 
+export function useApplyAuthoritativeAssistantState(): AssistantRuntimeContextValue['applyAuthoritativeState'] {
+  return useAssistantRuntime().applyAuthoritativeState;
+}
+
 /** Stable dispatch helpers for service / command integration. */
 export function useAssistantRuntimeActions() {
   const { dispatch } = useAssistantRuntime();
@@ -57,25 +82,34 @@ export function useAssistantRuntimeActions() {
         dispatch({ type: connected ? 'network/connected' : 'network/disconnected' });
       },
       setRegistrationConflict: () => dispatch({ type: 'network/registration_conflict' }),
-      setServiceToggling: (toggling: boolean) =>
-        dispatch({ type: 'service/toggling', toggling }),
-      setServiceStatus: (enabled: boolean) => dispatch({ type: 'service/status', enabled }),
-      syncCommandService: (payload: {
-        active: boolean;
-        ownerSessionId: string | null;
-        expiresAt: string | null;
+      beginServiceStateSyncPending: (baselineRevision: number) =>
+        beginServiceStateSyncPending(dispatch, baselineRevision),
+      clearServiceStateSyncPending: () => clearServiceStateSyncPending(dispatch),
+      runServiceStateMutation: (options: {
+        baselineRevision: number;
+        micPending?: boolean;
+        mutation: () => Promise<void>;
       }) =>
-        dispatch({
-          type: 'command/sync',
-          active: payload.active,
-          ownerSessionId: payload.ownerSessionId,
-          expiresAt: payload.expiresAt,
+        runServiceStateMutation({
+          dispatch,
+          baselineRevision: options.baselineRevision,
+          micPending: options.micPending,
+          mutation: options.mutation,
         }),
-      setCommandState: (commandState: AssistantState['commandState']) =>
+      waitForServiceStateRevisionAfter: (baselineRevision: number) =>
+        waitForServiceStateRevisionAfter(baselineRevision),
+      setCommandState: (commandState: CommandState) =>
         dispatch({ type: 'command/state', commandState }),
-      setCommandMode: (commandMode: AssistantState['commandMode']) =>
+      setCommandMode: (commandMode: CommandMode) =>
         dispatch({ type: 'command/mode', commandMode }),
-      resetRuntime: () => dispatch({ type: 'runtime/reset' }),
+      setCommandThinkingActive: (active: boolean) =>
+        dispatch({ type: 'command/thinking_active', active }),
+      setCommandCaptureSyncPending: (pending: boolean) =>
+        dispatch({ type: 'command/capture_sync_pending', pending }),
+      resetRuntime: () => {
+        resetAssistantLifecycle();
+        dispatch({ type: 'runtime/reset' });
+      },
     }),
     [dispatch],
   );

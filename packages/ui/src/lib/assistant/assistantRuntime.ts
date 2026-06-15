@@ -1,10 +1,21 @@
-import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';
-import type { ServiceMode } from '@dadei/ui/types/service.types';
+import type { AssistantBubbleStatus, CommandMode, CommandState } from '@dadei/ui/types/command.types';
 import {
   INITIAL_ASSISTANT_STATE,
   type AssistantAction,
   type AssistantState,
 } from '@dadei/ui/types/assistant.types';
+
+function clearServiceStateSyncPending(state: AssistantState): AssistantState {
+  return {
+    ...state,
+    serviceStateSyncPending: false,
+    serviceStateSyncBaselineRevision: null,
+  };
+}
+
+function clearCommandCaptureSyncPending(state: AssistantState): AssistantState {
+  return { ...state, commandCaptureSyncPending: false };
+}
 
 export function assistantRuntimeReducer(
   state: AssistantState,
@@ -26,55 +37,43 @@ export function assistantRuntimeReducer(
         registrationConflict: true,
       };
 
-    case 'service/toggling':
-      return { ...state, isTogglingService: action.toggling };
-
-    case 'service/status': {
-      if (action.enabled) {
-        if (state.serviceMode === 'command') return state;
-        return {
-          ...state,
-          serviceMode: 'ambient',
-          commandState: 'idle',
-          commandMode: 'normal',
-        };
+    case 'service_state/sync_pending':
+      if (!action.pending) {
+        return clearServiceStateSyncPending(state);
       }
-      if (state.serviceMode === 'command') return state;
       return {
         ...state,
-        serviceMode: 'off',
-        commandState: 'idle',
-        commandMode: 'normal',
-        commandOwnerSessionId: null,
-        commandServiceExpiresAt: null,
+        serviceStateSyncPending: true,
+        serviceStateSyncBaselineRevision:
+          action.baselineRevision ?? state.serviceStateRevision,
       };
-    }
 
-    case 'command/sync': {
-      if (action.active) {
-        return {
-          ...state,
-          serviceMode: 'command',
-          commandOwnerSessionId: action.ownerSessionId,
-          commandServiceExpiresAt: action.expiresAt,
-          commandState:
-            state.serviceMode === 'command' && state.commandState !== 'idle'
-              ? state.commandState
-              : state.commandState === 'locked'
-                ? 'locked'
-                : 'idle',
-        };
+    case 'command/capture_sync_pending':
+      if (!action.pending) {
+        return clearCommandCaptureSyncPending(state);
       }
-      const nextServiceMode: ServiceMode =
-        state.serviceMode === 'command' ? 'ambient' : state.serviceMode;
-      return {
+      return { ...state, commandCaptureSyncPending: true };
+
+    case 'assistant_state/sync': {
+      if (action.revision <= state.serviceStateRevision) {
+        if (
+          state.serviceStateSyncPending &&
+          state.serviceStateRevision >
+            (state.serviceStateSyncBaselineRevision ?? -1)
+        ) {
+          return clearServiceStateSyncPending(state);
+        }
+        return state;
+      }
+      return clearServiceStateSyncPending({
         ...state,
-        serviceMode: nextServiceMode,
-        commandState: 'idle',
-        commandMode: 'normal',
-        commandOwnerSessionId: null,
-        commandServiceExpiresAt: null,
-      };
+        serviceStateRevision: action.revision,
+        serviceMode: action.serviceMode,
+        commandOwnerSessionId: action.commandOwnerSessionId,
+        commandServiceExpiresAt: action.commandServiceExpiresAt,
+        commandState: action.commandState,
+        commandMode: action.commandMode,
+      });
     }
 
     case 'command/state': {
@@ -98,12 +97,28 @@ export function assistantRuntimeReducer(
     case 'command/mode':
       return { ...state, commandMode: action.commandMode };
 
+    case 'command/thinking_active':
+      return { ...state, commandThinkingActive: action.active };
+
     case 'runtime/reset':
       return { ...INITIAL_ASSISTANT_STATE };
 
     default:
       return state;
   }
+}
+
+export function selectIsServiceStateSyncPending(state: AssistantState): boolean {
+  return state.serviceStateSyncPending;
+}
+
+export function selectIsCommandCaptureSyncPending(state: AssistantState): boolean {
+  return state.commandCaptureSyncPending;
+}
+
+/** Gray mic chrome while awaiting any authoritative backend handshake. */
+export function selectIsMicSyncPending(state: AssistantState): boolean {
+  return selectIsServiceStateSyncPending(state) || selectIsCommandCaptureSyncPending(state);
 }
 
 export function selectIsAmbientEnabled(state: AssistantState): boolean {
@@ -176,7 +191,7 @@ export function selectShouldStreamAudio(state: AssistantState): boolean {
 }
 
 const CAPTURE_STATES: ReadonlySet<CommandState> = new Set(['listening', 'follow_up']);
-const BUSY_STATES: ReadonlySet<CommandState> = new Set(['transcribing', 'thinking', 'responding']);
+const BUSY_STATES: ReadonlySet<CommandState> = new Set(['thinking', 'responding']);
 
 export function selectShouldForwardAudioChunks(state: AssistantState): boolean {
   if (state.serviceMode === 'ambient' && state.commandState === 'idle') return true;
@@ -187,10 +202,25 @@ export function selectIsAssistantBusy(state: AssistantState): boolean {
   return BUSY_STATES.has(state.commandState);
 }
 
-export const COMMAND_PROCESSING_STATES: ReadonlySet<CommandState> = new Set([
-  'transcribing',
+export const COMMAND_THINKING_STATES: ReadonlySet<CommandState> = new Set([
   'thinking',
   'responding',
 ]);
+
+/** True while inference, streaming, or typewriter readout is in progress (not follow-up capture). */
+export function selectIsCommandThinking(
+  state: AssistantState,
+  assistantBubbleStatus?: AssistantBubbleStatus | null,
+): boolean {
+  if (state.commandThinkingActive) return true;
+  if (COMMAND_THINKING_STATES.has(state.commandState)) return true;
+  if (
+    assistantBubbleStatus === 'streaming' ||
+    assistantBubbleStatus === 'revealing'
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export const COMMAND_CAPTURE_STATES: ReadonlySet<CommandState> = new Set(['listening', 'follow_up']);

@@ -36,6 +36,7 @@ describe('backend type alignment', () => {
       active: true,
       owner_session_id: 'sess-1',
       expires_at: '2099-01-01T00:00:00.000Z',
+      revision: 4,
     };
     const backend: BackendCommandModeSnapshot = sample;
     expect(backend.active).toBe(true);

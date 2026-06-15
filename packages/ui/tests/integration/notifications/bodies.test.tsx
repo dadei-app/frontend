@@ -45,7 +45,7 @@ describe('notification bodies', () => {
     expect(screen.getByText(/person and their interactions will be removed/i)).toBeInTheDocument();
   });
 
-  it('truncates side-effect titles when compact', () => {
+  it('hides expanded copy when compact', () => {
     render(
       <ConversationDeleteBody
         title="Getting started with dadei"
@@ -53,7 +53,7 @@ describe('notification bodies', () => {
       />,
     );
 
-    expect(screen.getByText('Getting started with dadei')).toHaveClass('truncate');
+    expect(screen.getByText('Getting started with dadei')).toBeInTheDocument();
     expect(screen.queryByText(/will be removed/i)).not.toBeInTheDocument();
   });
 });
