@@ -1,6 +1,9 @@
 import { api } from '@dadei/ui/lib/workspace/api/http/client';
 import { API_CONFIG, ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
-import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
+import type {
+  IntegrationsStatusResponse,
+  PrimaryProvidersPatch,
+} from '@dadei/ui/types/integrations.types';
 import type { ServiceModeClaim } from '@dadei/ui/types/service.types';
 import { buildEndpoint, getClientIpAddresses, retryWithBackoff } from './utils';
 
@@ -113,6 +116,15 @@ export const serviceApi = {
     const { data } = await api.get<IntegrationsStatusResponse>(
       ENDPOINTS.SERVICE_INTEGRATIONS_STATUS,
     );
+    return data;
+  },
+
+  /**
+   * Set default mail/calendar/contacts providers for multi-account routing.
+   * PATCH /api/v1/network (v2 when BETA=true)
+   */
+  async updatePrimaryProviders(patch: PrimaryProvidersPatch) {
+    const { data } = await api.patch('/network', patch);
     return data;
   },
 };

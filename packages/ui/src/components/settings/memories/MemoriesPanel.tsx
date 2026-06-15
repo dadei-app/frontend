@@ -37,7 +37,7 @@ function MemorySection({
   }
 
   return (
-    <ul className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-none [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0">
+    <ul className="flex flex-col gap-3">
       {memories.map(m => (
         <MemorySettingsRow
           key={m.id}
@@ -108,6 +108,7 @@ export function MemoriesPanel() {
         tile="facts"
         title="Memories"
         hint="Observations and facts the assistant has retained."
+        scrollable
         bodyClassName="min-h-0 flex-1"
       >
         <MemorySection
@@ -126,6 +127,7 @@ export function MemoriesPanel() {
         tile="proposed"
         title="Proposed"
         hint="Unfinished thoughts and intents still being shaped."
+        scrollable
         bodyClassName="min-h-0 flex-1"
       >
         <MemorySection

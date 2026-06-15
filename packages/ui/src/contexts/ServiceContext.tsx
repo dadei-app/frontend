@@ -612,6 +612,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       queryClient.setQueryData<NetworkAction[]>(queryKeys.actions, data);
     }
 
+    function handleIntegrationReauth(_data: unknown) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+    }
+
     const offWs = subscribeRealtimeMessages(msg => {
       switch (msg.event) {
         case 'interaction':
@@ -631,6 +636,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           break;
         case 'action_queue':
           handleActionQueue(msg.data);
+          break;
+        case 'integration_reauth':
+          handleIntegrationReauth(msg.data);
           break;
         case 'realtime_status':
           if (typeof msg.connected === 'boolean') {

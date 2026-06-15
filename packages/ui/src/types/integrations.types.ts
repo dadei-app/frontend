@@ -16,9 +16,36 @@ export type IntegrationScopeStatus = {
   status: IntegrationStatus;
 };
 
+export type ProviderServiceStatus = {
+  id: string;
+  name: string;
+  status: IntegrationStatus;
+  read: boolean;
+  write: boolean;
+};
+
+export type ProviderHealth = {
+  provider: string;
+  connected: boolean;
+  needs_reauth: boolean;
+  reauth_reason: string | null;
+  account_identifier: string | null;
+  services: ProviderServiceStatus[];
+};
+
 export type IntegrationsStatusResponse = {
   google_connected: boolean;
   google_scopes_stale: boolean;
   scope_labels: Record<string, string>;
   integrations: IntegrationScopeStatus[];
+  providers: ProviderHealth[];
+  providers_needing_reauth: string[];
+};
+
+export type PrimaryProviderName = 'google' | 'microsoft' | 'apple';
+
+export type PrimaryProvidersPatch = {
+  primary_mail_provider?: PrimaryProviderName | null;
+  primary_calendar_provider?: PrimaryProviderName | null;
+  primary_contacts_provider?: PrimaryProviderName | null;
 };

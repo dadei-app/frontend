@@ -6,8 +6,8 @@ import { resolvePostOAuthPath } from '@dadei/ui/lib/platform/runtime/assistantPa
 
 /**
  * Web OAuth return handler — not a user-facing page.
- * The API redirects here with tokens (or errors) in the query string after Google sign-in.
- * Desktop uses main-process IPC OAuth instead and does not mount this route.
+ * The API redirects here with tokens (login) or `linked` (settings connect) in the query string.
+ * Desktop Electron uses the `dadei://oauth/callback` custom protocol instead and does not mount this route.
  */
 export default function OAuthCallback() {
   const [searchParams] = useSearchParams();
@@ -21,6 +21,13 @@ export default function OAuthCallback() {
       setMessage(err);
       const t = setTimeout(() => navigate('/login', { replace: true }), 2500);
       return () => clearTimeout(t);
+    }
+
+    const linked = searchParams.get('linked');
+    if (linked) {
+      setMessage('Account connected…');
+      navigate(resolvePostOAuthPath(searchParams.get('next')), { replace: true });
+      return;
     }
 
     const access =

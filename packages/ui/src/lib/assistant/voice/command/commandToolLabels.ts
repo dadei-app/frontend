@@ -60,21 +60,18 @@ const TOOL_LABELS: Record<string, string> = {
   contacts_update: 'Updating a contact',
   contacts_delete: 'Removing a contact',
 
-  // Docs
-  docs_create: 'Creating a doc',
-  docs_list: 'Flipping through docs',
-  docs_read: 'Reading a doc',
-  docs_append: 'Adding to a doc',
-  docs_update: 'Updating a doc',
-  docs_delete: 'Deleting a doc',
-
-  // Drive
-  drive_list_files: 'Sorting through drive files',
-  drive_search_files: 'Searching drive files',
-  drive_get_file: 'Opening a drive file',
-  drive_create_file: 'Creating a drive file',
-  drive_update_file_metadata: 'Updating a drive file',
-  drive_delete_file: 'Deleting a drive file',
+  // Files & documents
+  files_list: 'Listing your files',
+  files_search: 'Searching your files',
+  files_get: 'Opening file details',
+  files_download: 'Downloading a file',
+  files_upload: 'Uploading a file',
+  files_create_folder: 'Creating a folder',
+  files_delete: 'Deleting a file',
+  files_move: 'Moving a file',
+  document_read: 'Reading a document',
+  document_append: 'Adding to a document',
+  document_replace: 'Updating a document',
 
   // Sheets
   sheets_create: 'Creating a spreadsheet',
@@ -144,21 +141,20 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
     update: 'Updating a contact',
     delete: 'Removing a contact',
   },
-  docs_: {
-    list: 'Flipping through docs',
-    read: 'Opening that doc',
-    create: 'Starting a new doc',
-    append: 'Adding to a doc',
-    update: 'Updating a doc',
-    delete: 'Deleting that doc',
+  files_: {
+    list: 'Listing your files',
+    search: 'Searching your files',
+    get: 'Opening file details',
+    download: 'Downloading a file',
+    upload: 'Uploading a file',
+    create_folder: 'Creating a folder',
+    delete: 'Deleting a file',
+    move: 'Moving a file',
   },
-  drive_: {
-    list_files: 'Sorting through drive files',
-    search_files: 'Searching drive files',
-    get_file: 'Opening that file',
-    create_file: 'Creating a file',
-    update_file_metadata: 'Updating file details',
-    delete_file: 'Removing from drive',
+  document_: {
+    read: 'Reading a document',
+    append: 'Adding to a document',
+    replace: 'Updating a document',
   },
   sheets_: {
     list: 'Flipping through spreadsheets',
@@ -187,8 +183,8 @@ const PREFIX_DEFAULT_LABELS: Record<string, string> = {
   tasks_: 'Checking tasks',
   tasklist_: 'Checking task lists',
   contacts_: 'Flipping through contacts',
-  docs_: 'Working in docs',
-  drive_: 'Sorting through drive files',
+  files_: 'Working with your files',
+  document_: 'Editing a document',
   sheets_: 'Working in spreadsheets',
   device_: 'Adjusting the device',
   media_: 'Controlling playback',
@@ -199,8 +195,7 @@ const TOOL_GROUP_LABELS: Record<string, string> = {
   email: 'email',
   tasks: 'tasks',
   contacts: 'contacts',
-  docs: 'docs',
-  drive: 'drive',
+  files: 'files',
   sheets: 'sheets',
   realtime: 'weather & maps',
   web: 'web search',
@@ -401,6 +396,8 @@ function statusHintForTool(
       return hintForSearchTool('Checking Google', args);
     case 'contacts_search':
       return hintForSearchTool('Searching contacts', args);
+    case 'files_search':
+      return hintForSearchTool('Searching your files', args);
     case 'maps_search_places':
       return hintForSearchTool('Checking the map', args);
     case 'get_client_context':

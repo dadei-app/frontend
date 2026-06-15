@@ -3,7 +3,7 @@ import { Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { authApi } from '@dadei/ui/lib/workspace/api/auth';
-import { triggerGoogleOAuth } from '@dadei/ui/lib/platform/auth/googleAuth';
+import { triggerProviderOAuth } from '@dadei/ui/lib/platform/auth/providerAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
@@ -73,12 +73,7 @@ export function AccountPanel() {
     [sysTz, selectedTz],
   );
 
-  const passwordHint =
-    !hasPassword && profile?.google_connected
-      ? 'Sign in without Google.'
-      : hasPassword
-        ? 'Update your password.'
-        : 'Email sign-in.';
+  const passwordHint = hasPassword ? 'Update your password.' : 'Add a password to your account.';
 
   const handleLogout = async () => {
     await logout();
@@ -87,7 +82,7 @@ export function AccountPanel() {
   const handleLinkGoogle = async () => {
     setLinkingGoogle(true);
     try {
-      await triggerGoogleOAuth({
+      await triggerProviderOAuth('google', {
         saveTokens,
         onSuccess: () => {
           void refreshUser();
@@ -96,6 +91,7 @@ export function AccountPanel() {
         },
         onError: msg => showToast(msg, 'error'),
         webNextPath: ASSISTANT_PATH,
+        mode: 'link',
       });
     } finally {
       setLinkingGoogle(false);
@@ -176,7 +172,7 @@ export function AccountPanel() {
   const emailTile = (
     <GridTile
       title="Email"
-      hint="Managed by your sign-in provider."
+      hint="Your network identity — connected accounts may use other emails."
       stacked={isMobile}
       col={isMobile ? undefined : 3}
       row={isMobile ? undefined : 2}

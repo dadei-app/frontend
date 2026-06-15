@@ -298,7 +298,7 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
                             'ring-1 ring-inset ring-emerald-500/15',
                         )}
                       >
-                        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+                        <div className="settings-shell-panel-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
                           <ActivePanel
                             pendingAction={pendingAction}
                             onActionConsumed={() => setPendingAction(undefined)}

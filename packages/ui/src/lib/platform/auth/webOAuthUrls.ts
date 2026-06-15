@@ -9,15 +9,47 @@ function apiOriginPrefix(): string {
 }
 
 /**
- * Full URL to start Google OAuth in the browser (server redirect).
- * Backend redirects to `/auth/callback` on the SPA with tokens or errors in the query string.
- * Pass `spaOrigin` (e.g. `window.location.origin`) so the API can return there without a fixed WEB_APP_ORIGIN env.
+ * Full URL to start OAuth in the browser (server redirect).
+ * Web: API redirects to `{spaOrigin}/auth/callback` with tokens or `linked`.
+ * Desktop Electron: pass `dadei://oauth` as spaOrigin; API redirects to `dadei://oauth/callback`.
  */
-export function buildWebGoogleOAuthLoginUrl(nextPath: string = ASSISTANT_PATH, spaOrigin?: string): string {
-  const u = new URL(`${apiOriginPrefix()}${ENDPOINTS.AUTH_GOOGLE_WEB_LOGIN}`);
+function buildWebOAuthLoginUrl(
+  endpoint: string,
+  nextPath: string = ASSISTANT_PATH,
+  spaOrigin?: string,
+  linkToken?: string,
+): string {
+  const u = new URL(`${apiOriginPrefix()}${endpoint}`);
   u.searchParams.set('next', nextPath);
   if (spaOrigin) {
     u.searchParams.set('spa_origin', spaOrigin);
   }
+  if (linkToken) {
+    u.searchParams.set('link_token', linkToken);
+  }
   return u.toString();
+}
+
+export function buildWebGoogleOAuthLoginUrl(
+  nextPath: string = ASSISTANT_PATH,
+  spaOrigin?: string,
+  linkToken?: string,
+): string {
+  return buildWebOAuthLoginUrl(ENDPOINTS.AUTH_GOOGLE_WEB_LOGIN, nextPath, spaOrigin, linkToken);
+}
+
+export function buildWebMicrosoftOAuthLoginUrl(
+  nextPath: string = ASSISTANT_PATH,
+  spaOrigin?: string,
+  linkToken?: string,
+): string {
+  return buildWebOAuthLoginUrl(ENDPOINTS.AUTH_MICROSOFT_WEB_LOGIN, nextPath, spaOrigin, linkToken);
+}
+
+export function buildWebAppleOAuthLoginUrl(
+  nextPath: string = ASSISTANT_PATH,
+  spaOrigin?: string,
+  linkToken?: string,
+): string {
+  return buildWebOAuthLoginUrl(ENDPOINTS.AUTH_APPLE_WEB_LOGIN, nextPath, spaOrigin, linkToken);
 }
