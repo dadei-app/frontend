@@ -16,6 +16,8 @@ export interface AssistantState {
   isConnected: boolean;
   registrationConflict: boolean;
   isTogglingService: boolean;
+  /** Monotonic revision from backend `assistant_state` snapshots. */
+  serviceStateRevision: number;
 }
 
 export const INITIAL_ASSISTANT_STATE: AssistantState = {
@@ -27,6 +29,7 @@ export const INITIAL_ASSISTANT_STATE: AssistantState = {
   isConnected: false,
   registrationConflict: false,
   isTogglingService: false,
+  serviceStateRevision: 0,
 };
 
 export type AssistantAction =
@@ -34,12 +37,14 @@ export type AssistantAction =
   | { type: 'network/disconnected' }
   | { type: 'network/registration_conflict' }
   | { type: 'service/toggling'; toggling: boolean }
-  | { type: 'service/status'; enabled: boolean }
   | {
-      type: 'command/sync';
-      active: boolean;
-      ownerSessionId: string | null;
-      expiresAt: string | null;
+      type: 'assistant_state/sync';
+      revision: number;
+      serviceMode: ServiceMode;
+      commandOwnerSessionId: string | null;
+      commandServiceExpiresAt: string | null;
+      commandState: CommandState;
+      commandMode: CommandMode;
     }
   | { type: 'command/state'; commandState: CommandState }
   | { type: 'command/mode'; commandMode: CommandMode }

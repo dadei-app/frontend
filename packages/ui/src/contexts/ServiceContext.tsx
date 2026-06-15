@@ -12,6 +12,7 @@ import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import {
   useAssistantRuntimeActions,
   useAssistantRuntimeState,
+  useApplyAuthoritativeAssistantState,
 } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import {
   selectIsAmbientEnabled,
@@ -29,6 +30,12 @@ import { conversationsApi } from '@dadei/ui/lib/workspace/api/conversations';
 import { interactionsApi } from '@dadei/ui/lib/workspace/api/interactions';
 import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
 import type { ServiceModeClaim } from '@dadei/ui/types/service.types';
+import {
+  parseAssistantStateWireMessage,
+  runAssistantTransition,
+  snapshotFromServiceModeClaim,
+  type AssistantStateSnapshot,
+} from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
 import {
   startRealtimeClient,
   stopRealtimeClient,
@@ -115,7 +122,7 @@ interface ServiceContextType {
   commandOwnerSessionId: string | null;
   commandServiceExpiresAt: string | null;
   commandServiceRemainingMs: number;
-  /** Apply claim HTTP response immediately (do not wait for the command_mode webhook). */
+/** Apply claim HTTP response immediately (authoritative revision from backend). */
   syncCommandServiceFromClaim: (state: ServiceModeClaim) => void;
 
   memories: EpisodicMemory[];
@@ -167,6 +174,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const runtimeActions = useAssistantRuntimeActions();
   const runtime = useAssistantRuntimeState();
+  const applyAuthoritativeState = useApplyAuthoritativeAssistantState();
+  const runtimeRef = useRef(runtime);
+  runtimeRef.current = runtime;
 
   const isServiceEnabled = selectIsAmbientEnabled(runtime);
   const isConnected = runtime.isConnected;
@@ -340,15 +350,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const applyServiceStatus = useCallback((enabled: boolean) => {
-    if (tutorialIncompleteRef.current && enabled) {
-      runtimeActions.setServiceToggling(false);
-      return;
-    }
-    runtimeActions.setServiceStatus(enabled);
-    runtimeActions.setServiceToggling(false);
-  }, [runtimeActions]);
-
   const checkRequiredPermissions = useCallback(async () => {
     const tutorialPlatform = toTutorialPlatform(platform, isElectron);
     return areRequiredPermissionsGranted(tutorialPlatform, isElectron);
@@ -378,16 +379,17 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
     if (!shouldEnable) return;
 
-    runtimeActions.setServiceToggling(true);
-    try {
-      await serviceApi.enable();
-      applyServiceStatus(true);
-    } catch (error) {
-      console.error('Failed to enable service after permissions:', error);
-      runtimeActions.setServiceToggling(false);
-      showToast(getUserErrorMessage(error, 'Could not enable assistant service.'), 'error');
-    }
-  }, [applyServiceStatus, runtimeActions, showToast]);
+    await runAssistantTransition(async () => {
+      runtimeActions.setServiceToggling(true);
+      try {
+        await serviceApi.enable();
+      } catch (error) {
+        console.error('Failed to enable service after permissions:', error);
+        runtimeActions.setServiceToggling(false);
+        showToast(getUserErrorMessage(error, 'Could not enable assistant service.'), 'error');
+      }
+    });
+  }, [runtimeActions, showToast]);
 
   const maybePromptForActiveServicePermissions = useCallback(
     async (enabled: boolean) => {
@@ -401,18 +403,39 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     [isElectron, openPermissionsGate, permissionsGateOpen, platform],
   );
 
+  const handleAssistantStateSnapshot = useCallback(
+    (snapshot: AssistantStateSnapshot) => {
+      if (
+        tutorialIncompleteRef.current &&
+        snapshot.ambientEnabled &&
+        !snapshot.commandModeActive
+      ) {
+        console.log('[Service] Ignoring enabled status during tutorial');
+        void serviceApi.disable().catch(error => {
+          console.error('Failed to disable service for tutorial:', error);
+        });
+        return false;
+      }
+      const applied = applyAuthoritativeState(snapshot);
+      if (applied && snapshot.ambientEnabled && !snapshot.commandModeActive) {
+        void maybePromptForActiveServicePermissions(true);
+      }
+      return applied;
+    },
+    [applyAuthoritativeState, maybePromptForActiveServicePermissions],
+  );
+
   useEffect(() => {
     if (!isServiceEnabled || !sessionReady || permissionsGateOpen) return;
     void maybePromptForActiveServicePermissions(true);
   }, [isServiceEnabled, maybePromptForActiveServicePermissions, permissionsGateOpen, sessionReady]);
 
-  const syncCommandServiceFromClaim = useCallback((claim: ServiceModeClaim) => {
-    runtimeActions.syncCommandService({
-      active: claim.active,
-      ownerSessionId: claim.owner_session_id,
-      expiresAt: claim.expires_at,
-    });
-  }, [runtimeActions]);
+  const syncCommandServiceFromClaim = useCallback(
+    (claim: ServiceModeClaim) => {
+      handleAssistantStateSnapshot(snapshotFromServiceModeClaim(claim));
+    },
+    [handleAssistantStateSnapshot],
+  );
 
   useEffect(() => {
     if (!tutorialIncomplete) {
@@ -423,16 +446,15 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     if (tutorialServiceDisableAttemptedRef.current) return;
     tutorialServiceDisableAttemptedRef.current = true;
 
-    void (async () => {
+    void runAssistantTransition(async () => {
       try {
         await serviceApi.disable();
-        applyServiceStatus(false);
       } catch (error) {
         console.error('Failed to disable service for tutorial:', error);
         tutorialServiceDisableAttemptedRef.current = false;
       }
-    })();
-  }, [applyServiceStatus, isConnected, tutorialIncomplete]);
+    });
+  }, [isConnected, tutorialIncomplete]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -479,27 +501,11 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, [isAuthenticated, isAuthLoading, runtimeActions, showToast]);
 
   useEffect(() => {
-    const handleServiceStatusChanged = (status: { enabled: boolean }) => {
-      if (tutorialIncompleteRef.current && status.enabled) {
-        console.log('[Service] Ignoring enabled status during tutorial');
-        void serviceApi.disable().catch(error => {
-          console.error('Failed to disable service for tutorial:', error);
-        });
-        applyServiceStatus(false);
-        return;
-      }
-      console.log('[Service] Status event:', status.enabled ? 'ENABLED' : 'DISABLED');
-      applyServiceStatus(status.enabled);
-      if (status.enabled) {
-        void maybePromptForActiveServicePermissions(true);
-      }
-    };
-    const handleCommandServiceChanged = (payload: {
-      active: boolean;
-      ownerSessionId: string | null;
-      expiresAt: string | null;
-    }) => {
-      runtimeActions.syncCommandService(payload);
+    const handleAssistantStateChanged = (msg: Record<string, unknown>) => {
+      const snapshot = parseAssistantStateWireMessage(msg);
+      if (!snapshot) return;
+      console.log('[Service] assistant_state revision', snapshot.revision);
+      handleAssistantStateSnapshot(snapshot);
     };
 
     function handleInteraction(data: unknown) {
@@ -645,27 +651,13 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           runtimeActions.setNetworkConnected(true);
           break;
         }
-        case 'service_status':
-          if (typeof msg.enabled !== 'boolean') return;
-          handleServiceStatusChanged({ enabled: msg.enabled });
+        case 'assistant_state':
+          handleAssistantStateChanged(msg);
           break;
-        case 'command_mode': {
-          const active = typeof msg.active === 'boolean' ? msg.active : false;
-          const ownerSessionId =
-            typeof msg.owner_session_id === 'string' ? msg.owner_session_id : null;
-          const expiresAt = typeof msg.expires_at === 'string' ? msg.expires_at : null;
-          handleCommandServiceChanged({ active, ownerSessionId, expiresAt });
-          break;
-        }
         default:
           break;
       }
     });
-
-    let offElectron: (() => void) | undefined;
-    if (window.electronAPI?.onServiceStatusChanged) {
-      offElectron = window.electronAPI.onServiceStatusChanged(handleServiceStatusChanged);
-    }
 
     let offNewInteraction: (() => void) | undefined;
     if (window.electronAPI?.onNewInteraction) {
@@ -679,10 +671,9 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       offWs();
-      if (offElectron) offElectron();
       if (offNewInteraction) offNewInteraction();
     };
-  }, [applyServiceStatus, maybePromptForActiveServicePermissions, queryClient, runtimeActions, trackExtraBootstrapConversation]);
+  }, [handleAssistantStateSnapshot, queryClient, runtimeActions, trackExtraBootstrapConversation]);
 
   useEffect(() => {
     if (!window.electronAPI?.onWebhookAction) return;
@@ -711,21 +702,26 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const toggleService = useCallback(async () => {
-    if (registrationConflict) {
-      showToast(
-        'Could not connect this device to the assistant. Refresh the page or restart the app.',
-        'error',
-      );
-      return;
-    }
+    if (runtimeRef.current.isTogglingService) return;
 
-    runtimeActions.setServiceToggling(true);
+    await runAssistantTransition(async () => {
+      if (registrationConflict) {
+        showToast(
+          'Could not connect this device to the assistant. Refresh the page or restart the app.',
+          'error',
+        );
+        return;
+      }
 
-    try {
-      if (isServiceEnabled) {
-        await serviceApi.disable();
-        runtimeActions.setServiceToggling(false);
-      } else {
+      const ambientEnabled = selectIsAmbientEnabled(runtimeRef.current);
+      runtimeActions.setServiceToggling(true);
+
+      try {
+        if (ambientEnabled) {
+          await serviceApi.disable();
+          return;
+        }
+
         if (tutorialIncomplete) {
           runtimeActions.setServiceToggling(false);
           return;
@@ -746,18 +742,15 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
           return;
         }
         await serviceApi.enable();
-        applyServiceStatus(true);
+      } catch (error) {
+        console.error('Failed to toggle service:', error);
+        runtimeActions.setServiceToggling(false);
+        showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
       }
-    } catch (error) {
-      console.error('Failed to toggle service:', error);
-      runtimeActions.setServiceToggling(false);
-      showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
-    }
+    });
   }, [
-    applyServiceStatus,
     checkRequiredPermissions,
     isElectron,
-    isServiceEnabled,
     openPermissionsGate,
     platform,
     registrationConflict,

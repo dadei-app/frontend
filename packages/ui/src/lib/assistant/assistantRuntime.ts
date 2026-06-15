@@ -1,6 +1,4 @@
-import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';
-import type { ServiceMode } from '@dadei/ui/types/service.types';
-import {
+import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';import {
   INITIAL_ASSISTANT_STATE,
   type AssistantAction,
   type AssistantState,
@@ -29,51 +27,20 @@ export function assistantRuntimeReducer(
     case 'service/toggling':
       return { ...state, isTogglingService: action.toggling };
 
-    case 'service/status': {
-      if (action.enabled) {
-        if (state.serviceMode === 'command') return state;
-        return {
-          ...state,
-          serviceMode: 'ambient',
-          commandState: 'idle',
-          commandMode: 'normal',
-        };
+    case 'assistant_state/sync': {
+      if (action.revision <= state.serviceStateRevision) {
+        if (!state.isTogglingService) return state;
+        return { ...state, isTogglingService: false };
       }
-      if (state.serviceMode === 'command') return state;
       return {
         ...state,
-        serviceMode: 'off',
-        commandState: 'idle',
-        commandMode: 'normal',
-        commandOwnerSessionId: null,
-        commandServiceExpiresAt: null,
-      };
-    }
-
-    case 'command/sync': {
-      if (action.active) {
-        return {
-          ...state,
-          serviceMode: 'command',
-          commandOwnerSessionId: action.ownerSessionId,
-          commandServiceExpiresAt: action.expiresAt,
-          commandState:
-            state.serviceMode === 'command' && state.commandState !== 'idle'
-              ? state.commandState
-              : state.commandState === 'locked'
-                ? 'locked'
-                : 'idle',
-        };
-      }
-      const nextServiceMode: ServiceMode =
-        state.serviceMode === 'command' ? 'ambient' : state.serviceMode;
-      return {
-        ...state,
-        serviceMode: nextServiceMode,
-        commandState: 'idle',
-        commandMode: 'normal',
-        commandOwnerSessionId: null,
-        commandServiceExpiresAt: null,
+        serviceStateRevision: action.revision,
+        serviceMode: action.serviceMode,
+        commandOwnerSessionId: action.commandOwnerSessionId,
+        commandServiceExpiresAt: action.commandServiceExpiresAt,
+        commandState: action.commandState,
+        commandMode: action.commandMode,
+        isTogglingService: false,
       };
     }
 

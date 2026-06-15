@@ -2,13 +2,13 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'r
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
 import { useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 import { deriveMicAppearanceFromRuntime } from '@dadei/ui/lib/assistant/voice/micAppearance';
+import { useMicIntent } from '@dadei/ui/lib/assistant/lifecycle/useMicIntent';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;
@@ -95,10 +95,10 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const audioContext = useContext(AudioContext);
   const micLevel = audioContext?.micLevel ?? 0;
   const { matchesHotkey } = useSystem();
-  const { toggleService, permissionsGateOpen } = useService();
-  const { cancelCommandService, cancelProcessing } = useCommand();
+  const { permissionsGateOpen } = useService();
   const runtime = useAssistantRuntimeState();
   const tutorialActive = useTutorialEngaged();
+  const { submitMicIntent, inputsInert } = useMicIntent();
 
   const appearance = useMemo(
     () =>
@@ -109,37 +109,22 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     [permissionsGateOpen, runtime, tutorialActive],
   );
 
-  const inputsInert = appearance.action === 'none';
-
   const [rings, setRings] = useState<RingParticle[]>([]);
   const [showLiveAura, setShowLiveAura] = useState(false);
   const ringIdRef = useRef(0);
-
-  const runMicAction = useCallback(() => {
-    if (appearance.action === 'none') return;
-    if (appearance.action === 'cancel_processing') {
-      cancelProcessing();
-      return;
-    }
-    if (appearance.action === 'exit_command_service') {
-      cancelCommandService();
-      return;
-    }
-    void toggleService();
-  }, [appearance.action, cancelCommandService, cancelProcessing, toggleService]);
 
   useEffect(() => {
     if (disableSpaceToggle) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!matchesHotkey(e) || inputsInert) return;
+      if (e.repeat || !matchesHotkey(e) || inputsInert) return;
       e.preventDefault();
-      runMicAction();
+      submitMicIntent();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [disableSpaceToggle, inputsInert, matchesHotkey, runMicAction]);
+  }, [disableSpaceToggle, inputsInert, matchesHotkey, submitMicIntent]);
 
   const emitRing = useCallback(() => {
     const id = ringIdRef.current++;
@@ -194,7 +179,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     <div className="flex flex-col items-center gap-10">
       <motion.button
         data-tutorial-target="mic-button"
-        onClick={runMicAction}
+        onClick={submitMicIntent}
         disabled={inputsInert}
         aria-disabled={inputsInert}
         whileHover={

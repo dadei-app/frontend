@@ -8,10 +8,15 @@ import {
 import { INITIAL_ASSISTANT_STATE } from '@dadei/ui/types/assistant.types';
 
 describe('assistantRuntimeReducer', () => {
-  it('enables ambient listening without command lock', () => {
+  it('enables ambient listening from authoritative snapshot', () => {
     const next = assistantRuntimeReducer(INITIAL_ASSISTANT_STATE, {
-      type: 'service/status',
-      enabled: true,
+      type: 'assistant_state/sync',
+      revision: 1,
+      serviceMode: 'ambient',
+      commandOwnerSessionId: null,
+      commandServiceExpiresAt: null,
+      commandState: 'idle',
+      commandMode: 'normal',
     });
     expect(next.serviceMode).toBe('ambient');
     expect(selectIsAmbientEnabled(next)).toBe(true);
@@ -22,10 +27,13 @@ describe('assistantRuntimeReducer', () => {
     const next = assistantRuntimeReducer(
       { ...INITIAL_ASSISTANT_STATE, serviceMode: 'ambient' },
       {
-        type: 'command/sync',
-        active: true,
-        ownerSessionId: 'sess-a',
-        expiresAt: '2099-01-01T00:00:00.000Z',
+        type: 'assistant_state/sync',
+        revision: 2,
+        serviceMode: 'command',
+        commandOwnerSessionId: 'sess-a',
+        commandServiceExpiresAt: '2099-01-01T00:00:00.000Z',
+        commandState: 'idle',
+        commandMode: 'normal',
       },
     );
     expect(next.serviceMode).toBe('command');
@@ -41,12 +49,16 @@ describe('assistantRuntimeReducer', () => {
         commandState: 'follow_up',
         commandMode: 'introduction',
         commandOwnerSessionId: 'sess-a',
+        serviceStateRevision: 2,
       },
       {
-        type: 'command/sync',
-        active: false,
-        ownerSessionId: null,
-        expiresAt: null,
+        type: 'assistant_state/sync',
+        revision: 3,
+        serviceMode: 'ambient',
+        commandOwnerSessionId: null,
+        commandServiceExpiresAt: null,
+        commandState: 'idle',
+        commandMode: 'normal',
       },
     );
     expect(next.serviceMode).toBe('ambient');
@@ -75,15 +87,26 @@ describe('assistantRuntimeReducer', () => {
     expect(selectCanClaimCommandService(owned, 'sess-b')).toBe(false);
   });
 
-  it('ignores ambient enable while command lock is held', () => {
+  it('ignores stale revisions but clears an in-flight service toggle', () => {
     const next = assistantRuntimeReducer(
       {
         ...INITIAL_ASSISTANT_STATE,
         serviceMode: 'command',
         commandState: 'listening',
+        serviceStateRevision: 4,
+        isTogglingService: true,
       },
-      { type: 'service/status', enabled: true },
+      {
+        type: 'assistant_state/sync',
+        revision: 4,
+        serviceMode: 'ambient',
+        commandOwnerSessionId: null,
+        commandServiceExpiresAt: null,
+        commandState: 'idle',
+        commandMode: 'normal',
+      },
     );
     expect(next.serviceMode).toBe('command');
+    expect(next.isTogglingService).toBe(false);
   });
 });

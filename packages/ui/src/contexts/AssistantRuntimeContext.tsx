@@ -4,27 +4,44 @@ import {
   useContext,
   useMemo,
   useReducer,
+  useRef,
   type Dispatch,
   type ReactNode,
 } from 'react';
 import { assistantRuntimeReducer } from '@dadei/ui/lib/assistant/assistantRuntime';
 import {
+  applyAssistantStateSnapshot,
+  resetAssistantLifecycle,
+  type AssistantStateSnapshot,
+} from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
+import {
   INITIAL_ASSISTANT_STATE,
   type AssistantAction,
   type AssistantState,
 } from '@dadei/ui/types/assistant.types';
+import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';
 
 interface AssistantRuntimeContextValue {
   state: AssistantState;
   dispatch: Dispatch<AssistantAction>;
+  applyAuthoritativeState: (snapshot: AssistantStateSnapshot) => boolean;
 }
 
 const AssistantRuntimeContext = createContext<AssistantRuntimeContextValue | undefined>(undefined);
 
 export function AssistantRuntimeProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(assistantRuntimeReducer, INITIAL_ASSISTANT_STATE);
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-  const value = useMemo(() => ({ state, dispatch }), [state]);
+  const applyAuthoritativeState = useCallback((snapshot: AssistantStateSnapshot) => {
+    return applyAssistantStateSnapshot(dispatch, snapshot, stateRef.current);
+  }, []);
+
+  const value = useMemo(
+    () => ({ state, dispatch, applyAuthoritativeState }),
+    [applyAuthoritativeState, state],
+  );
 
   return (
     <AssistantRuntimeContext.Provider value={value}>{children}</AssistantRuntimeContext.Provider>
@@ -47,6 +64,10 @@ export function useAssistantRuntimeState(): AssistantState {
   return useAssistantRuntime().state;
 }
 
+export function useApplyAuthoritativeAssistantState(): AssistantRuntimeContextValue['applyAuthoritativeState'] {
+  return useAssistantRuntime().applyAuthoritativeState;
+}
+
 /** Stable dispatch helpers for service / command integration. */
 export function useAssistantRuntimeActions() {
   const { dispatch } = useAssistantRuntime();
@@ -59,23 +80,14 @@ export function useAssistantRuntimeActions() {
       setRegistrationConflict: () => dispatch({ type: 'network/registration_conflict' }),
       setServiceToggling: (toggling: boolean) =>
         dispatch({ type: 'service/toggling', toggling }),
-      setServiceStatus: (enabled: boolean) => dispatch({ type: 'service/status', enabled }),
-      syncCommandService: (payload: {
-        active: boolean;
-        ownerSessionId: string | null;
-        expiresAt: string | null;
-      }) =>
-        dispatch({
-          type: 'command/sync',
-          active: payload.active,
-          ownerSessionId: payload.ownerSessionId,
-          expiresAt: payload.expiresAt,
-        }),
-      setCommandState: (commandState: AssistantState['commandState']) =>
+      setCommandState: (commandState: CommandState) =>
         dispatch({ type: 'command/state', commandState }),
-      setCommandMode: (commandMode: AssistantState['commandMode']) =>
+      setCommandMode: (commandMode: CommandMode) =>
         dispatch({ type: 'command/mode', commandMode }),
-      resetRuntime: () => dispatch({ type: 'runtime/reset' }),
+      resetRuntime: () => {
+        resetAssistantLifecycle();
+        dispatch({ type: 'runtime/reset' });
+      },
     }),
     [dispatch],
   );

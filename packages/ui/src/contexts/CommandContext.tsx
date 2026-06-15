@@ -14,6 +14,11 @@ import {
   useAssistantRuntimeState,
 } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import { selectCommandMode, selectVoiceEnrollmentActive, selectCanClaimCommandService } from '@dadei/ui/lib/assistant/assistantRuntime';
+import {
+  markMicIntentHandled,
+  runAssistantTransition,
+  shouldAcceptMicIntent,
+} from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
@@ -394,23 +399,21 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const releaseCommandService = useCallback(async (): Promise<boolean> => {
+  const releaseCommandServiceInner = useCallback(async (): Promise<boolean> => {
     const sessionToken = getRealtimeSessionToken();
     if (!sessionToken) return false;
     try {
       await serviceApi.releaseCommandService(sessionToken);
-      runtimeActions.syncCommandService({
-        active: false,
-        ownerSessionId: null,
-        expiresAt: null,
-      });
-      runtimeActions.setServiceStatus(true);
       return true;
     } catch (error) {
       console.warn('[Command] Failed to release assistant mode', error);
       return false;
     }
-  }, [runtimeActions]);
+  }, []);
+
+  const releaseCommandService = useCallback(async (): Promise<boolean> => {
+    return runAssistantTransition(() => releaseCommandServiceInner());
+  }, [releaseCommandServiceInner]);
 
   const startRequestActivity = useCallback(() => {
     setAssistantStatusLine(formatAssistantStatusLine(ASSISTANT_STATUS_THINKING));
@@ -483,7 +486,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     abortActiveStream();
     void (async () => {
       if (ownsCommandSessionRef.current) {
-        await releaseCommandService();
+        await releaseCommandServiceInner();
       }
       goIdle();
     })();
@@ -497,13 +500,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   ]);
 
   const cancelCommandService = useCallback(() => {
-    const hadProcessing = COMMAND_PROCESSING_STATES.has(stateRef.current);
-    userInitiatedCancelRef.current = true;
-    commandProcessingEpochRef.current += 1;
-    activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
-    suppressNextTranscriptFinalRef.current = false;
-    endVoiceEnrollmentMode();
-    void (async () => {
+    void runAssistantTransition(async () => {
+      const hadProcessing = COMMAND_PROCESSING_STATES.has(stateRef.current);
+      userInitiatedCancelRef.current = true;
+      commandProcessingEpochRef.current += 1;
+      activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
+      suppressNextTranscriptFinalRef.current = false;
+      endVoiceEnrollmentMode();
       clearFollowUpTimer();
       clearWakeTimeout();
       abortActiveStream();
@@ -516,10 +519,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         });
       }
       if (ownsCommandSessionRef.current) {
-        await releaseCommandService();
+        await releaseCommandServiceInner();
       }
       goIdle();
-    })();
+    });
   }, [
     abortActiveStream,
     clearFollowUpTimer,
@@ -542,25 +545,26 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [abortActiveStream, endVoiceEnrollmentMode, goIdle, releaseCommandService]);
 
   const claimCommandService = useCallback(async (): Promise<boolean> => {
-    const sessionId = getRealtimeSessionId();
-    if (!selectCanClaimCommandService(runtimeRef.current, sessionId)) return false;
-    const sessionToken = getRealtimeSessionToken();
-    if (!sessionToken) return false;
-    try {
-      const claimed = await serviceApi.claimCommandService(sessionToken, CLAIM_HOLD_SECONDS);
-      syncCommandServiceFromClaim(claimed);
-      runtimeActions.setServiceStatus(false);
-      return true;
-    } catch (e) {
-      if (axios.isAxiosError(e) && e.response?.status === 409) {
-        setCommandState('locked');
-        resetLiveBubbles();
+    return runAssistantTransition(async () => {
+      const sessionId = getRealtimeSessionId();
+      if (!selectCanClaimCommandService(runtimeRef.current, sessionId)) return false;
+      const sessionToken = getRealtimeSessionToken();
+      if (!sessionToken) return false;
+      try {
+        const claimed = await serviceApi.claimCommandService(sessionToken, CLAIM_HOLD_SECONDS);
+        syncCommandServiceFromClaim(claimed);
+        return true;
+      } catch (e) {
+        if (axios.isAxiosError(e) && e.response?.status === 409) {
+          setCommandState('locked');
+          resetLiveBubbles();
+          return false;
+        }
+        console.warn('[Command] claim failed', e);
         return false;
       }
-      console.warn('[Command] claim failed', e);
-      return false;
-    }
-  }, [resetLiveBubbles, runtimeActions, syncCommandServiceFromClaim]);
+    });
+  }, [resetLiveBubbles, syncCommandServiceFromClaim]);
 
   const scheduleWakeFalsePositiveRelease = useCallback(() => {
     clearWakeTimeout();
@@ -1366,8 +1370,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [commandServiceExpiresAt, claimCommandService, isCommandOwner, state]);
 
   const dismissActiveCommand = useCallback(() => {
+    if (!shouldAcceptMicIntent()) return;
     const current = stateRef.current;
     if (current === 'idle' && !isCommandOwner && !isCommandService) return;
+    markMicIntentHandled();
     if (COMMAND_PROCESSING_STATES.has(current)) {
       cancelProcessing();
       return;
