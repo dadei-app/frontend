@@ -27,8 +27,10 @@ vi.mock('@dadei/ui/contexts/AssistantRuntimeContext', () => ({
     commandServiceExpiresAt: null,
     isConnected: true,
     registrationConflict: false,
-    isTogglingService: false,
+    serviceStateSyncPending: false,
+    serviceStateSyncBaselineRevision: null,
     serviceStateRevision: 1,
+    commandPipelineActive: false,
   }),
 }));
 
@@ -42,11 +44,6 @@ vi.mock('@dadei/ui/lib/assistant/lifecycle/useMicIntent', () => ({
 vi.mock('@dadei/ui/contexts/TutorialContext', () => ({
   useTutorialEngaged: () => false,
 }));
-
-vi.mock('@dadei/ui/components/command/MicLevelAura', () => ({
-  default: () => null,
-}));
-
 function renderMic(extra?: { disableSpaceToggle?: boolean }) {
   return render(
     <AudioContext.Provider

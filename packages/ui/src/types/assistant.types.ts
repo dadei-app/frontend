@@ -15,9 +15,20 @@ export interface AssistantState {
   commandServiceExpiresAt: string | null;
   isConnected: boolean;
   registrationConflict: boolean;
-  isTogglingService: boolean;
+  /**
+   * Mic chrome loading — waiting for the next authoritative `assistant_state`
+   * websocket after a service mutation (enable/disable/claim/release).
+   */
+  serviceStateSyncPending: boolean;
+  /** Revision at the time `serviceStateSyncPending` was set; cleared when a newer revision applies. */
+  serviceStateSyncBaselineRevision: number | null;
   /** Monotonic revision from backend `assistant_state` snapshots. */
   serviceStateRevision: number;
+  /**
+   * A /command/text inference is starting or in flight (claim, RAG, SSE).
+   * Drives mic cancel-processing chrome before `commandState` reaches `thinking`.
+   */
+  commandPipelineActive: boolean;
 }
 
 export const INITIAL_ASSISTANT_STATE: AssistantState = {
@@ -28,15 +39,21 @@ export const INITIAL_ASSISTANT_STATE: AssistantState = {
   commandServiceExpiresAt: null,
   isConnected: false,
   registrationConflict: false,
-  isTogglingService: false,
+  serviceStateSyncPending: false,
+  serviceStateSyncBaselineRevision: null,
   serviceStateRevision: 0,
+  commandPipelineActive: false,
 };
 
 export type AssistantAction =
   | { type: 'network/connected' }
   | { type: 'network/disconnected' }
   | { type: 'network/registration_conflict' }
-  | { type: 'service/toggling'; toggling: boolean }
+  | {
+      type: 'service_state/sync_pending';
+      pending: boolean;
+      baselineRevision?: number;
+    }
   | {
       type: 'assistant_state/sync';
       revision: number;
@@ -48,4 +65,5 @@ export type AssistantAction =
     }
   | { type: 'command/state'; commandState: CommandState }
   | { type: 'command/mode'; commandMode: CommandMode }
+  | { type: 'command/pipeline_active'; active: boolean }
   | { type: 'runtime/reset' };

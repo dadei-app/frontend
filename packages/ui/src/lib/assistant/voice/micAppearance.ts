@@ -3,6 +3,7 @@ import {
   COMMAND_PROCESSING_STATES,
   selectIsAmbientEnabled,
   selectIsCommandService,
+  selectIsServiceStateSyncPending,
 } from '@dadei/ui/lib/assistant/assistantRuntime';
 import type { AssistantState } from '@dadei/ui/types/assistant.types';
 
@@ -20,7 +21,8 @@ export type MicAppearance = {
   grayChrome: MicGrayChrome;
   tone: MicTone;
   showProcessingSpinner: boolean;
-  showLiveAura: boolean;
+  /** Command capture — modulate blue glass glow from mic level. */
+  modulateGlassGlow: boolean;
   /** Ambient service enabled — listening for wake word. */
   showAmbientRipples: boolean;
   action: MicAction;
@@ -40,7 +42,7 @@ export function deriveMicAppearanceFromRuntime(
       grayChrome: 'locked',
       tone: 'none',
       showProcessingSpinner: false,
-      showLiveAura: false,
+      modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
     };
@@ -51,7 +53,7 @@ export function deriveMicAppearanceFromRuntime(
       grayChrome: 'locked',
       tone: 'none',
       showProcessingSpinner: false,
-      showLiveAura: false,
+      modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
     };
@@ -62,31 +64,32 @@ export function deriveMicAppearanceFromRuntime(
       grayChrome: 'loading',
       tone: 'none',
       showProcessingSpinner: false,
-      showLiveAura: false,
+      modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
     };
   }
 
-  if (runtime.isTogglingService) {
+  if (selectIsServiceStateSyncPending(runtime)) {
     return {
       grayChrome: 'loading',
       tone: 'none',
       showProcessingSpinner: false,
-      showLiveAura: false,
+      modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
     };
   }
 
   if (selectIsCommandService(runtime)) {
-    const processing = COMMAND_PROCESSING_STATES.has(runtime.commandState);
-    const capturing = COMMAND_CAPTURE_STATES.has(runtime.commandState);
+    const processing =
+      COMMAND_PROCESSING_STATES.has(runtime.commandState) || runtime.commandPipelineActive;
+    const capturing = !processing && COMMAND_CAPTURE_STATES.has(runtime.commandState);
     return {
       grayChrome: 'none',
       tone: 'blue',
       showProcessingSpinner: processing,
-      showLiveAura: capturing && !processing,
+      modulateGlassGlow: capturing && !processing,
       showAmbientRipples: false,
       action: processing ? 'cancel_processing' : 'exit_command_service',
     };
@@ -97,7 +100,7 @@ export function deriveMicAppearanceFromRuntime(
       grayChrome: 'none',
       tone: 'red',
       showProcessingSpinner: false,
-      showLiveAura: false,
+      modulateGlassGlow: false,
       showAmbientRipples: true,
       action: 'toggle_service',
     };
@@ -107,7 +110,7 @@ export function deriveMicAppearanceFromRuntime(
     grayChrome: 'none',
     tone: 'green',
     showProcessingSpinner: false,
-    showLiveAura: false,
+    modulateGlassGlow: false,
     showAmbientRipples: false,
     action: 'toggle_service',
   };

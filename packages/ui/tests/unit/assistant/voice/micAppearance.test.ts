@@ -20,6 +20,23 @@ describe('deriveMicAppearanceFromRuntime', () => {
     expect(appearance.showAmbientRipples).toBe(false);
   });
 
+  it('interrupts processing while the command pipeline is active but state is still idle', () => {
+    const appearance = deriveMicAppearanceFromRuntime(
+      {
+        ...INITIAL_ASSISTANT_STATE,
+        serviceMode: 'command',
+        commandState: 'idle',
+        commandOwnerSessionId: 'sess-1',
+        commandPipelineActive: true,
+      },
+      tutorialOff,
+    );
+    expect(appearance.tone).toBe('blue');
+    expect(appearance.showProcessingSpinner).toBe(true);
+    expect(appearance.action).toBe('cancel_processing');
+    expect(appearance.grayChrome).toBe('none');
+  });
+
   it('interrupts processing instead of exiting command service', () => {
     for (const commandState of ['thinking', 'responding'] as const) {
       const appearance = deriveMicAppearanceFromRuntime(
@@ -37,6 +54,25 @@ describe('deriveMicAppearanceFromRuntime', () => {
     }
   });
 
+  it('shows gray loading chrome while awaiting assistant_state websocket sync', () => {
+    const appearance = deriveMicAppearanceFromRuntime(
+      {
+        ...INITIAL_ASSISTANT_STATE,
+        serviceMode: 'command',
+        commandState: 'follow_up',
+        commandOwnerSessionId: 'sess-1',
+        serviceStateSyncPending: true,
+        serviceStateSyncBaselineRevision: 2,
+        serviceStateRevision: 2,
+      },
+      tutorialOff,
+    );
+    expect(appearance.grayChrome).toBe('loading');
+    expect(appearance.tone).toBe('none');
+    expect(appearance.action).toBe('none');
+    expect(appearance.modulateGlassGlow).toBe(false);
+  });
+
   it('exits command service while listening or during readout', () => {
     for (const commandState of ['listening', 'follow_up'] as const) {
       const appearance = deriveMicAppearanceFromRuntime(
@@ -50,7 +86,7 @@ describe('deriveMicAppearanceFromRuntime', () => {
       );
       expect(appearance.tone).toBe('blue');
       expect(appearance.showProcessingSpinner).toBe(false);
-      expect(appearance.showLiveAura).toBe(true);
+      expect(appearance.modulateGlassGlow).toBe(true);
       expect(appearance.action).toBe('exit_command_service');
     }
   });

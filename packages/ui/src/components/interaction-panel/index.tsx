@@ -406,7 +406,7 @@ export default function InteractionPanel({ embedded = false }: { embedded?: bool
 
             ref={containerRef}
 
-            className="flex-1 space-y-3 overflow-y-auto overscroll-none px-4 py-4 sm:px-6 sm:py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0"
+            className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-none px-4 py-4 sm:px-6 sm:py-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:h-0 [&::-webkit-scrollbar]:w-0"
 
           >
 

@@ -53,7 +53,7 @@ const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
 const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
 const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
 
-/** Normalized 0–1 level from a time-domain analyser (command aura + settings meter). */
+/** Normalized 0–1 level from a time-domain analyser (command glass glow + settings meter). */
 export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint8Array<ArrayBufferLike>): number {
   analyser.getByteTimeDomainData(buffer as Uint8Array<ArrayBuffer>);
   let sumSq = 0;
@@ -69,16 +69,6 @@ export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint
 
 export function clampMicLevel(level: number): number {
   return Math.max(0, Math.min(1, level));
-}
-
-/** Motion targets for MicLevelAura from a normalized mic level (75% of full strength). */
-export function micLevelAuraMotion(level: number, visible: boolean) {
-  const clamped = clampMicLevel(level);
-  return {
-    opacity: visible ? 0.33 + clamped * 0.42 : 0,
-    scale: visible ? 1.06 + clamped * 0.69 : 0.91,
-    y: visible ? -3 - clamped * 16.5 : 0,
-  };
 }
 
 export function micLevelMeterLabel(level: number): 'Quiet' | 'Low' | 'Good' | 'Hot' {
@@ -582,7 +572,7 @@ export function useAudio() {
   return context;
 }
 
-/** Enable settings mic meter; shares the same level source as the command mic aura. */
+/** Enable settings mic meter; shares the same level source as command glass glow. */
 export function useMicLevelPreview(enabled = true): number {
   const ctx = useContext(AudioContext);
   const setPreview = ctx?.setMicLevelPreview;

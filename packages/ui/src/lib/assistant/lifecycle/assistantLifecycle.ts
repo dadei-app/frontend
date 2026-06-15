@@ -13,15 +13,46 @@ export interface AssistantStateSnapshot {
 }
 
 export const MIC_INTENT_COOLDOWN_MS = 350;
+export const SERVICE_STATE_SYNC_TIMEOUT_MS = 15_000;
 
 let transitionChain: Promise<void> = Promise.resolve();
 let lastAppliedRevision = 0;
 let lastMicIntentAtMs = 0;
 
+interface RevisionWaiter {
+  minRevision: number;
+  resolve: () => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+const revisionWaiters: RevisionWaiter[] = [];
+
+function rejectAllRevisionWaiters(error: Error) {
+  while (revisionWaiters.length > 0) {
+    const waiter = revisionWaiters.pop();
+    if (!waiter) break;
+    clearTimeout(waiter.timer);
+    waiter.reject(error);
+  }
+}
+
+function notifyRevisionWaiters(revision: number) {
+  for (let i = revisionWaiters.length - 1; i >= 0; i -= 1) {
+    const waiter = revisionWaiters[i];
+    if (revision > waiter.minRevision) {
+      clearTimeout(waiter.timer);
+      waiter.resolve();
+      revisionWaiters.splice(i, 1);
+    }
+  }
+}
+
 export function resetAssistantLifecycle(): void {
   transitionChain = Promise.resolve();
   lastAppliedRevision = 0;
   lastMicIntentAtMs = 0;
+  rejectAllRevisionWaiters(new Error('assistant_lifecycle_reset'));
 }
 
 export function getLastAppliedAssistantRevision(): number {
@@ -96,6 +127,66 @@ export function buildAssistantStateSyncAction(
   };
 }
 
+export function beginServiceStateSyncPending(
+  dispatch: Dispatch<AssistantAction>,
+  baselineRevision: number,
+): void {
+  dispatch({
+    type: 'service_state/sync_pending',
+    pending: true,
+    baselineRevision,
+  });
+}
+
+export function clearServiceStateSyncPending(dispatch: Dispatch<AssistantAction>): void {
+  dispatch({ type: 'service_state/sync_pending', pending: false });
+}
+
+export function waitForServiceStateRevisionAfter(
+  baselineRevision: number,
+  timeoutMs: number = SERVICE_STATE_SYNC_TIMEOUT_MS,
+): Promise<void> {
+  if (lastAppliedRevision > baselineRevision) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve, reject) => {
+    const waiter: RevisionWaiter = {
+      minRevision: baselineRevision,
+      resolve,
+      reject,
+      timer: setTimeout(() => {
+        const idx = revisionWaiters.indexOf(waiter);
+        if (idx !== -1) revisionWaiters.splice(idx, 1);
+        reject(new Error('service_state_sync_timeout'));
+      }, timeoutMs),
+    };
+    revisionWaiters.push(waiter);
+  });
+}
+
+/** Run a backend service mutation and block until the websocket snapshot lands. */
+export async function runServiceStateMutation(options: {
+  dispatch: Dispatch<AssistantAction>;
+  baselineRevision: number;
+  micPending?: boolean;
+  mutation: () => Promise<void>;
+}): Promise<void> {
+  const { dispatch, baselineRevision, micPending = false, mutation } = options;
+  if (micPending) {
+    beginServiceStateSyncPending(dispatch, baselineRevision);
+  }
+  try {
+    await mutation();
+    await waitForServiceStateRevisionAfter(baselineRevision);
+  } catch (error) {
+    if (micPending) {
+      clearServiceStateSyncPending(dispatch);
+    }
+    throw error;
+  }
+}
+
 export function applyAssistantStateSnapshot(
   dispatch: Dispatch<AssistantAction>,
   snapshot: AssistantStateSnapshot,
@@ -103,13 +194,17 @@ export function applyAssistantStateSnapshot(
 ): boolean {
   const syncAction = buildAssistantStateSyncAction(snapshot, state);
   if (snapshot.revision <= lastAppliedRevision) {
-    if (state.isTogglingService) {
-      dispatch({ type: 'service/toggling', toggling: false });
+    if (
+      state.serviceStateSyncPending &&
+      lastAppliedRevision > (state.serviceStateSyncBaselineRevision ?? -1)
+    ) {
+      clearServiceStateSyncPending(dispatch);
     }
     return false;
   }
   lastAppliedRevision = snapshot.revision;
   dispatch(syncAction);
+  notifyRevisionWaiters(snapshot.revision);
   return true;
 }
 
@@ -128,10 +223,4 @@ export function shouldAcceptMicIntent(nowMs: number = Date.now()): boolean {
 
 export function markMicIntentHandled(nowMs: number = Date.now()): void {
   lastMicIntentAtMs = nowMs;
-}
-
-export function noteLocalAssistantRevision(revision: number): void {
-  if (revision > lastAppliedRevision) {
-    lastAppliedRevision = revision;
-  }
 }

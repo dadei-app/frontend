@@ -11,7 +11,11 @@ import {
 import { assistantRuntimeReducer } from '@dadei/ui/lib/assistant/assistantRuntime';
 import {
   applyAssistantStateSnapshot,
+  beginServiceStateSyncPending,
+  clearServiceStateSyncPending,
   resetAssistantLifecycle,
+  runServiceStateMutation,
+  waitForServiceStateRevisionAfter,
   type AssistantStateSnapshot,
 } from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
 import {
@@ -78,12 +82,28 @@ export function useAssistantRuntimeActions() {
         dispatch({ type: connected ? 'network/connected' : 'network/disconnected' });
       },
       setRegistrationConflict: () => dispatch({ type: 'network/registration_conflict' }),
-      setServiceToggling: (toggling: boolean) =>
-        dispatch({ type: 'service/toggling', toggling }),
+      beginServiceStateSyncPending: (baselineRevision: number) =>
+        beginServiceStateSyncPending(dispatch, baselineRevision),
+      clearServiceStateSyncPending: () => clearServiceStateSyncPending(dispatch),
+      runServiceStateMutation: (options: {
+        baselineRevision: number;
+        micPending?: boolean;
+        mutation: () => Promise<void>;
+      }) =>
+        runServiceStateMutation({
+          dispatch,
+          baselineRevision: options.baselineRevision,
+          micPending: options.micPending,
+          mutation: options.mutation,
+        }),
+      waitForServiceStateRevisionAfter: (baselineRevision: number) =>
+        waitForServiceStateRevisionAfter(baselineRevision),
       setCommandState: (commandState: CommandState) =>
         dispatch({ type: 'command/state', commandState }),
       setCommandMode: (commandMode: CommandMode) =>
         dispatch({ type: 'command/mode', commandMode }),
+      setCommandPipelineActive: (active: boolean) =>
+        dispatch({ type: 'command/pipeline_active', active }),
       resetRuntime: () => {
         resetAssistantLifecycle();
         dispatch({ type: 'runtime/reset' });

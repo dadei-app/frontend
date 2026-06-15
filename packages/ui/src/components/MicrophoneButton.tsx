@@ -1,94 +1,20 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useContext, useEffect, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
-import MicLevelAura from '@dadei/ui/components/command/MicLevelAura';
 import { useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 import { deriveMicAppearanceFromRuntime } from '@dadei/ui/lib/assistant/voice/micAppearance';
 import { useMicIntent } from '@dadei/ui/lib/assistant/lifecycle/useMicIntent';
+import MicAmbientRipples from '@dadei/ui/components/command/mic/MicAmbientRipples';
+import MicGlassLayer from '@dadei/ui/components/command/mic/MicGlassLayer';
+import MicSpinner from '@dadei/ui/components/command/mic/MicSpinner';
+import { MIC_GRAY_LOADING, MIC_GRAY_LOCKED } from '@dadei/ui/components/command/mic/micChrome';
 
 interface MicrophoneButtonProps {
   disableSpaceToggle?: boolean;
-}
-
-const RIPPLE_COLORS = {
-  red: 'rgba(255, 68, 68, 0.6)',
-} as const;
-
-const MIC_SHELL =
-  'pointer-events-none absolute inset-0 rounded-full border-[3px] backdrop-blur-xl transition-[border-color,box-shadow] duration-700 ease-in-out';
-
-const MIC_GLASS = {
-  blue: {
-    shell: 'border-sky-100/35 ring-1 ring-sky-200/35',
-    fill: 'bg-[linear-gradient(132deg,rgba(37,99,235,0.28),rgba(14,165,233,0.25)_45%,rgba(186,230,253,0.22))]',
-    glow: 'shadow-[0_0_32px_rgba(37,99,235,0.35),0_0_68px_rgba(14,165,233,0.22)]',
-  },
-  red: {
-    shell: 'border-rose-100/35 ring-1 ring-rose-200/35',
-    fill: 'bg-[linear-gradient(132deg,rgba(225,29,72,0.32),rgba(244,63,94,0.26)_45%,rgba(254,205,211,0.18))]',
-    glow: 'shadow-[0_0_32px_rgba(225,29,72,0.45),0_0_68px_rgba(244,63,94,0.22)]',
-  },
-  green: {
-    shell: 'border-emerald-100/35 ring-1 ring-emerald-200/35',
-    fill: 'bg-[linear-gradient(132deg,rgba(20,184,166,0.28),rgba(16,185,129,0.24)_45%,rgba(167,243,208,0.2))]',
-    glow: 'shadow-[0_0_32px_rgba(16,185,129,0.38),0_0_68px_rgba(16,185,129,0.2)]',
-  },
-} as const;
-
-const MIC_GRAY_LOCKED =
-  'pointer-events-none absolute inset-0 rounded-full border-[3px] border-white/10 bg-zinc-800/90';
-
-const MIC_GRAY_LOADING =
-  'pointer-events-none absolute inset-0 rounded-full border-[3px] border-white/15 bg-zinc-700/80';
-
-const COLOR_CROSSFADE = { duration: 0.65, ease: [0.22, 1, 0.36, 1] as const };
-const RIPPLE_FADE = { duration: 0.45, ease: 'easeOut' as const };
-const RING_RHYTHM_MS = [330, 390, 360, 2000] as const;
-const RING_LIFETIME_MS = 2000;
-const MAX_RINGS = 8;
-
-interface RingParticle {
-  id: number;
-}
-
-function MicGlassLayer({
-  tone,
-  visible,
-}: {
-  tone: keyof typeof MIC_GLASS;
-  visible: boolean;
-}) {
-  const g = MIC_GLASS[tone];
-  return (
-    <motion.div
-      aria-hidden
-      className={cn(MIC_SHELL, g.shell, g.fill, g.glow)}
-      initial={false}
-      animate={{ opacity: visible ? 1 : 0 }}
-      transition={COLOR_CROSSFADE}
-    />
-  );
-}
-
-function MicSpinner({ className }: { className: string }) {
-  return (
-    <motion.div
-      className={cn(
-        'absolute inset-0 z-20 rounded-full border-4 border-t-white border-r-transparent border-b-transparent border-l-transparent',
-        className,
-      )}
-      animate={{ rotate: 360 }}
-      transition={{
-        duration: 1,
-        repeat: Infinity,
-        ease: 'linear',
-      }}
-    />
-  );
 }
 
 export default function MicrophoneButton({ disableSpaceToggle = false }: MicrophoneButtonProps) {
@@ -109,10 +35,6 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     [permissionsGateOpen, runtime, tutorialActive],
   );
 
-  const [rings, setRings] = useState<RingParticle[]>([]);
-  const [showLiveAura, setShowLiveAura] = useState(false);
-  const ringIdRef = useRef(0);
-
   useEffect(() => {
     if (disableSpaceToggle) return;
 
@@ -125,51 +47,6 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [disableSpaceToggle, inputsInert, matchesHotkey, submitMicIntent]);
-
-  const emitRing = useCallback(() => {
-    const id = ringIdRef.current++;
-    setRings((prev) => {
-      const next = [...prev, { id }];
-      if (next.length <= MAX_RINGS) return next;
-      return next.slice(next.length - MAX_RINGS);
-    });
-    window.setTimeout(() => {
-      setRings((prev) => prev.filter((ring) => ring.id !== id));
-    }, RING_LIFETIME_MS + 80);
-  }, []);
-
-  useEffect(() => {
-    if (!appearance.showAmbientRipples) {
-      setRings([]);
-      return;
-    }
-    emitRing();
-    let rhythmIdx = 0;
-    let timeoutId: number | null = null;
-    const scheduleNext = () => {
-      const waitMs = RING_RHYTHM_MS[rhythmIdx];
-      rhythmIdx = (rhythmIdx + 1) % RING_RHYTHM_MS.length;
-      timeoutId = window.setTimeout(() => {
-        emitRing();
-        scheduleNext();
-      }, waitMs);
-    };
-    scheduleNext();
-    return () => {
-      if (timeoutId != null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [appearance.showAmbientRipples, emitRing]);
-
-  useEffect(() => {
-    if (!appearance.showLiveAura) {
-      setShowLiveAura(false);
-      return;
-    }
-    setShowLiveAura(true);
-    setRings([]);
-  }, [appearance.showLiveAura]);
 
   const showEnabled = appearance.tone === 'red';
   const showCommandMode = appearance.tone === 'blue';
@@ -207,41 +84,17 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
         ) : (
           <>
             <MicGlassLayer tone="red" visible={showEnabled} />
-            <MicGlassLayer tone="blue" visible={showCommandMode} />
+            <MicGlassLayer
+              tone="blue"
+              visible={showCommandMode}
+              modulateGlow={appearance.modulateGlassGlow}
+              micLevel={micLevel}
+            />
             <MicGlassLayer tone="green" visible={showDisabled} />
           </>
         )}
 
-        <AnimatePresence>
-          {rings.length > 0 ? (
-            <motion.div
-              key="mic-ripples"
-              aria-hidden
-              className="pointer-events-none absolute inset-0 z-0 overflow-visible"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={RIPPLE_FADE}
-            >
-              {rings.map((ring) => (
-                <div key={ring.id} className="absolute inset-0 flex items-center justify-center">
-                  <motion.div
-                    className="h-full w-full rounded-full border-2 bg-transparent"
-                    initial={{ scale: 1.05, opacity: 0, borderColor: RIPPLE_COLORS.red }}
-                    animate={{
-                      scale: [1.05, 2],
-                      opacity: [0, 0.62, 0],
-                      borderColor: RIPPLE_COLORS.red,
-                    }}
-                    transition={{ duration: RING_LIFETIME_MS / 1000, ease: 'easeOut' }}
-                  />
-                </div>
-              ))}
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-
-        <MicLevelAura visible={showLiveAura} level={micLevel} />
+        <MicAmbientRipples active={appearance.showAmbientRipples} />
 
         <div className="relative z-10 flex items-center justify-center text-white">
           <svg

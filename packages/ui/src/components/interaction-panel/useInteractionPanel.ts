@@ -197,14 +197,7 @@ export function useInteractionPanel() {
     });
   }, [conversationGroups]);
 
-  const interactionsScrollSignature = useMemo(
-    () =>
-      conversationGroups
-        .flatMap(g => g.interactions)
-        .map(i => i.id)
-        .join('\u001f'),
-    [conversationGroups],
-  );
+  const prevInteractionIdsRef = useRef<string[]>([]);
 
   const [armedInteractionDeleteId, setArmedInteractionDeleteId] = useState<string | null>(null);
   const [armedConversationDeleteId, setArmedConversationDeleteId] = useState<string | null>(null);
@@ -280,15 +273,25 @@ export function useInteractionPanel() {
   }, [tutorial, displayGroups, tutorialEngaged]);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
     if (
       tutorialEngaged &&
       (tutorial?.step.id === 'delete_interaction' || tutorial?.step.id === 'layout_tour')
     ) {
       return;
     }
-    containerRef.current.scrollTop = containerRef.current.scrollHeight;
-  }, [interactionsScrollSignature, tutorialEngaged, tutorial?.step.id]);
+
+    const currentIds = conversationGroups.flatMap(g => g.interactions).map(i => i.id);
+    const prevIds = prevInteractionIdsRef.current;
+    prevInteractionIdsRef.current = currentIds;
+
+    const addedInteraction =
+      currentIds.length > prevIds.length || currentIds.some(id => !prevIds.includes(id));
+    if (prevIds.length > 0 && !addedInteraction) return;
+
+    container.scrollTop = container.scrollHeight;
+  }, [conversationGroups, tutorialEngaged, tutorial?.step.id]);
 
   const toggleConversation = (index: number) => {
     setConversationGroups(prev => {

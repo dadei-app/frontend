@@ -18,6 +18,7 @@ import {
   selectIsAmbientEnabled,
   selectIsCommandService,
   selectIsCommandOwner,
+  selectIsServiceStateSyncPending,
 } from '@dadei/ui/lib/assistant/assistantRuntime';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
@@ -29,11 +30,9 @@ import { personsApi } from '@dadei/ui/lib/workspace/api/persons';
 import { conversationsApi } from '@dadei/ui/lib/workspace/api/conversations';
 import { interactionsApi } from '@dadei/ui/lib/workspace/api/interactions';
 import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
-import type { ServiceModeClaim } from '@dadei/ui/types/service.types';
 import {
   parseAssistantStateWireMessage,
   runAssistantTransition,
-  snapshotFromServiceModeClaim,
   type AssistantStateSnapshot,
 } from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
 import {
@@ -116,14 +115,13 @@ interface ServiceContextType {
   registrationConflict: boolean;
   clientName: string;
   toggleService: () => Promise<void>;
-  isTogglingService: boolean;
+  /** Mic loading — awaiting authoritative `assistant_state` after a service mutation. */
+  serviceStateSyncPending: boolean;
   isCommandService: boolean;
   isCommandOwner: boolean;
   commandOwnerSessionId: string | null;
   commandServiceExpiresAt: string | null;
   commandServiceRemainingMs: number;
-/** Apply claim HTTP response immediately (authoritative revision from backend). */
-  syncCommandServiceFromClaim: (state: ServiceModeClaim) => void;
 
   memories: EpisodicMemory[];
   memoriesLoading: boolean;
@@ -180,7 +178,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
 
   const isServiceEnabled = selectIsAmbientEnabled(runtime);
   const isConnected = runtime.isConnected;
-  const isTogglingService = runtime.isTogglingService;
+  const serviceStateSyncPending = selectIsServiceStateSyncPending(runtime);
   const registrationConflict = runtime.registrationConflict;
   const isCommandService = selectIsCommandService(runtime);
   const commandOwnerSessionId = runtime.commandOwnerSessionId;
@@ -366,7 +364,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     permissionsGateIntentRef.current = null;
     setPermissionsGateOpen(false);
     setPermissionsGateIntent(null);
-    runtimeActions.setServiceToggling(false);
+    runtimeActions.clearServiceStateSyncPending();
   }, [runtimeActions]);
 
   const completePermissionsGate = useCallback(async () => {
@@ -380,12 +378,15 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     if (!shouldEnable) return;
 
     await runAssistantTransition(async () => {
-      runtimeActions.setServiceToggling(true);
+      const baseline = runtimeRef.current.serviceStateRevision;
       try {
-        await serviceApi.enable();
+        await runtimeActions.runServiceStateMutation({
+          baselineRevision: baseline,
+          micPending: true,
+          mutation: () => serviceApi.enable(),
+        });
       } catch (error) {
         console.error('Failed to enable service after permissions:', error);
-        runtimeActions.setServiceToggling(false);
         showToast(getUserErrorMessage(error, 'Could not enable assistant service.'), 'error');
       }
     });
@@ -429,13 +430,6 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
     if (!isServiceEnabled || !sessionReady || permissionsGateOpen) return;
     void maybePromptForActiveServicePermissions(true);
   }, [isServiceEnabled, maybePromptForActiveServicePermissions, permissionsGateOpen, sessionReady]);
-
-  const syncCommandServiceFromClaim = useCallback(
-    (claim: ServiceModeClaim) => {
-      handleAssistantStateSnapshot(snapshotFromServiceModeClaim(claim));
-    },
-    [handleAssistantStateSnapshot],
-  );
 
   useEffect(() => {
     if (!tutorialIncomplete) {
@@ -702,7 +696,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const toggleService = useCallback(async () => {
-    if (runtimeRef.current.isTogglingService) return;
+    if (selectIsServiceStateSyncPending(runtimeRef.current)) return;
 
     await runAssistantTransition(async () => {
       if (registrationConflict) {
@@ -714,23 +708,25 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
       }
 
       const ambientEnabled = selectIsAmbientEnabled(runtimeRef.current);
-      runtimeActions.setServiceToggling(true);
+      const baseline = runtimeRef.current.serviceStateRevision;
 
       try {
         if (ambientEnabled) {
-          await serviceApi.disable();
+          await runtimeActions.runServiceStateMutation({
+            baselineRevision: baseline,
+            micPending: true,
+            mutation: () => serviceApi.disable(),
+          });
           return;
         }
 
         if (tutorialIncomplete) {
-          runtimeActions.setServiceToggling(false);
           return;
         }
         const granted = await checkRequiredPermissions();
         if (!granted) {
           pendingEnableRef.current = true;
           openPermissionsGate('enable');
-          runtimeActions.setServiceToggling(false);
           return;
         }
         const tutorialPlatform = toTutorialPlatform(platform, isElectron);
@@ -738,13 +734,15 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         if (missingOptional) {
           pendingEnableRef.current = true;
           openPermissionsGate('enable');
-          runtimeActions.setServiceToggling(false);
           return;
         }
-        await serviceApi.enable();
+        await runtimeActions.runServiceStateMutation({
+          baselineRevision: baseline,
+          micPending: true,
+          mutation: () => serviceApi.enable(),
+        });
       } catch (error) {
         console.error('Failed to toggle service:', error);
-        runtimeActions.setServiceToggling(false);
         showToast(getUserErrorMessage(error, 'Could not change assistant service state.'), 'error');
       }
     });
@@ -819,13 +817,12 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
         registrationConflict,
         clientName,
         toggleService,
-        isTogglingService,
+        serviceStateSyncPending,
         isCommandService,
         isCommandOwner,
         commandOwnerSessionId,
         commandServiceExpiresAt,
         commandServiceRemainingMs,
-        syncCommandServiceFromClaim,
 
         permissionsGateOpen,
         permissionsGateIntent,

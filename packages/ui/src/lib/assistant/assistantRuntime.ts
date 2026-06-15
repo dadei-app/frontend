@@ -1,8 +1,17 @@
-import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';import {
+import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';
+import {
   INITIAL_ASSISTANT_STATE,
   type AssistantAction,
   type AssistantState,
 } from '@dadei/ui/types/assistant.types';
+
+function clearServiceStateSyncPending(state: AssistantState): AssistantState {
+  return {
+    ...state,
+    serviceStateSyncPending: false,
+    serviceStateSyncBaselineRevision: null,
+  };
+}
 
 export function assistantRuntimeReducer(
   state: AssistantState,
@@ -24,15 +33,29 @@ export function assistantRuntimeReducer(
         registrationConflict: true,
       };
 
-    case 'service/toggling':
-      return { ...state, isTogglingService: action.toggling };
+    case 'service_state/sync_pending':
+      if (!action.pending) {
+        return clearServiceStateSyncPending(state);
+      }
+      return {
+        ...state,
+        serviceStateSyncPending: true,
+        serviceStateSyncBaselineRevision:
+          action.baselineRevision ?? state.serviceStateRevision,
+      };
 
     case 'assistant_state/sync': {
       if (action.revision <= state.serviceStateRevision) {
-        if (!state.isTogglingService) return state;
-        return { ...state, isTogglingService: false };
+        if (
+          state.serviceStateSyncPending &&
+          state.serviceStateRevision >
+            (state.serviceStateSyncBaselineRevision ?? -1)
+        ) {
+          return clearServiceStateSyncPending(state);
+        }
+        return state;
       }
-      return {
+      return clearServiceStateSyncPending({
         ...state,
         serviceStateRevision: action.revision,
         serviceMode: action.serviceMode,
@@ -40,8 +63,7 @@ export function assistantRuntimeReducer(
         commandServiceExpiresAt: action.commandServiceExpiresAt,
         commandState: action.commandState,
         commandMode: action.commandMode,
-        isTogglingService: false,
-      };
+      });
     }
 
     case 'command/state': {
@@ -65,12 +87,19 @@ export function assistantRuntimeReducer(
     case 'command/mode':
       return { ...state, commandMode: action.commandMode };
 
+    case 'command/pipeline_active':
+      return { ...state, commandPipelineActive: action.active };
+
     case 'runtime/reset':
       return { ...INITIAL_ASSISTANT_STATE };
 
     default:
       return state;
   }
+}
+
+export function selectIsServiceStateSyncPending(state: AssistantState): boolean {
+  return state.serviceStateSyncPending;
 }
 
 export function selectIsAmbientEnabled(state: AssistantState): boolean {

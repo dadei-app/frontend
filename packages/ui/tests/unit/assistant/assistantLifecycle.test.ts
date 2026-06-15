@@ -5,6 +5,7 @@ import {
   parseAssistantStateWireMessage,
   resetAssistantLifecycle,
   shouldAcceptMicIntent,
+  waitForServiceStateRevisionAfter,
 } from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
 import { INITIAL_ASSISTANT_STATE } from '@dadei/ui/types/assistant.types';
 
@@ -65,5 +66,26 @@ describe('assistantLifecycle', () => {
     markMicIntentHandled(1_000);
     expect(shouldAcceptMicIntent(1_100)).toBe(false);
     expect(shouldAcceptMicIntent(1_400)).toBe(true);
+  });
+
+  it('resolves revision waiters when a newer snapshot applies', async () => {
+    resetAssistantLifecycle();
+    const actions: unknown[] = [];
+    const dispatch = (action: unknown) => actions.push(action);
+    const wait = waitForServiceStateRevisionAfter(1);
+
+    applyAssistantStateSnapshot(
+      dispatch,
+      {
+        revision: 2,
+        ambientEnabled: true,
+        commandModeActive: false,
+        ownerSessionId: null,
+        expiresAt: null,
+      },
+      INITIAL_ASSISTANT_STATE,
+    );
+
+    await expect(wait).resolves.toBeUndefined();
   });
 });

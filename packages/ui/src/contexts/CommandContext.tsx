@@ -13,7 +13,7 @@ import {
   useAssistantRuntimeActions,
   useAssistantRuntimeState,
 } from '@dadei/ui/contexts/AssistantRuntimeContext';
-import { selectCommandMode, selectVoiceEnrollmentActive, selectCanClaimCommandService } from '@dadei/ui/lib/assistant/assistantRuntime';
+import { selectCommandMode, selectIsCommandOwner, selectVoiceEnrollmentActive, selectCanClaimCommandService } from '@dadei/ui/lib/assistant/assistantRuntime';
 import {
   markMicIntentHandled,
   runAssistantTransition,
@@ -76,6 +76,8 @@ import {
 import { CommandBubbleStack } from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
 import { COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/assistant/assistantRuntime';
+import { motion } from 'framer-motion';
+import { VOICE_EASE } from '@dadei/ui/lib/assistant/voice/constants';
 
 const ASSISTANT_STATUS_THINKING = 'Thinking';
 
@@ -265,7 +267,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     isCommandService,
     isCommandOwner,
     commandServiceExpiresAt,
-    syncCommandServiceFromClaim,
   } = useService();
   const runtimeActions = useAssistantRuntimeActions();
   const runtime = useAssistantRuntimeState();
@@ -352,6 +353,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     [runtimeActions],
   );
 
+  const setCommandPipelineActive = useCallback(
+    (active: boolean) => {
+      runtimeActions.setCommandPipelineActive(active);
+    },
+    [runtimeActions],
+  );
+
   useEffect(() => {
     ownsCommandSessionRef.current = isCommandOwner;
     stateRef.current = state;
@@ -412,8 +420,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const releaseCommandService = useCallback(async (): Promise<boolean> => {
-    return runAssistantTransition(() => releaseCommandServiceInner());
-  }, [releaseCommandServiceInner]);
+    return runAssistantTransition(async () => {
+      const baseline = runtimeRef.current.serviceStateRevision;
+      const released = await releaseCommandServiceInner();
+      if (released) {
+        await runtimeActions.waitForServiceStateRevisionAfter(baseline);
+      }
+      return released;
+    });
+  }, [releaseCommandServiceInner, runtimeActions]);
 
   const startRequestActivity = useCallback(() => {
     setAssistantStatusLine(formatAssistantStatusLine(ASSISTANT_STATUS_THINKING));
@@ -474,9 +489,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastSubmittedTextRef.current = null;
     lastCommittedTurnRef.current = '';
     setBubbleHistory([]);
+    setCommandPipelineActive(false);
     setCommandState('idle');
     resetLiveBubbles();
-  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles]);
+  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles, setCommandPipelineActive]);
 
   const endSession = useCallback(() => {
     endVoiceEnrollmentMode();
@@ -486,7 +502,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     abortActiveStream();
     void (async () => {
       if (ownsCommandSessionRef.current) {
-        await releaseCommandServiceInner();
+        await releaseCommandService();
       }
       goIdle();
     })();
@@ -518,8 +534,22 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           ...(sessionId ? { session_id: sessionId } : {}),
         });
       }
+      const baseline = runtimeRef.current.serviceStateRevision;
       if (ownsCommandSessionRef.current) {
-        await releaseCommandServiceInner();
+        try {
+          await runtimeActions.runServiceStateMutation({
+            baselineRevision: baseline,
+            micPending: true,
+            mutation: async () => {
+              const released = await releaseCommandServiceInner();
+              if (!released) {
+                throw new Error('command_mode_release_failed');
+              }
+            },
+          });
+        } catch (error) {
+          console.warn('[Command] Failed to release assistant mode during cancel', error);
+        }
       }
       goIdle();
     });
@@ -529,7 +559,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearWakeTimeout,
     goIdle,
     endVoiceEnrollmentMode,
-    releaseCommandService,
+    releaseCommandServiceInner,
+    runtimeActions,
   ]);
 
   const rollbackVoiceEnrollmentAttempt = useCallback(async () => {
@@ -550,10 +581,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       if (!selectCanClaimCommandService(runtimeRef.current, sessionId)) return false;
       const sessionToken = getRealtimeSessionToken();
       if (!sessionToken) return false;
+      const baseline = runtimeRef.current.serviceStateRevision;
       try {
-        const claimed = await serviceApi.claimCommandService(sessionToken, CLAIM_HOLD_SECONDS);
-        syncCommandServiceFromClaim(claimed);
-        return true;
+        await serviceApi.claimCommandService(sessionToken, CLAIM_HOLD_SECONDS);
+        await runtimeActions.waitForServiceStateRevisionAfter(baseline);
+        return selectIsCommandOwner(runtimeRef.current, sessionId);
       } catch (e) {
         if (axios.isAxiosError(e) && e.response?.status === 409) {
           setCommandState('locked');
@@ -564,7 +596,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         return false;
       }
     });
-  }, [resetLiveBubbles, syncCommandServiceFromClaim]);
+  }, [resetLiveBubbles, runtimeActions]);
 
   const scheduleWakeFalsePositiveRelease = useCallback(() => {
     clearWakeTimeout();
@@ -579,7 +611,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [clearWakeTimeout, endVoiceEnrollmentMode, goIdle, releaseCommandService]);
 
   const cancelProcessing = useCallback(() => {
-    if (!COMMAND_PROCESSING_STATES.has(stateRef.current)) return;
+    if (
+      !COMMAND_PROCESSING_STATES.has(stateRef.current) &&
+      !runtimeRef.current.commandPipelineActive
+    ) {
+      return;
+    }
 
     const inVoiceEnrollment = voiceEnrollmentActiveRef.current;
     const cancellingLiveCaption =
@@ -591,6 +628,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     commandProcessingEpochRef.current += 1;
     activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
     suppressNextTranscriptFinalRef.current = cancellingLiveCaption;
+
+    const sessionId = getRealtimeSessionId();
+    sendRealtimeMessage({
+      type: 'command_inference_cancel',
+      ...(sessionId ? { session_id: sessionId } : {}),
+    });
 
     if (!inVoiceEnrollment) {
       endVoiceEnrollmentMode();
@@ -609,15 +652,11 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastToolBubbleSnippetRef.current = '';
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
+    setCommandPipelineActive(false);
     setCommandState(inVoiceEnrollment ? 'follow_up' : 'listening');
     if (!inVoiceEnrollment) {
       scheduleWakeFalsePositiveRelease();
     }
-    const sessionId = getRealtimeSessionId();
-    sendRealtimeMessage({
-      type: 'command_inference_cancel',
-      ...(sessionId ? { session_id: sessionId } : {}),
-    });
     sendRealtimeMessage({ type: 'command_audio_discard' });
     sendRealtimeMessage({
       type: 'command_audio_wake',
@@ -634,6 +673,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     endVoiceEnrollmentMode,
     resetLiveBubbles,
     scheduleWakeFalsePositiveRelease,
+    setCommandPipelineActive,
   ]);
 
   const clearWakeFalsePositiveIfCommandInProgress = useCallback((text: string) => {
@@ -795,6 +835,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamHadOutputRef.current = true;
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
+          setCommandPipelineActive(false);
           setAssistantBubbleTextSynced(
             formatCommandStreamError(ev.message, 'code' in ev ? String(ev.code) : undefined),
           );
@@ -810,6 +851,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           pendingNewResponseRef.current = false;
           setAssistantStatusLine(null);
           commandStreamInFlightRef.current = false;
+          setCommandPipelineActive(false);
           if (!assistantBubbleTextRef.current.trim()) {
             if (streamHadOutputRef.current) {
               setAssistantBubbleStatus('revealing');
@@ -831,7 +873,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [endSession, queryClient, setAssistantBubbleTextSynced, setCommandState],
+    [endSession, queryClient, setAssistantBubbleTextSynced, setCommandPipelineActive, setCommandState],
   );
 
   const submitVisibleCommandText = useCallback(
@@ -891,12 +933,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setUserCaptionInterim(false);
       setUserBubbleText(displayText);
       if (processingEpoch !== commandProcessingEpochRef.current) return;
-      setCommandState('thinking');
+      setCommandPipelineActive(true);
 
       void (async () => {
         const claimed = await claimCommandService();
         if (processingEpoch !== commandProcessingEpochRef.current) return;
         if (!claimed) {
+          setCommandPipelineActive(false);
           const msg = fromFollowUp
             ? ERROR_CODES.command_mode_not_owner
             : ERROR_CODES.invalid_session;
@@ -906,9 +949,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        setCommandState('thinking');
+
         const accessToken = await getAccessToken();
         if (processingEpoch !== commandProcessingEpochRef.current) return;
         if (!accessToken) {
+          setCommandPipelineActive(false);
           setAssistantBubbleTextSynced('Sign in to use the assistant.');
           setAssistantBubbleStatus('revealing');
           setCommandState('responding');
@@ -916,6 +962,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         }
 
         if (!isConnected || !getRealtimeSessionToken()) {
+          setCommandPipelineActive(false);
           setAssistantBubbleTextSynced(ERROR_CODES.invalid_session);
           setAssistantBubbleStatus('revealing');
           setCommandState('responding');
@@ -965,6 +1012,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         } finally {
           streamAbortRef.current = null;
           commandStreamInFlightRef.current = false;
+          if (processingEpoch !== commandProcessingEpochRef.current) {
+            setCommandPipelineActive(false);
+          }
         }
       })();
     },
@@ -981,6 +1031,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       releaseCommandService,
       scheduleFollowUpExpiry,
       setAssistantBubbleTextSynced,
+      setCommandPipelineActive,
       startNewTurn,
       startRequestActivity,
     ],
@@ -1015,7 +1066,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const kickoffEpoch = commandProcessingEpochRef.current;
       commandStreamInFlightRef.current = true;
       activeCommandStreamEpochRef.current = kickoffEpoch;
-      setCommandState('thinking');
+      setCommandPipelineActive(true);
 
       try {
         const claimed = await claimCommandService();
@@ -1023,6 +1074,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           await rollbackVoiceEnrollmentAttempt();
           return false;
         }
+
+        setCommandState('thinking');
 
         const accessToken = await getAccessToken();
         if (!accessToken) {
@@ -1363,7 +1416,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const current = stateRef.current;
     if (current === 'idle' && !isCommandOwner && !isCommandService) return;
     markMicIntentHandled();
-    if (COMMAND_PROCESSING_STATES.has(current)) {
+    if (
+      COMMAND_PROCESSING_STATES.has(current) ||
+      runtimeRef.current.commandPipelineActive
+    ) {
       cancelProcessing();
       return;
     }
@@ -1426,17 +1482,21 @@ export function CommandBubbleStackHost({ className = '' }: { className?: string 
   if (state === 'idle' || state === 'locked') return null;
 
   return (
-    <div
-      className={`command-bubble-stack-host pointer-events-none absolute left-1/2 z-30 flex min-h-0 w-full max-w-[min(520px,calc(100vw-3rem))] -translate-x-1/2 flex-col overflow-visible ${className}`}
+    <motion.div
+      className={`command-bubble-stack-host pointer-events-none absolute left-1/2 z-30 flex min-h-0 w-full max-w-[min(42rem,calc(100vw-2rem))] -translate-x-1/2 flex-col overflow-visible ${className}`}
       style={{
         top: 'calc(50% + var(--assistant-mic-half, 5rem) + var(--assistant-dock-gap, 0.75rem))',
         bottom: 0,
       }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 6 }}
+      transition={{ duration: 0.38, ease: VOICE_EASE }}
     >
       <div className="pointer-events-auto h-full min-h-0 min-w-0">
         <CommandBubbleStack />
       </div>
-    </div>
+    </motion.div>
   );
 }
 

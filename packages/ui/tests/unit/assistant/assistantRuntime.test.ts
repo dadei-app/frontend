@@ -87,14 +87,15 @@ describe('assistantRuntimeReducer', () => {
     expect(selectCanClaimCommandService(owned, 'sess-b')).toBe(false);
   });
 
-  it('ignores stale revisions but clears an in-flight service toggle', () => {
+  it('ignores stale revisions but clears an in-flight service-state sync wait', () => {
     const next = assistantRuntimeReducer(
       {
         ...INITIAL_ASSISTANT_STATE,
         serviceMode: 'command',
         commandState: 'listening',
         serviceStateRevision: 4,
-        isTogglingService: true,
+        serviceStateSyncPending: true,
+        serviceStateSyncBaselineRevision: 3,
       },
       {
         type: 'assistant_state/sync',
@@ -107,6 +108,30 @@ describe('assistantRuntimeReducer', () => {
       },
     );
     expect(next.serviceMode).toBe('command');
-    expect(next.isTogglingService).toBe(false);
+    expect(next.serviceStateSyncPending).toBe(false);
+    expect(next.serviceStateSyncBaselineRevision).toBeNull();
+  });
+
+  it('clears service-state sync pending when a newer revision applies', () => {
+    const next = assistantRuntimeReducer(
+      {
+        ...INITIAL_ASSISTANT_STATE,
+        serviceMode: 'command',
+        serviceStateRevision: 4,
+        serviceStateSyncPending: true,
+        serviceStateSyncBaselineRevision: 4,
+      },
+      {
+        type: 'assistant_state/sync',
+        revision: 5,
+        serviceMode: 'ambient',
+        commandOwnerSessionId: null,
+        commandServiceExpiresAt: null,
+        commandState: 'idle',
+        commandMode: 'normal',
+      },
+    );
+    expect(next.serviceMode).toBe('ambient');
+    expect(next.serviceStateSyncPending).toBe(false);
   });
 });
