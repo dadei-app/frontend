@@ -69,7 +69,7 @@ All voice behavior lives in `@dadei/ui` and is identical in the website and desk
 
 Local wake-word detection uses the [openWakeWord](https://github.com/dscripka/openWakeWord) pipeline via `onnxruntime-web`:
 
-- **Implementation:** `packages/ui/src/lib/assistant/voice/wake/openWakeWordDetector.ts`
+- **Implementation:** `packages/ui/src/lib/assistant/voice/command/openWakeWordDetector.ts`
 - **Models:** `packages/ui/src/lib/assistant/audio/models/` (bundled by Vite with `?url` imports)
   - `melspectrogram.onnx` — mel feature extractor
   - `embedding_model.onnx` — embedding network
@@ -78,7 +78,7 @@ Local wake-word detection uses the [openWakeWord](https://github.com/dscripka/op
 - **ORT WASM:** loaded from jsDelivr CDN (`onnxruntime-web@1.26.0`), not self-hosted in the repo
 - **Behavior:** runs on the mic stream in parallel with command capture; on detection it transitions to `listening` — transcription is **WebSocket-only** on the server
 
-To swap in a custom wake word, replace the classifier ONNX in `models/` and update `lib/assistant/voice/wake/constants.ts`. No changes needed in `apps/website` or `apps/desktop`.
+To swap in a custom wake word, replace the classifier ONNX in `models/` and update `lib/assistant/voice/command/constants.ts`. No changes needed in `apps/website` or `apps/desktop`.
 
 ### Command capture and end-of-utterance
 
@@ -90,7 +90,7 @@ After wake (or manual start), PCM16 chunks stream to the backend over the realti
 
 ### Transcript wake-word fallback
 
-Server-side ASR can also recognize spoken wake phrases. `packages/ui/src/lib/assistant/voice/wake/wakeWordDetection.ts` normalizes transcripts (handles “Dadei” spelling variants, “Assistant”, “Jarvis”, leading disfluencies) and strips wake tokens from submitted command text.
+Server-side ASR can also recognize spoken wake phrases. `packages/ui/src/lib/assistant/voice/command/wakeWordDetection.ts` normalizes transcripts (handles “Dadei” spelling variants, “Assistant”, “Jarvis”, leading disfluencies) and strips wake tokens from submitted command text.
 
 ### Removed: client-side Silero VAD
 

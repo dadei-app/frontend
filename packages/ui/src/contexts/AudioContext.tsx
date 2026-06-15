@@ -27,7 +27,7 @@ import {
 import {
   OpenWakeWordDetector,
   type WakeWordLabel,
-} from '@dadei/ui/lib/assistant/voice/wake/openWakeWordDetector';
+} from '@dadei/ui/lib/assistant/voice/command/openWakeWordDetector';
 import type { AudioSettings } from '@dadei/ui/types/electron';
 import { AUDIO_SETTINGS_CHANGED } from '@dadei/ui/lib/assistant/audio/audioSettingsEvents';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';

@@ -53,12 +53,12 @@ import { isProposedToolSummary, proposedActionHumanLine } from '@dadei/ui/lib/wo
 import {
   isInstructionalTranscriptBleed,
   sanitizeCommandTranscript,
-} from '@dadei/ui/lib/assistant/voice/wake/commandTranscriptSanitize';
+} from '@dadei/ui/lib/assistant/voice/command/commandTranscriptSanitize';
 import {
   liveCommandCaptionText,
   submitCommandText,
-} from '@dadei/ui/lib/assistant/voice/wake/commandCaption';
-import { normalizeVisibleCommandText, transcriptStartsWithWakeCommand } from '@dadei/ui/lib/assistant/voice/wake/wakeWordDetection';
+} from '@dadei/ui/lib/assistant/voice/command/commandCaption';
+import { normalizeVisibleCommandText, transcriptStartsWithWakeCommand } from '@dadei/ui/lib/assistant/voice/command/wakeWordDetection';
 import {
   CLAIM_HOLD_SECONDS,
   CLAIM_RENEW_BEFORE_EXPIRE_MS,
@@ -67,7 +67,7 @@ import {
 import {
   commandToolStatusLabel,
   formatAssistantStatusLine,
-} from '@dadei/ui/lib/assistant/voice/labels/commandToolLabels';
+} from '@dadei/ui/lib/assistant/voice/command/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/assistant/voice/session/sessionEndDetection';
 import {
   notifyCommandCaptureRearm,

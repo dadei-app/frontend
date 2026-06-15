@@ -15,7 +15,7 @@ import {
   OPEN_WAKEWORD_FRAME_SAMPLES,
   ORT_WASM_DIST_URL,
   PROCESSOR_BUFFER_SAMPLES,
-} from '@dadei/ui/lib/assistant/voice/wake/constants';
+} from '@dadei/ui/lib/assistant/voice/command/constants';
 
 export type WakeWordLabel = 'hey_dadei' | 'hey_jarvis';
 

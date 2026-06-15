@@ -3,7 +3,7 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-m
 import type { AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
-import { formatAssistantStatusLine } from '@dadei/ui/lib/assistant/voice/labels/commandToolLabels';
+import { formatAssistantStatusLine } from '@dadei/ui/lib/assistant/voice/command/commandToolLabels';
 import {
   typewriterDelayBeforeChar,
   typewriterRevealStep,
@@ -215,13 +215,16 @@ function StatusSpinnerRing() {
 }
 
 function AnimatedStatusLine({ base }: { base: string }) {
-  const [dotPhase, setDotPhase] = useState(0);
-  useEffect(() => setDotPhase(0), [base]);
+  const [dotPhase, setDotPhase] = useState(1);
+  useEffect(() => setDotPhase(1), [base]);
   useEffect(() => {
-    const id = window.setInterval(() => setDotPhase((p) => (p + 1) % 4), STATUS_ELLIPSIS_CYCLE_MS);
+    const id = window.setInterval(
+      () => setDotPhase((p) => (p % 3) + 1),
+      STATUS_ELLIPSIS_CYCLE_MS,
+    );
     return () => window.clearInterval(id);
   }, [base]);
-  return <span className="text-zinc-400">{dotPhase === 0 ? base : `${base}${'.'.repeat(dotPhase)}`}</span>;
+  return <span className="text-zinc-400">{`${base}${'.'.repeat(dotPhase)}`}</span>;
 }
 
 function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean }) {
