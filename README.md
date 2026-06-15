@@ -46,8 +46,12 @@ tests/
 └── support/        # setup, fixtures, render helpers
 ```
 
-- **Unit** tests run in Node (`npm run test:unit`).
-- **Integration** tests run in happy-dom and assert user-visible behavior (roles, labels, state)—not Tailwind classes or live API calls.
+The suite is built to verify **functionality, not form**. Prefer integration between components, state machines, and business logic over exact copy, Tailwind classes, colors, or animation constants that are expected to change.
+
+For errors and user messages, assert that a message was **emitted** (non-empty, sanitized) and that structured **codes** match — not that the prose equals a particular string baked into the test.
+
+- **Unit** tests run in Node (`npm run test:unit`) and cover logic such as wake-word stripping, lifecycle reducers, and API type alignment.
+- **Integration** tests run in happy-dom and assert user-visible **behavior** (roles, enabled/disabled state, callbacks)—not CSS classes, label prose, or live API calls.
 - **CI** runs the full suite plus TypeScript typecheck on every PR.
 
 ```bash

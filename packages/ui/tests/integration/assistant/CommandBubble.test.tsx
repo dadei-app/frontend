@@ -19,6 +19,8 @@ describe('CommandBubbleStack', () => {
       assistantBubbleStatus: 'pending',
       assistantStatusLine: null,
       userCaptionInterim: false,
+      followUpDockPrimed: false,
+      assistantBubbleAnchored: false,
       notifyAssistantRevealStarted: vi.fn(),
       notifyAssistantRevealComplete: vi.fn(),
     });
@@ -27,7 +29,6 @@ describe('CommandBubbleStack', () => {
   it('shows the live user caption while listening', () => {
     render(<CommandBubbleStack />);
     expect(screen.getByText('Dadei, what time is it?')).toBeInTheDocument();
-    expect(screen.getByText('listening')).toBeInTheDocument();
   });
 
   it('shows assistant status while thinking', () => {
@@ -40,13 +41,35 @@ describe('CommandBubbleStack', () => {
       assistantBubbleStatus: 'pending',
       assistantStatusLine: 'Thinking',
       userCaptionInterim: false,
+      followUpDockPrimed: false,
+      assistantBubbleAnchored: true,
       notifyAssistantRevealStarted: vi.fn(),
       notifyAssistantRevealComplete: vi.fn(),
     });
 
     render(<CommandBubbleStack />);
     expect(screen.getByText(/Thinking/)).toBeInTheDocument();
-    expect(screen.getByText('you')).toBeInTheDocument();
+  });
+
+  it('keeps the assistant shell visible when anchored during a status gap', () => {
+    mockUseCommand.mockReturnValue({
+      state: 'thinking',
+      bubbleHistory: [],
+      liveTurnId: 'turn-1',
+      userBubbleText: 'Set a reminder',
+      assistantBubbleText: '',
+      assistantBubbleStatus: 'pending',
+      assistantStatusLine: null,
+      userCaptionInterim: false,
+      followUpDockPrimed: false,
+      assistantBubbleAnchored: true,
+      notifyAssistantRevealStarted: vi.fn(),
+      notifyAssistantRevealComplete: vi.fn(),
+    });
+
+    render(<CommandBubbleStack />);
+    expect(screen.getByText(/Thinking/)).toBeInTheDocument();
+    expect(screen.getAllByText('dadei').length).toBeGreaterThan(0);
   });
 
   it('shows assistant response text while responding', () => {
@@ -59,19 +82,19 @@ describe('CommandBubbleStack', () => {
       assistantBubbleStatus: 'streaming',
       assistantStatusLine: null,
       userCaptionInterim: false,
+      followUpDockPrimed: false,
+      assistantBubbleAnchored: false,
       notifyAssistantRevealStarted: vi.fn(),
       notifyAssistantRevealComplete: vi.fn(),
     });
 
     render(<CommandBubbleStack />);
     expect(screen.getByText('Hi there — how can I help?')).toBeInTheDocument();
-    expect(screen.getAllByText('dadei').length).toBeGreaterThan(0);
-    expect(screen.getByText('you')).toBeInTheDocument();
   });
 
-  it('keeps submitted follow-up text settled in the stack while dadei responds', () => {
+  it('keeps submitted user text settled in the stack while dadei typewrites', () => {
     mockUseCommand.mockReturnValue({
-      state: 'follow_up',
+      state: 'responding',
       bubbleHistory: [],
       liveTurnId: 'turn-1',
       userBubbleText: 'And tomorrow?',
@@ -79,13 +102,13 @@ describe('CommandBubbleStack', () => {
       assistantBubbleStatus: 'revealing',
       assistantStatusLine: null,
       userCaptionInterim: false,
+      followUpDockPrimed: true,
       notifyAssistantRevealStarted: vi.fn(),
       notifyAssistantRevealComplete: vi.fn(),
     });
 
     render(<CommandBubbleStack />);
     expect(screen.getByText('And tomorrow?')).toBeInTheDocument();
-    expect(screen.getByText('you')).toBeInTheDocument();
     expect(screen.queryByText('listening')).not.toBeInTheDocument();
   });
 });

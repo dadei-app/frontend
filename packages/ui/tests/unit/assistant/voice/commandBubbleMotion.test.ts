@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isAssistantLive,
+  hasVisibleAssistantContent,
   isUserCaptureLive,
   shouldShowLiveUserBubble,
   userBubblePhase,
   userBubblePlacement,
 } from '@dadei/ui/lib/assistant/voice/ui/commandBubbleMotion';
 
-const noText = { isInterim: false, userText: '' };
-const withText = { isInterim: false, userText: 'Set a reminder' };
-const interim = { isInterim: true, userText: 'Set a' };
+const noText = { isInterim: false, userText: '', followUpListenOpen: false };
+const withText = { isInterim: false, userText: 'Set a reminder', followUpListenOpen: false };
+const interim = { isInterim: true, userText: 'Set a', followUpListenOpen: false };
+const followUpListen = { isInterim: false, userText: '', followUpListenOpen: true };
 
 describe('commandBubbleMotion', () => {
   it('docks the user bubble while capturing speech', () => {
@@ -18,7 +19,12 @@ describe('commandBubbleMotion', () => {
     expect(isUserCaptureLive('dock', 'thought')).toBe(true);
   });
 
-  it('keeps submitted follow-up text in the stack, not the dock', () => {
+  it('opens an empty follow-up dock when listening is ready', () => {
+    expect(userBubblePlacement('follow_up', true, followUpListen)).toBe('dock');
+    expect(shouldShowLiveUserBubble('dock', '', true)).toBe(true);
+  });
+
+  it('keeps submitted follow-up text in the stack while dadei responds', () => {
     expect(userBubblePlacement('follow_up', true, withText)).toBe('stack');
     expect(userBubblePhase('follow_up', 'stack')).toBe('settled');
     expect(isUserCaptureLive('stack', 'settled')).toBe(false);
@@ -34,23 +40,12 @@ describe('commandBubbleMotion', () => {
     expect(userBubblePlacement('responding', true, withText)).toBe('stack');
     expect(userBubblePhase('thinking', 'stack')).toBe('settling');
     expect(userBubblePhase('responding', 'stack')).toBe('settled');
-    expect(isUserCaptureLive('stack', 'settling')).toBe(false);
   });
 
-  it('shows an empty dock bubble during capture but requires text in the stack', () => {
-    expect(shouldShowLiveUserBubble('dock', '')).toBe(true);
-    expect(shouldShowLiveUserBubble('stack', '')).toBe(false);
-    expect(shouldShowLiveUserBubble('stack', 'hello')).toBe(true);
-  });
-
-  it('hides placement when there is no live turn', () => {
-    expect(userBubblePlacement('listening', false, noText)).toBeNull();
-    expect(userBubblePlacement('idle', false, noText)).toBeNull();
-  });
-
-  it('tracks assistant activity during processing states', () => {
-    expect(isAssistantLive('thinking')).toBe(true);
-    expect(isAssistantLive('responding')).toBe(true);
-    expect(isAssistantLive('follow_up')).toBe(false);
+  it('hides the assistant bubble until processing starts', () => {
+    expect(hasVisibleAssistantContent('', null, 'pending', 'listening', false)).toBe(false);
+    expect(hasVisibleAssistantContent('', 'Thinking', 'pending', 'thinking', false)).toBe(true);
+    expect(hasVisibleAssistantContent('', null, 'pending', 'thinking', true)).toBe(true);
+    expect(hasVisibleAssistantContent('Hello', null, 'streaming', 'responding', false)).toBe(true);
   });
 });

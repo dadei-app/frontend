@@ -78,6 +78,8 @@ import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
 import { COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/assistant/assistantRuntime';
 import { motion } from 'framer-motion';
 import { VOICE_EASE } from '@dadei/ui/lib/assistant/voice/constants';
+import { DOCK_POP_LEAD_MS } from '@dadei/ui/lib/assistant/voice/ui/commandBubbleMotion';
+import { estimateTypewriterRemainingMs } from '@dadei/ui/lib/assistant/voice/ui/typewriterTiming';
 
 const ASSISTANT_STATUS_THINKING = 'Thinking';
 
@@ -117,7 +119,11 @@ interface CommandContextValue {
   commandMode: CommandMode;
   /** Introduction or retraining voice enrollment (not tutorial UI). */
   voiceEnrollmentActive: boolean;
-  /** First typewriter character of the final response (mic → follow-up listen). */
+  /** Follow-up dock warmed ~1s before responding ends; pop waits for follow_up. */
+  followUpDockPrimed: boolean;
+  /** Latched when a response turn starts; keeps the assistant shell from flickering off. */
+  assistantBubbleAnchored: boolean;
+  /** First typewriter character — schedules follow-up dock prime. */
   notifyAssistantRevealStarted: () => void;
   /** Typewriter finished; start the length-based follow-up idle window. */
   notifyAssistantRevealComplete: () => void;
@@ -297,10 +303,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const [assistantStatusLine, setAssistantStatusLine] = useState<string | null>(null);
   const [bubbleHistory, setBubbleHistory] = useState<CommandTurnHistory[]>([]);
   const [liveTurnId, setLiveTurnId] = useState<string | null>(null);
+  const [followUpDockPrimed, setFollowUpDockPrimed] = useState(false);
+  const [assistantBubbleAnchored, setAssistantBubbleAnchored] = useState(false);
 
   const stateRef = useRef(state);
   const liveTurnIdRef = useRef<string | null>(null);
   const followUpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const followUpDockPrimeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wakeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamAbortRef = useRef<AbortController | null>(null);
   const ownsCommandSessionRef = useRef(isCommandOwner);
@@ -353,6 +362,38 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     [runtimeActions],
   );
 
+  const isAssistantProcessingState = useCallback(
+    (commandState: CommandState = stateRef.current) =>
+      commandState === 'thinking' || commandState === 'responding',
+    [],
+  );
+
+  const applyAssistantStatusLine = useCallback(
+    (next: string | null | undefined) => {
+      const trimmed = typeof next === 'string' ? next.trim() : '';
+      const hasText = assistantBubbleTextRef.current.trim().length > 0;
+
+      if (!trimmed) {
+        if (hasText) {
+          setAssistantStatusLine(null);
+          return;
+        }
+        if (isAssistantProcessingState()) {
+          setAssistantStatusLine((prev) => {
+            if (prev?.trim()) return prev;
+            return formatAssistantStatusLine(ASSISTANT_STATUS_THINKING);
+          });
+          return;
+        }
+        setAssistantStatusLine(null);
+        return;
+      }
+
+      setAssistantStatusLine(formatAssistantStatusLine(trimmed));
+    },
+    [isAssistantProcessingState],
+  );
+
   const setCommandPipelineActive = useCallback(
     (active: boolean) => {
       runtimeActions.setCommandPipelineActive(active);
@@ -387,6 +428,18 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       followUpTimerRef.current = null;
     }
   }, []);
+
+  const clearFollowUpDockPrimeTimer = useCallback(() => {
+    if (followUpDockPrimeTimerRef.current != null) {
+      clearTimeout(followUpDockPrimeTimerRef.current);
+      followUpDockPrimeTimerRef.current = null;
+    }
+  }, []);
+
+  const clearFollowUpDockPrime = useCallback(() => {
+    clearFollowUpDockPrimeTimer();
+    setFollowUpDockPrimed(false);
+  }, [clearFollowUpDockPrimeTimer]);
 
   const onFollowUpSpeechActivity = useCallback(() => {
     if (stateRef.current !== 'follow_up') return;
@@ -431,17 +484,33 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   }, [releaseCommandServiceInner, runtimeActions]);
 
   const startRequestActivity = useCallback(() => {
-    setAssistantStatusLine(formatAssistantStatusLine(ASSISTANT_STATUS_THINKING));
-  }, []);
+    setAssistantBubbleAnchored(true);
+    applyAssistantStatusLine(ASSISTANT_STATUS_THINKING);
+  }, [applyAssistantStatusLine]);
 
   const notifyAssistantRevealStarted = useCallback(() => {
     if (responseRevealStartedRef.current) return;
     responseRevealStartedRef.current = true;
-    // Introduction: keep mic sealed while the canned opener types out — opening on
-    // the first character was buffering ambient audio to the 20s decode cap.
     if (voiceEnrollmentActiveRef.current) return;
-    setCommandState('follow_up');
-  }, []);
+
+    clearFollowUpDockPrimeTimer();
+    const text = assistantBubbleTextRef.current;
+    const leadMs = Math.max(0, estimateTypewriterRemainingMs(text, 0) - DOCK_POP_LEAD_MS);
+    followUpDockPrimeTimerRef.current = setTimeout(() => {
+      followUpDockPrimeTimerRef.current = null;
+      setFollowUpDockPrimed(true);
+    }, leadMs);
+  }, [clearFollowUpDockPrimeTimer]);
+
+  const primeFollowUpDockSoon = useCallback(() => {
+    clearFollowUpDockPrimeTimer();
+    const text = assistantBubbleTextRef.current;
+    const leadMs = Math.max(0, estimateTypewriterRemainingMs(text, 0) - DOCK_POP_LEAD_MS);
+    followUpDockPrimeTimerRef.current = setTimeout(() => {
+      followUpDockPrimeTimerRef.current = null;
+      setFollowUpDockPrimed(true);
+    }, leadMs);
+  }, [clearFollowUpDockPrimeTimer]);
 
   const newTurnId = () => `turn-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 
@@ -473,13 +542,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const resetLiveBubbles = useCallback(() => {
     pendingNewResponseRef.current = false;
     lastToolBubbleSnippetRef.current = '';
+    clearFollowUpDockPrime();
+    setAssistantBubbleAnchored(false);
     clearLiveTurnId();
-    setAssistantStatusLine(null);
+    applyAssistantStatusLine(null);
     setUserBubbleText('');
     setUserCaptionInterim(false);
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
-  }, [clearLiveTurnId, setAssistantBubbleTextSynced]);
+  }, [applyAssistantStatusLine, clearFollowUpDockPrime, clearLiveTurnId, setAssistantBubbleTextSynced]);
 
   const goIdle = useCallback(() => {
     clearFollowUpTimer();
@@ -704,24 +775,30 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!assistant) return;
 
     revealCompleteHandledRef.current = true;
+    clearFollowUpDockPrimeTimer();
     commitLiveTurnToHistory();
+    assignLiveTurnId();
     setUserBubbleText('');
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
-    setAssistantStatusLine(null);
+    setAssistantBubbleAnchored(false);
+    applyAssistantStatusLine(null);
     responseRevealStartedRef.current = false;
     void claimCommandService();
-    if (voiceEnrollmentActiveRef.current) {
-      // Introduction stays active until inference ends the session — no follow-up idle timer.
-      setCommandState('follow_up');
-    } else {
+    setCommandState('follow_up');
+    if (!voiceEnrollmentActiveRef.current) {
       scheduleFollowUpExpiry(assistant.length);
     }
+    setFollowUpDockPrimed(false);
   }, [
+    applyAssistantStatusLine,
+    assignLiveTurnId,
     claimCommandService,
+    clearFollowUpDockPrimeTimer,
     commitLiveTurnToHistory,
     scheduleFollowUpExpiry,
     setAssistantBubbleTextSynced,
+    setCommandState,
   ]);
 
   const startNewTurn = useCallback(() => {
@@ -738,7 +815,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastSubmittedTextRef.current = null;
     setAssistantBubbleTextSynced('');
     setAssistantBubbleStatus('pending');
-    setAssistantStatusLine(null);
+    setAssistantBubbleAnchored(false);
+    applyAssistantStatusLine(null);
 
     // Arm server capture before HTTP claim so in-flight PCM is promoted, not discarded.
     sendRealtimeMessage({ type: 'command_audio_wake' });
@@ -758,6 +836,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearWakeTimeout,
     scheduleWakeFalsePositiveRelease,
     setAssistantBubbleTextSynced,
+    applyAssistantStatusLine,
     assignLiveTurnId,
   ]);
 
@@ -801,7 +880,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           const label = commandToolStatusLabel(ev.tool, ev.args, {
             timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           });
-          setAssistantStatusLine(formatAssistantStatusLine(label || ASSISTANT_STATUS_THINKING));
+          applyAssistantStatusLine(label || ASSISTANT_STATUS_THINKING);
           break;
         }
         case 'tool_result':
@@ -814,7 +893,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             if (!ev.ok) {
               lastToolBubbleSnippetRef.current = snippet;
               replaceNextStreamTokensRef.current = true;
-              setAssistantStatusLine(null);
+              applyAssistantStatusLine(ASSISTANT_STATUS_THINKING);
               setAssistantBubbleStatus('pending');
               setCommandState((s) => (s === 'thinking' ? 'responding' : s));
               break;
@@ -834,12 +913,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamTerminalErrorRef.current = true;
           streamHadOutputRef.current = true;
           pendingNewResponseRef.current = false;
-          setAssistantStatusLine(null);
+          applyAssistantStatusLine(null);
           setCommandPipelineActive(false);
           setAssistantBubbleTextSynced(
             formatCommandStreamError(ev.message, 'code' in ev ? String(ev.code) : undefined),
           );
           setAssistantBubbleStatus('revealing');
+          primeFollowUpDockSoon();
           setCommandState('responding');
           break;
         case 'session_end':
@@ -849,12 +929,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         case 'done':
           if (stateRef.current === 'idle' || sessionEndingRef.current) break;
           pendingNewResponseRef.current = false;
-          setAssistantStatusLine(null);
+          applyAssistantStatusLine(null);
           commandStreamInFlightRef.current = false;
           setCommandPipelineActive(false);
           if (!assistantBubbleTextRef.current.trim()) {
             if (streamHadOutputRef.current) {
               setAssistantBubbleStatus('revealing');
+              primeFollowUpDockSoon();
               setCommandState((s) => (s === 'thinking' ? 'responding' : s));
               break;
             }
@@ -867,13 +948,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             setAssistantBubbleTextSynced(fallback);
           }
           setAssistantBubbleStatus('revealing');
+          primeFollowUpDockSoon();
           setCommandState((s) => (s === 'thinking' ? 'responding' : s));
           break;
         default:
           break;
       }
     },
-    [endSession, queryClient, setAssistantBubbleTextSynced, setCommandPipelineActive, setCommandState],
+    [applyAssistantStatusLine, endSession, primeFollowUpDockSoon, queryClient, setAssistantBubbleTextSynced, setCommandPipelineActive, setCommandState],
   );
 
   const submitVisibleCommandText = useCallback(
@@ -934,6 +1016,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setUserBubbleText(displayText);
       if (processingEpoch !== commandProcessingEpochRef.current) return;
       setCommandPipelineActive(true);
+      setCommandState('thinking');
 
       void (async () => {
         const claimed = await claimCommandService();
@@ -945,11 +1028,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             : ERROR_CODES.invalid_session;
           setAssistantBubbleTextSynced(msg);
           setAssistantBubbleStatus('revealing');
+          primeFollowUpDockSoon();
           setCommandState('responding');
           return;
         }
-
-        setCommandState('thinking');
 
         const accessToken = await getAccessToken();
         if (processingEpoch !== commandProcessingEpochRef.current) return;
@@ -1031,6 +1113,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       releaseCommandService,
       scheduleFollowUpExpiry,
       setAssistantBubbleTextSynced,
+      primeFollowUpDockSoon,
       setCommandPipelineActive,
       startNewTurn,
       startRequestActivity,
@@ -1459,6 +1542,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     beginRetraining,
     commandMode,
     voiceEnrollmentActive,
+    followUpDockPrimed,
+    assistantBubbleAnchored,
     notifyAssistantRevealStarted,
     notifyAssistantRevealComplete,
   };

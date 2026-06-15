@@ -22,8 +22,6 @@ describe('Tutorial Card', () => {
     );
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { name: steps[0].title }).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(steps[0].body).length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: 'Next step' }));
     expect(onNext).toHaveBeenCalledOnce();

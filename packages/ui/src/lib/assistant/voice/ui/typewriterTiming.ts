@@ -68,3 +68,21 @@ export function typewriterRevealStep(backlogRemaining: number): number {
   if (backlogRemaining > 32) return 2;
   return 1;
 }
+
+/** Deterministic mean delay per character class — for scheduling UI lead time. */
+function meanDelayBeforeChar(char: string): number {
+  if (char === '\n') return (NEWLINE_MS_MIN + NEWLINE_MS_MAX) / 2;
+  if (/[.!?]/.test(char)) return (PUNCTUATION_STRONG_MS_MIN + PUNCTUATION_STRONG_MS_MAX) / 2;
+  if (/[,;:]/.test(char)) return (PUNCTUATION_LIGHT_MS_MIN + PUNCTUATION_LIGHT_MS_MAX) / 2;
+  if (char === ' ') return (SPACE_MS_MIN + SPACE_MS_MAX) / 2;
+  return (CHAR_MS_MIN + CHAR_MS_MAX) / 2 + (HESITATION_CHANCE * (HESITATION_MS_MIN + HESITATION_MS_MAX)) / 2;
+}
+
+/** Estimated ms remaining from `fromIndex` to end of `text` at normal typewriter pace. */
+export function estimateTypewriterRemainingMs(text: string, fromIndex = 0): number {
+  let total = 0;
+  for (let i = Math.max(0, fromIndex); i < text.length; i++) {
+    total += meanDelayBeforeChar(text[i] ?? '');
+  }
+  return total;
+}
