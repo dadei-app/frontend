@@ -51,7 +51,7 @@ const DEFAULT_AUDIO_SETTINGS: AudioSettings = {
 };
 
 const CHUNK_FORWARD_STATES: CommandState[] = ['idle', 'listening', 'follow_up'];
-const ASSISTANT_BUSY_STATES: CommandState[] = ['transcribing', 'thinking', 'responding'];
+const ASSISTANT_BUSY_STATES: CommandState[] = ['thinking', 'responding'];
 
 /** Normalized 0–1 level from a time-domain analyser (command aura + settings meter). */
 export function computeMicLevelFromAnalyser(analyser: AnalyserNode, buffer: Uint8Array<ArrayBufferLike>): number {
@@ -266,7 +266,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const prev = prevStateRef.current;
     if (
       state === 'thinking' &&
-      (prev === 'listening' || prev === 'follow_up' || prev === 'transcribing')
+      (prev === 'listening' || prev === 'follow_up')
     ) {
       sendRealtimeMessage({ type: 'command_audio_discard' });
     } else if (
@@ -291,7 +291,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [state, rearmIntroductionCapture]);
 
   useEffect(() => {
-    if (state === 'listening' || state === 'follow_up' || state === 'transcribing') {
+    if (state === 'listening' || state === 'follow_up') {
       commandAudioEndSentRef.current = false;
     }
   }, [state]);
@@ -317,9 +317,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
       if (meterFromCommand) {
         const inCapture =
-          stateRef.current === 'listening' ||
-          stateRef.current === 'follow_up' ||
-          stateRef.current === 'transcribing';
+          stateRef.current === 'listening' || stateRef.current === 'follow_up';
         if (inCapture) {
           const speaking = level >= FOLLOW_UP_SPEECH_RMS;
           if (speaking && !speechActive && stateRef.current === 'follow_up') {
@@ -345,7 +343,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       if (
-        stateRef.current === 'transcribing' ||
         stateRef.current === 'thinking' ||
         stateRef.current === 'responding' ||
         stateRef.current === 'locked'

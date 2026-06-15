@@ -15,8 +15,6 @@ export const COMMAND_MODES = ['normal', 'introduction', 'retraining'] as const s
 export type CommandState =
   | 'idle'
   | 'listening'
-  /** User finished speaking; mic spinner only until transcript arrives. */
-  | 'transcribing'
   | 'thinking'
   | 'responding'
   | 'follow_up'

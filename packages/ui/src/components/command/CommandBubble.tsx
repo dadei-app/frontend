@@ -19,36 +19,36 @@ const EMERALD = '0,204,106';
 type BubblePhase = 'thought' | 'settling' | 'settled';
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Material
-   The whole quality bet is here, not in motion. One glass recipe with a real
-   vertical light gradient, a crisp 1px inset top highlight, and a two-part
-   shadow (tight contact + soft ambient) so the card reads physically lifted.
-   The live state is the SAME recipe with an emerald border and a contained
-   wash rising from the lower inner edge — "alive" without atmosphere cosplay.
+   Material — translucent glass, not paint.
+   Fill alpha is kept low (~0.6) so the backdrop blur reads through it; the
+   structure comes from a crisp 1px inset top light and a two-part shadow
+   (tight contact + soft ambient). The live state is the same recipe with a
+   soft emerald border and a faint wash rising from the lower inner edge —
+   present, but a whisper, not a flood.
    ────────────────────────────────────────────────────────────────────────── */
 
 const cardSettled: CSSProperties = {
-  backdropFilter: 'blur(20px) saturate(140%)',
-  WebkitBackdropFilter: 'blur(20px) saturate(140%)',
-  background: 'linear-gradient(180deg, rgba(28,28,32,0.78) 0%, rgba(16,16,19,0.85) 100%)',
-  border: '1px solid rgba(255,255,255,0.075)',
+  backdropFilter: 'blur(24px) saturate(135%)',
+  WebkitBackdropFilter: 'blur(24px) saturate(135%)',
+  background: 'linear-gradient(180deg, rgba(26,26,30,0.60) 0%, rgba(15,15,18,0.68) 100%)',
+  border: '1px solid rgba(255,255,255,0.07)',
   boxShadow: [
     'inset 0 1px 0 0 rgba(255,255,255,0.07)',
-    '0 1px 2px rgba(0,0,0,0.38)',
-    '0 24px 48px -30px rgba(0,0,0,0.8)',
+    '0 1px 2px rgba(0,0,0,0.35)',
+    '0 24px 48px -30px rgba(0,0,0,0.78)',
   ].join(', '),
 };
 
 const cardLive: CSSProperties = {
-  backdropFilter: 'blur(22px) saturate(150%)',
-  WebkitBackdropFilter: 'blur(22px) saturate(150%)',
-  background: `linear-gradient(180deg, rgba(31,33,35,0.84) 0%, rgba(14,16,16,0.88) 100%)`,
-  border: `1px solid rgba(${EMERALD},0.24)`,
+  backdropFilter: 'blur(26px) saturate(140%)',
+  WebkitBackdropFilter: 'blur(26px) saturate(140%)',
+  background: `linear-gradient(180deg, rgba(24,27,27,0.58) 0%, rgba(14,17,16,0.66) 100%)`,
+  border: `1px solid rgba(${EMERALD},0.20)`,
   boxShadow: [
-    'inset 0 1px 0 0 rgba(255,255,255,0.10)',
-    `inset 0 -22px 44px -30px rgba(${EMERALD},0.30)`,
-    '0 1px 2px rgba(0,0,0,0.45)',
-    '0 30px 60px -30px rgba(0,0,0,0.84)',
+    'inset 0 1px 0 0 rgba(255,255,255,0.09)',
+    `inset 0 -20px 40px -32px rgba(${EMERALD},0.16)`,
+    '0 1px 2px rgba(0,0,0,0.4)',
+    '0 28px 56px -30px rgba(0,0,0,0.8)',
   ].join(', '),
 };
 
@@ -65,10 +65,10 @@ function stackEdgeMaskStyle(fadeTop: boolean, fadeBottom: boolean): CSSPropertie
 
 /* ──────────────────────────────────────────────────────────────────────────
    Speaker mark — the single ownership signal.
-   Dot and pulse are the SAME size and share one center point (the prior bug
-   was a 6px dot inside an 8px box with an inset-0 pulse → off-center at scale).
-   Emerald means one honest thing: Dadei's presence (assistant) or active
-   listening (live user). A settled user is a quiet neutral node.
+   Dot and pulse are BOTH `absolute inset-0` inside one sized wrapper, so they
+   occupy the identical box and share one center. Framer animates only `scale`
+   (origin defaults to the box center) — there are no translate utilities for
+   it to clobber, which is what knocked the ring off-center before.
    ────────────────────────────────────────────────────────────────────────── */
 function SpeakerMark({
   role,
@@ -85,21 +85,21 @@ function SpeakerMark({
 
   return (
     <span className="flex items-center gap-2">
-      <span className="relative inline-flex h-1.5 w-1.5 shrink-0 items-center justify-center">
+      <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
         {emerald && !reduce ? (
           <motion.span
             aria-hidden
-            className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-            style={{ background: `rgba(${EMERALD},0.5)` }}
-            animate={{ scale: [1, 2.8], opacity: [0.45, 0] }}
+            className="absolute inset-0 rounded-full"
+            style={{ background: `rgba(${EMERALD},0.45)` }}
+            animate={{ scale: [1, 2.8], opacity: [0.4, 0] }}
             transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
           />
         ) : null}
         <span
-          className="relative h-1.5 w-1.5 rounded-full"
+          className="absolute inset-0 rounded-full"
           style={{
             background: dotColor,
-            boxShadow: emerald ? `0 0 8px rgba(${EMERALD},0.55)` : undefined,
+            boxShadow: emerald ? `0 0 6px rgba(${EMERALD},0.45)` : undefined,
           }}
         />
       </span>
@@ -224,12 +224,11 @@ function useTypewriterText(
 }
 
 /* ── A single quiet caret. Used for the empty live state and interim text. ── */
-function Caret({ reduce, dim = false }: { reduce: boolean; dim?: boolean }) {
+function Caret({ reduce }: { reduce: boolean }) {
   return (
     <motion.span
       aria-hidden
       className="ml-px inline-block h-[1.05em] w-px translate-y-[2px] rounded-full bg-emerald-300 align-middle"
-      style={{ opacity: dim ? 0.8 : 1 }}
       animate={reduce ? undefined : { opacity: [1, 0.12, 1] }}
       transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
     />
@@ -302,7 +301,7 @@ export default function CommandBubble({
         style={live ? cardLive : cardSettled}
       >
         {/* Contained specular cap. Stops 12px short of each corner so it can
-            never collide with the radius and smear (the old top-right bleed). */}
+            never reach the radius and smear. */}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-3 top-0 h-px rounded-full bg-gradient-to-r from-transparent via-white/15 to-transparent"
@@ -340,7 +339,6 @@ export default function CommandBubble({
 
 /* ══════════════════════════════════════════════════════════════════════════
    Stack — live floating bubble settles into the column via shared layoutId.
-   Unchanged structurally from the version you have.
    ══════════════════════════════════════════════════════════════════════════ */
 export function CommandBubbleStack() {
   const {
@@ -415,7 +413,7 @@ export function CommandBubbleStack() {
   const assistantBusy = state === 'thinking' || state === 'responding';
   const hasAssistantLive =
     assistantBusy || assistantBubbleText.trim().length > 0 || !!assistantStatusLine;
-  const showFloatingUser = !!liveTurnId && (state === 'listening' || state === 'transcribing');
+  const showFloatingUser = !!liveTurnId && (state === 'listening' || state === 'follow_up');
   const showStackedUser =
     !!liveTurnId &&
     userBubbleText.trim().length > 0 &&

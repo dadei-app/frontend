@@ -330,7 +330,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const replaceNextStreamTokensRef = useRef(false);
   /** User clicked mic to cancel — suppress error UI from aborted streams. */
   const userInitiatedCancelRef = useRef(false);
-  /** Drop the next WS final after cancel while still transcribing (discarded decode). */
+  /** Drop the next WS final after cancel while a live caption is in flight. */
   const suppressNextTranscriptFinalRef = useRef(false);
   const lastServerUtteranceIdRef = useRef<number | null>(null);
   const setAssistantBubbleTextSynced = useCallback(
@@ -582,13 +582,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!COMMAND_PROCESSING_STATES.has(stateRef.current)) return;
 
     const inVoiceEnrollment = voiceEnrollmentActiveRef.current;
-    const cancellingTranscribing = stateRef.current === 'transcribing';
+    const cancellingLiveCaption =
+      awaitingTranscriptRef.current &&
+      (stateRef.current === 'listening' || stateRef.current === 'follow_up');
     userInitiatedCancelRef.current = true;
     streamTerminalErrorRef.current = false;
     replaceNextStreamTokensRef.current = false;
     commandProcessingEpochRef.current += 1;
     activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
-    suppressNextTranscriptFinalRef.current = cancellingTranscribing;
+    suppressNextTranscriptFinalRef.current = cancellingLiveCaption;
 
     if (!inVoiceEnrollment) {
       endVoiceEnrollmentMode();
@@ -1129,7 +1131,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         setAssistantStatusLine(null);
         setAssistantBubbleTextSynced(text);
         setAssistantBubbleStatus('revealing');
-        if (current === 'transcribing' || current === 'thinking') {
+        if (current === 'thinking') {
           setCommandState('responding');
         }
         return;
@@ -1146,19 +1148,22 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           return;
         }
         // Final decode finished with no command_transcript_final (empty ASR).
-        if (current === 'transcribing' && awaitingTranscriptRef.current) {
+        if (
+          (current === 'listening' || current === 'follow_up') &&
+          awaitingTranscriptRef.current
+        ) {
           const fromFollowUp = transcribeFromFollowUpRef.current;
           utteranceEndNotifiedRef.current = false;
           awaitingTranscriptRef.current = false;
           transcribeFromFollowUpRef.current = false;
           suppressNextTranscriptFinalRef.current = false;
+          setUserCaptionInterim(false);
           setAssistantStatusLine(null);
           setCommandState(fromFollowUp ? 'follow_up' : 'listening');
           return;
         }
         if (
-          (current === 'transcribing' ||
-            (current === 'thinking' && !userBubbleTextRef.current.trim())) &&
+          current === 'thinking' &&
           !commandStreamInFlightRef.current &&
           !userBubbleTextRef.current.trim() &&
           !awaitingTranscriptRef.current
@@ -1202,10 +1207,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             utteranceEndNotifiedRef.current = true;
             awaitingTranscriptRef.current = true;
             transcribeFromFollowUpRef.current = current === 'follow_up';
-            setCommandState('transcribing');
           }
-        } else if (current === 'thinking' && awaitingTranscriptRef.current) {
-          setCommandState('transcribing');
         }
 
         userBubbleTextRef.current = raw;
@@ -1233,49 +1235,37 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         const finalRaw = cleanTranscript(typeof msg.text === 'string' ? msg.text : '');
         const text = finalRaw;
 
-        if (current === 'transcribing' || (current === 'thinking' && awaitingTranscriptRef.current)) {
-          const fromFollowUp = transcribeFromFollowUpRef.current;
+        if (
+          current === 'listening' ||
+          current === 'follow_up' ||
+          (current === 'thinking' && awaitingTranscriptRef.current)
+        ) {
+          const fromFollowUp =
+            transcribeFromFollowUpRef.current || current === 'follow_up';
           awaitingTranscriptRef.current = false;
           transcribeFromFollowUpRef.current = false;
+          utteranceEndNotifiedRef.current = false;
+          setUserCaptionInterim(false);
           const trimmed = text.trim();
           if (!trimmed) {
-            utteranceEndNotifiedRef.current = false;
             setCommandState(fromFollowUp ? 'follow_up' : 'listening');
             return;
           }
+          if (fromFollowUp) {
+            if (commandStreamInFlightRef.current) return;
+            if (isSessionEndUtterance(trimmed)) {
+              console.debug('[Voice][SessionEnd] matched follow-up final', { text: trimmed });
+              setUserBubbleText(trimmed);
+              endSession();
+              return;
+            }
+            if (trimmed.length < MIN_FOLLOW_UP_FINAL_CHARS) {
+              console.debug('[Voice][FollowUp] dropped short final', { text: trimmed });
+              return;
+            }
+          }
           clearWakeFalsePositiveIfCommandInProgress(trimmed);
           submitVisibleCommandText(text, fromFollowUp);
-          return;
-        }
-
-        if (current === 'listening') {
-          const trimmed = text.trim();
-          if (!trimmed) return;
-          clearWakeFalsePositiveIfCommandInProgress(trimmed);
-          if (!utteranceEndNotifiedRef.current) {
-            utteranceEndNotifiedRef.current = true;
-            awaitingTranscriptRef.current = true;
-            setCommandState('transcribing');
-          }
-          submitVisibleCommandText(text, false);
-          return;
-        }
-
-        if (current === 'follow_up') {
-          if (commandStreamInFlightRef.current) return;
-          const trimmed = text.trim();
-          if (!trimmed) return;
-          if (isSessionEndUtterance(trimmed)) {
-            console.debug('[Voice][SessionEnd] matched follow-up final', { text: trimmed });
-            setUserBubbleText(trimmed);
-            endSession();
-            return;
-          }
-          if (trimmed.length < MIN_FOLLOW_UP_FINAL_CHARS) {
-            console.debug('[Voice][FollowUp] dropped short final', { text: trimmed });
-            return;
-          }
-          submitVisibleCommandText(text, true);
           return;
         }
       }
@@ -1348,7 +1338,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (!isCommandOwner || !commandServiceExpiresAt) return;
     const statesWithClaim: CommandState[] = [
       'listening',
-      'transcribing',
       'thinking',
       'responding',
       'follow_up',

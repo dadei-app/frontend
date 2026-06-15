@@ -21,7 +21,7 @@ describe('deriveMicAppearanceFromRuntime', () => {
   });
 
   it('interrupts processing instead of exiting command service', () => {
-    for (const commandState of ['transcribing', 'thinking', 'responding'] as const) {
+    for (const commandState of ['thinking', 'responding'] as const) {
       const appearance = deriveMicAppearanceFromRuntime(
         {
           ...INITIAL_ASSISTANT_STATE,
