@@ -104,6 +104,8 @@ export function useAssistantRuntimeActions() {
         dispatch({ type: 'command/mode', commandMode }),
       setCommandThinkingActive: (active: boolean) =>
         dispatch({ type: 'command/thinking_active', active }),
+      setCommandCaptureSyncPending: (pending: boolean) =>
+        dispatch({ type: 'command/capture_sync_pending', pending }),
       resetRuntime: () => {
         resetAssistantLifecycle();
         dispatch({ type: 'runtime/reset' });

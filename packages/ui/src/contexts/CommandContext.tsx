@@ -18,6 +18,7 @@ import {
   markMicIntentHandled,
   runAssistantTransition,
   shouldAcceptMicIntent,
+  SERVICE_STATE_SYNC_TIMEOUT_MS,
 } from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
@@ -126,6 +127,8 @@ interface CommandContextValue {
   notifyAssistantRevealStarted: () => void;
   /** Typewriter finished; start the length-based follow-up idle window. */
   notifyAssistantRevealComplete: () => void;
+  /** Synchronous thinking check (refs + runtime) for mic routing before React re-renders. */
+  isCommandThinkingNow: () => boolean;
 }
 
 const CommandContext = createContext<CommandContextValue | undefined>(undefined);
@@ -343,7 +346,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const userInitiatedCancelRef = useRef(false);
   /** Drop the next WS final after cancel while a live caption is in flight. */
   const suppressNextTranscriptFinalRef = useRef(false);
+  const commandThinkingActiveRef = useRef(false);
   const cancelThinkingRef = useRef<(() => void) | null>(null);
+  const captureSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCancelSessionIdRef = useRef<string | null>(null);
   const lastServerUtteranceIdRef = useRef<number | null>(null);
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
@@ -401,15 +407,26 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const setCommandThinkingActive = useCallback(
     (active: boolean) => {
+      commandThinkingActiveRef.current = active;
       runtimeActions.setCommandThinkingActive(active);
     },
     [runtimeActions],
   );
 
+  const isCommandThinkingNow = useCallback((): boolean => {
+    if (commandStreamInFlightRef.current) return true;
+    if (commandThinkingActiveRef.current) return true;
+    return selectIsCommandThinking(
+      { ...runtimeRef.current, commandState: stateRef.current },
+      assistantBubbleStatusRef.current,
+    );
+  }, []);
+
   useEffect(() => {
     ownsCommandSessionRef.current = isCommandOwner;
     stateRef.current = state;
-  }, [isCommandOwner, state]);
+    commandThinkingActiveRef.current = runtime.commandThinkingActive;
+  }, [isCommandOwner, runtime.commandThinkingActive, state]);
 
   useEffect(() => {
     if (state === 'listening') {
@@ -592,9 +609,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   ]);
 
   const cancelCommandService = useCallback(() => {
-    if (
-      selectIsCommandThinking(runtimeRef.current, assistantBubbleStatusRef.current)
-    ) {
+    if (isCommandThinkingNow()) {
       cancelThinkingRef.current?.();
       return;
     }
@@ -633,6 +648,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     clearWakeTimeout,
     goIdle,
     endVoiceEnrollmentMode,
+    isCommandThinkingNow,
     releaseCommandServiceInner,
     runtimeActions,
   ]);
@@ -684,10 +700,38 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }, WAKE_FALSE_POSITIVE_MS);
   }, [clearWakeTimeout, endVoiceEnrollmentMode, goIdle, releaseCommandService]);
 
+  const clearCaptureSyncTimer = useCallback(() => {
+    if (captureSyncTimerRef.current != null) {
+      clearTimeout(captureSyncTimerRef.current);
+      captureSyncTimerRef.current = null;
+    }
+  }, []);
+
+  const completeCommandCaptureCancel = useCallback(
+    (inVoiceEnrollment: boolean) => {
+      clearCaptureSyncTimer();
+      runtimeActions.setCommandCaptureSyncPending(false);
+      pendingCancelSessionIdRef.current = null;
+      setCommandThinkingActive(false);
+      setCommandState(inVoiceEnrollment ? 'follow_up' : 'listening');
+      if (!inVoiceEnrollment) {
+        scheduleWakeFalsePositiveRelease();
+      }
+      notifyCommandCaptureRearm();
+    },
+    [
+      clearCaptureSyncTimer,
+      runtimeActions,
+      scheduleWakeFalsePositiveRelease,
+      setCommandThinkingActive,
+    ],
+  );
+
   const cancelThinking = useCallback(() => {
-    if (
-      !selectIsCommandThinking(runtimeRef.current, assistantBubbleStatusRef.current)
-    ) {
+    if (!isCommandThinkingNow()) {
+      return;
+    }
+    if (runtimeRef.current.commandCaptureSyncPending) {
       return;
     }
 
@@ -703,10 +747,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     suppressNextTranscriptFinalRef.current = cancellingLiveCaption;
 
     const sessionId = getRealtimeSessionId();
-    sendRealtimeMessage({
-      type: 'command_inference_cancel',
-      ...(sessionId ? { session_id: sessionId } : {}),
-    });
+    pendingCancelSessionIdRef.current = sessionId ?? null;
 
     if (!inVoiceEnrollment) {
       endVoiceEnrollmentMode();
@@ -725,28 +766,34 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastToolBubbleSnippetRef.current = '';
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
-    setCommandThinkingActive(false);
-    setCommandState(inVoiceEnrollment ? 'follow_up' : 'listening');
-    if (!inVoiceEnrollment) {
-      scheduleWakeFalsePositiveRelease();
-    }
-    sendRealtimeMessage({ type: 'command_audio_discard' });
+
+    runtimeActions.setCommandCaptureSyncPending(true);
     sendRealtimeMessage({
-      type: 'command_audio_wake',
+      type: 'command_inference_cancel',
       ...(sessionId ? { session_id: sessionId } : {}),
     });
-    notifyCommandCaptureRearm();
-    console.debug('[Voice][Cancel] cancelThinking', {
+
+    clearCaptureSyncTimer();
+    captureSyncTimerRef.current = setTimeout(() => {
+      console.warn('[Voice][Cancel] command capture sync timed out');
+      completeCommandCaptureCancel(inVoiceEnrollment);
+    }, SERVICE_STATE_SYNC_TIMEOUT_MS);
+
+    console.debug('[Voice][Cancel] cancelThinking awaiting backend', {
       state: stateRef.current,
       epoch: commandThinkingEpochRef.current,
+      sessionId,
     });
   }, [
+    abortActiveStream,
+    clearCaptureSyncTimer,
     clearFollowUpTimer,
     clearWakeTimeout,
+    completeCommandCaptureCancel,
     endVoiceEnrollmentMode,
+    isCommandThinkingNow,
     resetLiveBubbles,
-    scheduleWakeFalsePositiveRelease,
-    setCommandThinkingActive,
+    runtimeActions,
   ]);
 
   cancelThinkingRef.current = cancelThinking;
@@ -1262,6 +1309,30 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const off = subscribeRealtimeMessages((msg) => {
       const current = stateRef.current;
 
+      if (msg.event === 'command_inference_cancelled') {
+        if (!runtimeRef.current.commandCaptureSyncPending) {
+          return;
+        }
+        const ackSession = typeof msg.session_id === 'string' ? msg.session_id : null;
+        const localSession = getRealtimeSessionId();
+        if (ackSession && localSession && ackSession !== localSession) {
+          return;
+        }
+        if (
+          pendingCancelSessionIdRef.current &&
+          localSession &&
+          pendingCancelSessionIdRef.current !== localSession
+        ) {
+          return;
+        }
+        completeCommandCaptureCancel(voiceEnrollmentActiveRef.current);
+        console.debug('[Voice][Cancel] command_inference_cancelled', {
+          inference_cancelled: msg.inference_cancelled,
+          capture_ready: msg.capture_ready,
+        });
+        return;
+      }
+
       if (msg.event === 'command_transcript_error') {
         if (shouldDropStaleTranscriptFinal()) return;
         const text = formatWsTranscriptError({
@@ -1348,6 +1419,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             awaitingTranscriptRef.current = true;
             transcribeFromFollowUpRef.current = current === 'follow_up';
           }
+          if (raw.trim()) {
+            clearWakeTimeout();
+          }
         }
 
         userBubbleTextRef.current = raw;
@@ -1421,6 +1495,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     releaseCommandService,
     scheduleWakeFalsePositiveRelease,
     assignLiveTurnId,
+    completeCommandCaptureCancel,
     shouldDropStaleTranscriptFinal,
     submitVisibleCommandText,
   ]);
@@ -1503,14 +1578,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     const current = stateRef.current;
     if (current === 'idle' && !isCommandOwner && !isCommandService) return;
     markMicIntentHandled();
-    if (
-      selectIsCommandThinking(runtimeRef.current, assistantBubbleStatusRef.current)
-    ) {
+    if (isCommandThinkingNow()) {
       cancelThinking();
       return;
     }
     cancelCommandService();
-  }, [cancelCommandService, cancelThinking, isCommandService, isCommandOwner]);
+  }, [cancelCommandService, cancelThinking, isCommandService, isCommandOwner, isCommandThinkingNow]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1524,9 +1597,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     () => () => {
       clearFollowUpTimer();
       clearWakeTimeout();
+      clearCaptureSyncTimer();
       abortActiveStream();
     },
-    [abortActiveStream, clearFollowUpTimer, clearWakeTimeout],
+    [abortActiveStream, clearCaptureSyncTimer, clearFollowUpTimer, clearWakeTimeout],
   );
 
   const value: CommandContextValue = {
@@ -1549,6 +1623,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     assistantBubbleAnchored,
     notifyAssistantRevealStarted,
     notifyAssistantRevealComplete,
+    isCommandThinkingNow,
   };
 
   return <CommandContext.Provider value={value}>{children}</CommandContext.Provider>;

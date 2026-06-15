@@ -7,7 +7,6 @@ import {
   markMicIntentHandled,
   shouldAcceptMicIntent,
 } from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
-import { resolveMicIntentAction } from '@dadei/ui/lib/assistant/lifecycle/micIntent';
 import { deriveMicAppearanceFromRuntime } from '@dadei/ui/lib/assistant/voice/micAppearance';
 
 export function useMicIntent() {
@@ -17,16 +16,25 @@ export function useMicIntent() {
 
   const tutorialActive = useTutorialEngaged();
   const { toggleService, permissionsGateOpen } = useService();
-  const { assistantBubbleStatus, cancelCommandService, cancelThinking } = useCommand();
+  const {
+    assistantBubbleStatus,
+    cancelCommandService,
+    cancelThinking,
+    isCommandThinkingNow,
+  } = useCommand();
+  const isCommandThinkingNowRef = useRef(isCommandThinkingNow);
+  isCommandThinkingNowRef.current = isCommandThinkingNow;
 
   const submitMicIntent = useCallback(() => {
     if (!shouldAcceptMicIntent()) return;
 
-    const action = resolveMicIntentAction(runtimeRef.current, {
+    const thinking = isCommandThinkingNowRef.current();
+    const action = deriveMicAppearanceFromRuntime(runtimeRef.current, {
       tutorialActive,
       permissionsGateBlocked: permissionsGateOpen,
       assistantBubbleStatus,
-    });
+      isCommandThinking: thinking,
+    }).action;
     if (action === 'none') return;
 
     markMicIntentHandled();
@@ -55,8 +63,15 @@ export function useMicIntent() {
         tutorialActive,
         permissionsGateBlocked: permissionsGateOpen,
         assistantBubbleStatus,
+        isCommandThinking: isCommandThinkingNow(),
       }),
-    [assistantBubbleStatus, permissionsGateOpen, runtime, tutorialActive],
+    [
+      assistantBubbleStatus,
+      isCommandThinkingNow,
+      permissionsGateOpen,
+      runtime,
+      tutorialActive,
+    ],
   );
 
   return {

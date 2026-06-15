@@ -13,6 +13,10 @@ function clearServiceStateSyncPending(state: AssistantState): AssistantState {
   };
 }
 
+function clearCommandCaptureSyncPending(state: AssistantState): AssistantState {
+  return { ...state, commandCaptureSyncPending: false };
+}
+
 export function assistantRuntimeReducer(
   state: AssistantState,
   action: AssistantAction,
@@ -43,6 +47,12 @@ export function assistantRuntimeReducer(
         serviceStateSyncBaselineRevision:
           action.baselineRevision ?? state.serviceStateRevision,
       };
+
+    case 'command/capture_sync_pending':
+      if (!action.pending) {
+        return clearCommandCaptureSyncPending(state);
+      }
+      return { ...state, commandCaptureSyncPending: true };
 
     case 'assistant_state/sync': {
       if (action.revision <= state.serviceStateRevision) {
@@ -100,6 +110,15 @@ export function assistantRuntimeReducer(
 
 export function selectIsServiceStateSyncPending(state: AssistantState): boolean {
   return state.serviceStateSyncPending;
+}
+
+export function selectIsCommandCaptureSyncPending(state: AssistantState): boolean {
+  return state.commandCaptureSyncPending;
+}
+
+/** Gray mic chrome while awaiting any authoritative backend handshake. */
+export function selectIsMicSyncPending(state: AssistantState): boolean {
+  return selectIsServiceStateSyncPending(state) || selectIsCommandCaptureSyncPending(state);
 }
 
 export function selectIsAmbientEnabled(state: AssistantState): boolean {

@@ -16,10 +16,15 @@ export interface AssistantState {
   isConnected: boolean;
   registrationConflict: boolean;
   /**
-   * Mic chrome loading — waiting for the next authoritative `assistant_state`
+   * Mic chrome loading — waiting for authoritative `assistant_state`
    * websocket after a service mutation (enable/disable/claim/release).
    */
   serviceStateSyncPending: boolean;
+  /**
+   * Mic chrome loading — waiting for backend `command_inference_cancelled`
+   * after the user stops thinking (capture pipeline re-armed server-side).
+   */
+  commandCaptureSyncPending: boolean;
   /** Revision at the time `serviceStateSyncPending` was set; cleared when a newer revision applies. */
   serviceStateSyncBaselineRevision: number | null;
   /** Monotonic revision from backend `assistant_state` snapshots. */
@@ -40,6 +45,7 @@ export const INITIAL_ASSISTANT_STATE: AssistantState = {
   isConnected: false,
   registrationConflict: false,
   serviceStateSyncPending: false,
+  commandCaptureSyncPending: false,
   serviceStateSyncBaselineRevision: null,
   serviceStateRevision: 0,
   commandThinkingActive: false,
@@ -65,5 +71,6 @@ export type AssistantAction =
     }
   | { type: 'command/state'; commandState: CommandState }
   | { type: 'command/mode'; commandMode: CommandMode }
+  | { type: 'command/capture_sync_pending'; pending: boolean }
   | { type: 'command/thinking_active'; active: boolean }
   | { type: 'runtime/reset' };

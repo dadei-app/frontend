@@ -18,6 +18,7 @@ import {
   selectIsAmbientEnabled,
   selectIsCommandService,
   selectIsCommandOwner,
+  selectIsMicSyncPending,
   selectIsServiceStateSyncPending,
 } from '@dadei/ui/lib/assistant/assistantRuntime';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
@@ -696,7 +697,7 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   }, [queryClient]);
 
   const toggleService = useCallback(async () => {
-    if (selectIsServiceStateSyncPending(runtimeRef.current)) return;
+    if (selectIsMicSyncPending(runtimeRef.current)) return;
 
     await runAssistantTransition(async () => {
       if (registrationConflict) {

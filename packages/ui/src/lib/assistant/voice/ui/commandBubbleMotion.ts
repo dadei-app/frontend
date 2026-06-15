@@ -105,8 +105,17 @@ export const DOCK_TO_STACK_LAYOUT_TRANSITION = {
 export const COMMAND_BUBBLE_STACK_SPACING = {
   /** Uniform gap between every bubble in the scroll stack. */
   stackGapPx: 12,
-  dockMarginBottomPx: 6,
   scrollPaddingPx: 8,
+  /** Space between the capture dock and the first stack bubble. */
+  dockStackGapPx: 8,
+  /** Initial stack inset before the dock is measured (avoids one-frame overlap). */
+  dockFallbackMinPx: 92,
+} as const;
+
+/** Empty dock placeholder copy. */
+export const COMMAND_DOCK_PLACEHOLDER = {
+  listening: 'Start speaking to dadei…',
+  follow_up: 'Ask a follow-up…',
 } as const;
 
 /** @deprecated Use COMMAND_BUBBLE_STACK_SPACING.stackGapPx */
@@ -161,10 +170,6 @@ export const CAPTURE_RELEASE_SCALE = 0.985;
 export const CAPTURE_RELEASE_MS = 1.05;
 
 export const DOCK_SLOT_COLLAPSE_MS = 0.72;
-
-/** Live dock breathing — subtle idle pulse layered under mic reactivity. */
-export const DOCK_BREATHE_SCALE = [1, 1.01, 1] as const;
-export const DOCK_BREATHE_DURATION_S = 3.2;
 
 /** Mic level → live dock glow intensity (0–1 normalized). */
 export function dockGlowFromMicLevel(level: number): number {

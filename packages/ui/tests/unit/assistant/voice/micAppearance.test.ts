@@ -27,6 +27,21 @@ describe('deriveMicAppearanceFromRuntime', () => {
         serviceMode: 'command',
         commandState: 'idle',
         commandOwnerSessionId: 'sess-1',
+        commandThinkingActive: false,
+      },
+      { ...tutorialOff, isCommandThinking: true },
+    );
+    expect(appearance.showThinkingSpinner).toBe(true);
+    expect(appearance.action).toBe('cancel_thinking');
+  });
+
+  it('interrupts thinking while the command thinking flag is active but state is still idle (runtime)', () => {
+    const appearance = deriveMicAppearanceFromRuntime(
+      {
+        ...INITIAL_ASSISTANT_STATE,
+        serviceMode: 'command',
+        commandState: 'idle',
+        commandOwnerSessionId: 'sess-1',
         commandThinkingActive: true,
       },
       tutorialOff,

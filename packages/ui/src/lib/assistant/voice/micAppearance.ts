@@ -3,7 +3,7 @@ import {
   selectIsAmbientEnabled,
   selectIsCommandService,
   selectIsCommandThinking,
-  selectIsServiceStateSyncPending,
+  selectIsMicSyncPending,
 } from '@dadei/ui/lib/assistant/assistantRuntime';
 import type { AssistantState } from '@dadei/ui/types/assistant.types';
 import type { AssistantBubbleStatus } from '@dadei/ui/types/command.types';
@@ -35,9 +35,16 @@ export function deriveMicAppearanceFromRuntime(
     tutorialActive: boolean;
     permissionsGateBlocked?: boolean;
     assistantBubbleStatus?: AssistantBubbleStatus | null;
+    /** When set, overrides `selectIsCommandThinking` (sync ref snapshot for mic clicks). */
+    isCommandThinking?: boolean;
   },
 ): MicAppearance {
-  const { tutorialActive, permissionsGateBlocked = false, assistantBubbleStatus = null } = options;
+  const {
+    tutorialActive,
+    permissionsGateBlocked = false,
+    assistantBubbleStatus = null,
+    isCommandThinking,
+  } = options;
 
   if (tutorialActive) {
     return {
@@ -72,7 +79,7 @@ export function deriveMicAppearanceFromRuntime(
     };
   }
 
-  if (selectIsServiceStateSyncPending(runtime)) {
+  if (selectIsMicSyncPending(runtime)) {
     return {
       grayChrome: 'loading',
       tone: 'none',
@@ -84,7 +91,8 @@ export function deriveMicAppearanceFromRuntime(
   }
 
   if (selectIsCommandService(runtime)) {
-    const thinking = selectIsCommandThinking(runtime, assistantBubbleStatus);
+    const thinking =
+      isCommandThinking ?? selectIsCommandThinking(runtime, assistantBubbleStatus);
     const capturing = !thinking && COMMAND_CAPTURE_STATES.has(runtime.commandState);
     return {
       grayChrome: 'none',

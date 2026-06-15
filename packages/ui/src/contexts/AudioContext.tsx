@@ -17,13 +17,15 @@ import {
 import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
+  notifyCommandCaptureCommit,
   notifyVoiceSpeechActivity,
   subscribeCommandCaptureCommit,
   subscribeCommandCaptureRearm,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
-  FOLLOW_UP_SPEECH_RMS,
+  COMMAND_SPEECH_RMS_THRESHOLD,
+  COMMAND_UTTERANCE_END_MS,
 } from '@dadei/ui/lib/assistant/voice/constants';
 import {
   OpenWakeWordDetector,
@@ -36,7 +38,7 @@ import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 
 const COMMAND_START_RETRY_MS = 500;
-const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 2048;
+const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 1024;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
 const MIC_LEVEL_ANALYSER_FFT = 256;
@@ -171,6 +173,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const wakeDetectorRef = useRef<OpenWakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
   const commandAudioEndSentRef = useRef(false);
+  const speechCaptureRef = useRef({
+    hadSpeech: false,
+    speaking: false,
+    silenceTimer: null as ReturnType<typeof setTimeout> | null,
+  });
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
   const voiceEnrollmentRef = useRef(false);
@@ -242,6 +249,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     sendRealtimeMessage({ type: 'command_audio_end' });
   }, []);
 
+  const resetSpeechCapture = useCallback(() => {
+    const capture = speechCaptureRef.current;
+    if (capture.silenceTimer != null) {
+      clearTimeout(capture.silenceTimer);
+    }
+    speechCaptureRef.current = { hadSpeech: false, speaking: false, silenceTimer: null };
+  }, []);
+
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -283,8 +298,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state === 'listening' || state === 'follow_up') {
       commandAudioEndSentRef.current = false;
+      resetSpeechCapture();
+    } else {
+      resetSpeechCapture();
     }
-  }, [state]);
+  }, [state, resetSpeechCapture]);
 
   useEffect(() => {
     const commandAnalyser = streamAnalyserReady ? analyserRef.current : null;
@@ -299,7 +317,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     const buf = new Uint8Array(analyser.fftSize);
     const meterFromCommand = Boolean(commandAnalyser);
     let raf = 0;
-    let speechActive = false;
 
     const tick = () => {
       const level = computeMicLevelFromAnalyser(analyser, buf);
@@ -309,13 +326,34 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
         const inCapture =
           stateRef.current === 'listening' || stateRef.current === 'follow_up';
         if (inCapture) {
-          const speaking = level >= FOLLOW_UP_SPEECH_RMS;
-          if (speaking && !speechActive && stateRef.current === 'follow_up') {
-            notifyVoiceSpeechActivity();
+          const speaking = level >= COMMAND_SPEECH_RMS_THRESHOLD;
+          const capture = speechCaptureRef.current;
+          if (speaking) {
+            if (capture.silenceTimer != null) {
+              clearTimeout(capture.silenceTimer);
+              capture.silenceTimer = null;
+            }
+            if (!capture.speaking && stateRef.current === 'follow_up') {
+              notifyVoiceSpeechActivity();
+            }
+            capture.speaking = true;
+            capture.hadSpeech = true;
+          } else if (capture.hadSpeech && capture.silenceTimer == null && !commandAudioEndSentRef.current) {
+            capture.speaking = false;
+            capture.silenceTimer = setTimeout(() => {
+              speechCaptureRef.current.silenceTimer = null;
+              if (
+                stateRef.current === 'listening' ||
+                stateRef.current === 'follow_up'
+              ) {
+                notifyCommandCaptureCommit();
+              }
+            }, COMMAND_UTTERANCE_END_MS);
+          } else if (!speaking) {
+            capture.speaking = false;
           }
-          speechActive = speaking;
         } else {
-          speechActive = false;
+          resetSpeechCapture();
         }
       }
 
@@ -324,7 +362,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [streamAnalyserReady, previewAnalyserReady, state]);
+  }, [streamAnalyserReady, previewAnalyserReady, state, resetSpeechCapture]);
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number, wakeWord: WakeWordLabel) => {
@@ -405,10 +443,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   const rearmCommandCapture = useCallback(() => {
     commandAudioEndSentRef.current = false;
     commandStreamReadyRef.current = false;
+    resetSpeechCapture();
     if (commandStreamActiveRef.current) {
       ensureCommandSessionStarted(Date.now(), true);
     }
-  }, [ensureCommandSessionStarted]);
+  }, [ensureCommandSessionStarted, resetSpeechCapture]);
 
   useEffect(() => subscribeCommandCaptureRearm(rearmCommandCapture), [rearmCommandCapture]);
 
