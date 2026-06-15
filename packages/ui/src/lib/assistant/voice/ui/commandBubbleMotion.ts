@@ -224,6 +224,9 @@ export const DOCK_ENTRY_OFFSET_Y = DOCK_POP_ORIGIN_Y;
 /** @deprecated Use DOCK_POP_* */
 export const DOCK_ENTRY_SCALE = DOCK_POP_ORIGIN_SCALE;
 
+/** Blue capture chrome → settled stack chrome (background, border, shadow). */
+export const CAPTURE_CHROME_SETTLE_MS = 0.5;
+
 /** Listening ends — gentle settle into the stack (single ease, no bounce). */
 export const CAPTURE_RELEASE_DEPRESS_Y = 4;
 export const CAPTURE_RELEASE_SCALE = 0.985;

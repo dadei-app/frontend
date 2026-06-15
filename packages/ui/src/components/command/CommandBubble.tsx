@@ -14,6 +14,7 @@ import {
   CAPTURE_RELEASE_DEPRESS_Y,
   CAPTURE_RELEASE_MS,
   CAPTURE_RELEASE_SCALE,
+  CAPTURE_CHROME_SETTLE_MS,
   COMMAND_BUBBLE_STACK_SPACING,
   COMMAND_DOCK_PLACEHOLDER,
   DOCK_POP_ORIGIN_BLUR_PX,
@@ -55,13 +56,9 @@ const COMMAND_SKY = '14,165,233';
 type BubblePhase = 'thought' | 'settling' | 'settled';
 
 const userCardSettledChrome = {
-  background: 'linear-gradient(180deg, rgba(26,26,30,0.60) 0%, rgba(15,15,18,0.68) 100%)',
+  background: 'linear-gradient(180deg, rgba(26,26,30,0.97) 0%, rgba(15,15,18,0.98) 100%)',
   borderColor: 'rgba(255,255,255,0.07)',
-  boxShadow: [
-    'inset 0 1px 0 0 rgba(255,255,255,0.07)',
-    '0 1px 2px rgba(0,0,0,0.35)',
-    '0 24px 48px -30px rgba(0,0,0,0.78)',
-  ].join(', '),
+  boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.07), 0 1px 2px rgba(0,0,0,0.35)',
 } as const;
 
 const userCardCaptureChrome = {
@@ -175,7 +172,7 @@ function SpeakerMark({
               initial={{ opacity: 0, scale: 0.55 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.55 }}
-              transition={{ duration: 0.3, ease: VOICE_EASE }}
+              transition={{ duration: CAPTURE_CHROME_SETTLE_MS, ease: VOICE_EASE }}
             >
               {captureAccent ? (
                 <motion.span
@@ -209,7 +206,7 @@ function SpeakerMark({
 function StatusSpinnerRing() {
   return (
     <motion.span
-      className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 border-zinc-600/70 border-t-sky-300/90"
+      className="box-border inline-block size-3.5 shrink-0 rounded-full border-2 border-zinc-600/70 border-t-sky-300/90"
       animate={{ rotate: 360 }}
       transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
       aria-hidden
@@ -231,12 +228,14 @@ function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean 
   const statusBase = formatAssistantStatusLine(line);
   return (
     <span
-      className={cn('flex min-w-0 items-center gap-2.5', BUBBLE_BODY_CLASS, BUBBLE_BODY_MIN_H)}
+      className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-2.5 font-primary text-[15px] leading-6 sm:text-[16px]"
       aria-live="polite"
       aria-busy="true"
     >
-      <StatusSpinnerRing />
-      <span className={cn('relative min-w-0 flex-1 overflow-hidden', BUBBLE_BODY_MIN_H)}>
+      <span className="flex h-6 items-center justify-center">
+        <StatusSpinnerRing />
+      </span>
+      <span className="relative h-6 min-w-0 overflow-hidden">
         <AnimatePresence initial={false}>
           <motion.span
             key={statusBase}
@@ -244,7 +243,7 @@ function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean 
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '-100%', opacity: 0.2 }}
             transition={{ duration: 0.3, ease: VOICE_EASE }}
-            className="absolute inset-0 flex min-w-0 items-center truncate"
+            className="absolute inset-0 flex items-center truncate leading-6 text-zinc-400"
           >
             <AnimatedStatusLine base={statusBase} />
           </motion.span>
@@ -395,7 +394,8 @@ export default function CommandBubble({
   const isDepressing = !isAssistant && phase === 'settling';
   const captureFading = isDepressing;
   const justPopped = captureLive && dockPopSeq > 0;
-  const chromeReleaseMs = captureFading ? CAPTURE_RELEASE_MS : 0.45;
+  const userChromeEase = VOICE_EASE;
+  const userChromeDuration = captureLive ? 0.35 : CAPTURE_CHROME_SETTLE_MS;
 
   return (
     <motion.div
@@ -431,25 +431,19 @@ export default function CommandBubble({
               }
         }
         transition={{
-          borderRadius: { duration: isDepressing ? CAPTURE_RELEASE_MS : justPopped ? 0.52 : chromeReleaseMs, ease: VOICE_EASE },
-          scale: { duration: isDepressing ? CAPTURE_RELEASE_MS : chromeReleaseMs, ease: VOICE_EASE },
-          background: { duration: chromeReleaseMs, ease: VOICE_EASE },
-          borderColor: { duration: chromeReleaseMs, ease: VOICE_EASE },
-          boxShadow: { duration: chromeReleaseMs, ease: VOICE_EASE },
+          borderRadius: {
+            duration: isDepressing ? CAPTURE_RELEASE_MS : justPopped ? 0.52 : userChromeDuration,
+            ease: userChromeEase,
+          },
+          scale: { duration: isDepressing ? CAPTURE_RELEASE_MS : userChromeDuration, ease: userChromeEase },
+          background: { duration: userChromeDuration, ease: userChromeEase },
+          borderColor: { duration: userChromeDuration, ease: userChromeEase },
+          boxShadow: { duration: userChromeDuration, ease: userChromeEase },
         }}
         style={
           isAssistant
             ? { ...cardStyle, borderWidth: 1, borderStyle: 'solid' }
-            : {
-                borderWidth: 1,
-                borderStyle: 'solid',
-                ...(!captureLive
-                  ? {
-                      backdropFilter: cardSettled.backdropFilter,
-                      WebkitBackdropFilter: cardSettled.WebkitBackdropFilter,
-                    }
-                  : {}),
-              }
+            : { borderWidth: 1, borderStyle: 'solid' }
         }
       >
         <div
