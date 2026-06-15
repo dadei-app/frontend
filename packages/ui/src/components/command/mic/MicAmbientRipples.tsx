@@ -14,8 +14,8 @@ const RIPPLE_RING_MOTION = {
     borderColor: RIPPLE_COLOR,
   },
   animate: {
-    scale: [1.05, 2] as const,
-    opacity: [0, 0.62, 0] as const,
+    scale: [1.05, 2],
+    opacity: [0, 0.62, 0],
     borderColor: RIPPLE_COLOR,
   },
   transition: {
