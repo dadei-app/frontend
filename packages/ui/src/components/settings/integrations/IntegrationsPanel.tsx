@@ -16,6 +16,7 @@ import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
 import { GlassAlertModal } from '@dadei/ui/components/ui/GlassModal';
 import type { ProviderHealth } from '@dadei/ui/types/integrations.types';
+import type { UserMe } from '@dadei/ui/types/auth.types';
 import { IntegrationCard } from './IntegrationCard';
 import { PrimaryProviderSelector } from './PrimaryProviderSelector';
 import { ProviderColumn } from './ProviderColumn';
@@ -141,13 +142,26 @@ export function IntegrationsPanel() {
   };
 
   const handlePrimaryChange = async (domain: PrimaryDomain, provider: string | null) => {
+    const field = `primary_${domain}_provider` as const;
+    const previous = queryClient.getQueryData<UserMe>(queryKeys.authMe);
+
+    if (previous) {
+      queryClient.setQueryData<UserMe>(queryKeys.authMe, {
+        ...previous,
+        [field]: provider,
+      });
+    }
+
     setSavingDomain(domain);
     try {
       await serviceApi.updatePrimaryProviders({
-        [`primary_${domain}_provider`]: provider,
+        [field]: provider,
       } as Parameters<typeof serviceApi.updatePrimaryProviders>[0]);
       void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
     } catch (err: unknown) {
+      if (previous) {
+        queryClient.setQueryData<UserMe>(queryKeys.authMe, previous);
+      }
       setConnectError(getUserErrorMessage(err, 'Could not update default account.'));
     } finally {
       setSavingDomain(null);

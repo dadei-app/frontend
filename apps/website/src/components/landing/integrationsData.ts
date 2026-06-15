@@ -13,14 +13,21 @@ import {
   AppWindow,
   type LucideIcon,
 } from 'lucide-react';
-import {
-  GOOGLE_LOGOS,
-  type LogoDef,
-} from '@dadei/ui/components/settings/integrations/integrationIcons';
+import { resolveWorkspaceToolLogo } from '@dadei/ui/components/settings/integrations/integrationIcons';
 
 export type ScopeItem = {
   label: string;
   detail?: string;
+};
+
+export type WorkspaceProviderId = 'google' | 'microsoft' | 'apple';
+
+export type WorkspaceProvider = {
+  id: WorkspaceProviderId;
+  label: string;
+  networkEmail: string;
+  linkedEmail?: string;
+  comingSoon?: boolean;
 };
 
 export type IntegrationTool = {
@@ -30,6 +37,7 @@ export type IntegrationTool = {
   logo?: LogoDef;
   Icon?: LucideIcon;
   scopes: ScopeItem[];
+  providers?: WorkspaceProviderId[];
 };
 
 export type IntegrationCategory = {
@@ -37,104 +45,176 @@ export type IntegrationCategory = {
   label: string;
   short: string;
   tools: IntegrationTool[];
+  workspace?: boolean;
 };
+
+export const WORKSPACE_PROVIDERS: WorkspaceProvider[] = [
+  {
+    id: 'google',
+    label: 'Google',
+    networkEmail: 'you@gmail.com',
+  },
+  {
+    id: 'microsoft',
+    label: 'Microsoft',
+    networkEmail: 'you@gmail.com',
+    linkedEmail: 'you@company.com',
+  },
+  {
+    id: 'apple',
+    label: 'Apple',
+    networkEmail: 'you@gmail.com',
+    comingSoon: true,
+  },
+];
+
+export const ACCOUNT_FEATURES = [
+  {
+    id: 'sign-in',
+    title: 'Sign in with any provider',
+    body: 'Google, Microsoft, or Apple — matching emails link to the same network automatically.',
+  },
+  {
+    id: 'link',
+    title: 'Mix personal & work accounts',
+    body: 'Connect additional providers in Settings, even when the email differs from your network.',
+  },
+  {
+    id: 'defaults',
+    title: 'Pick smart defaults',
+    body: 'Choose which connected account handles mail, calendar, and contacts by default.',
+  },
+] as const;
+
+const WORKSPACE_TOOLS: IntegrationTool[] = [
+  {
+    id: 'gmail',
+    name: 'Gmail',
+    short: 'inbox & send',
+    providers: ['google'],
+    scopes: [
+      { label: 'read', detail: 'list threads & open messages' },
+      { label: 'search', detail: 'query inbox by sender, subject, or date' },
+      { label: 'send', detail: 'compose & deliver outbound mail' },
+      { label: 'modify', detail: 'labels, archive, mark read/unread' },
+    ],
+  },
+  {
+    id: 'mail',
+    name: 'Outlook',
+    short: 'inbox & send',
+    providers: ['microsoft'],
+    scopes: [
+      { label: 'read', detail: 'list messages & open threads' },
+      { label: 'search', detail: 'find mail by sender or subject' },
+      { label: 'send', detail: 'compose & deliver outbound mail' },
+      { label: 'modify', detail: 'move, flag, or archive messages' },
+    ],
+  },
+  {
+    id: 'calendar',
+    name: 'Calendar',
+    short: 'schedule & meetings',
+    providers: ['google', 'microsoft', 'apple'],
+    scopes: [
+      { label: 'read', detail: 'list events & inspect details' },
+      { label: 'create', detail: 'book new events & reminders' },
+      { label: 'update', detail: 'reschedule or change attendees' },
+      { label: 'delete', detail: 'cancel events from your calendar' },
+    ],
+  },
+  {
+    id: 'contacts',
+    name: 'Contacts',
+    short: 'people lookup',
+    providers: ['google', 'microsoft', 'apple'],
+    scopes: [
+      { label: 'read', detail: 'list & open contact records' },
+      { label: 'search', detail: 'find people by name or email' },
+      { label: 'create', detail: 'add new contacts' },
+      { label: 'update', detail: 'edit names, emails, phone numbers' },
+    ],
+  },
+  {
+    id: 'tasks',
+    name: 'Tasks',
+    short: 'to-do lists',
+    providers: ['google', 'microsoft'],
+    scopes: [
+      { label: 'read', detail: 'list tasks & task lists' },
+      { label: 'create', detail: 'add tasks with due dates & notes' },
+      { label: 'update', detail: 'mark complete or edit details' },
+      { label: 'delete', detail: 'remove tasks & lists' },
+    ],
+  },
+  {
+    id: 'docs',
+    name: 'Docs',
+    short: 'documents',
+    providers: ['google'],
+    scopes: [
+      { label: 'read', detail: 'open & read document content' },
+      { label: 'create', detail: 'start new documents' },
+      { label: 'append', detail: 'add text to the end of a doc' },
+      { label: 'update', detail: 'replace or edit existing content' },
+    ],
+  },
+  {
+    id: 'files',
+    name: 'OneDrive',
+    short: 'files & folders',
+    providers: ['microsoft'],
+    scopes: [
+      { label: 'read', detail: 'list & inspect files dadei created' },
+      { label: 'search', detail: 'find files by name or type' },
+      { label: 'create', detail: 'upload or create new files' },
+      { label: 'update', detail: 'rename or change file metadata' },
+    ],
+  },
+  {
+    id: 'drive',
+    name: 'Drive',
+    short: 'app files only',
+    providers: ['google'],
+    scopes: [
+      { label: 'read', detail: 'list & inspect files dadei created' },
+      { label: 'search', detail: 'find files by name or type' },
+      { label: 'create', detail: 'upload or create new files' },
+      { label: 'update', detail: 'rename or change file metadata' },
+    ],
+  },
+  {
+    id: 'sheets',
+    name: 'Sheets',
+    short: 'spreadsheets',
+    providers: ['google', 'microsoft'],
+    scopes: [
+      { label: 'read', detail: 'read ranges & cell values' },
+      { label: 'create', detail: 'start new spreadsheets' },
+      { label: 'append', detail: 'add rows to existing sheets' },
+      { label: 'update', detail: 'write to specific cell ranges' },
+    ],
+  },
+];
+
+export function workspaceToolsForProvider(providerId: WorkspaceProviderId): IntegrationTool[] {
+  return WORKSPACE_TOOLS.filter(tool => tool.providers?.includes(providerId));
+}
+
+export function defaultWorkspaceToolId(providerId: WorkspaceProviderId): string {
+  const tools = workspaceToolsForProvider(providerId);
+  if (providerId === 'microsoft') return tools.find(t => t.id === 'mail')?.id ?? tools[0]?.id ?? 'mail';
+  if (providerId === 'apple') return tools.find(t => t.id === 'calendar')?.id ?? tools[0]?.id ?? 'calendar';
+  return tools.find(t => t.id === 'gmail')?.id ?? tools[0]?.id ?? 'gmail';
+}
 
 export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
   {
-    id: 'google',
-    label: 'Google Workspace',
-    short: 'connect once via OAuth',
-    tools: [
-      {
-        id: 'gmail',
-        name: 'Gmail',
-        short: 'inbox & send',
-        logo: GOOGLE_LOGOS.gmail,
-        scopes: [
-          { label: 'read', detail: 'list threads & open messages' },
-          { label: 'search', detail: 'query inbox by sender, subject, or date' },
-          { label: 'send', detail: 'compose & deliver outbound mail' },
-          { label: 'modify', detail: 'labels, archive, mark read/unread' },
-          { label: 'delete', detail: 'remove messages permanently' },
-        ],
-      },
-      {
-        id: 'calendar',
-        name: 'Calendar',
-        short: 'schedule & meetings',
-        logo: GOOGLE_LOGOS.calendar,
-        scopes: [
-          { label: 'read', detail: 'list events & inspect details' },
-          { label: 'create', detail: 'book new events & reminders' },
-          { label: 'update', detail: 'reschedule, rename, or change attendees' },
-          { label: 'delete', detail: 'cancel events from your calendar' },
-        ],
-      },
-      {
-        id: 'contacts',
-        name: 'Contacts',
-        short: 'people lookup',
-        logo: GOOGLE_LOGOS.contacts,
-        scopes: [
-          { label: 'read', detail: 'list & open contact records' },
-          { label: 'search', detail: 'find people by name or email' },
-          { label: 'create', detail: 'add new contacts' },
-          { label: 'update', detail: 'edit names, emails, phone numbers' },
-          { label: 'delete', detail: 'remove contacts' },
-        ],
-      },
-      {
-        id: 'tasks',
-        name: 'Tasks',
-        short: 'to-do lists',
-        logo: GOOGLE_LOGOS.tasks,
-        scopes: [
-          { label: 'read', detail: 'list tasks & task lists' },
-          { label: 'create', detail: 'add tasks with due dates & notes' },
-          { label: 'update', detail: 'mark complete or edit details' },
-          { label: 'delete', detail: 'remove tasks & lists' },
-        ],
-      },
-      {
-        id: 'docs',
-        name: 'Docs',
-        short: 'docs read & write',
-        logo: GOOGLE_LOGOS.docs,
-        scopes: [
-          { label: 'read', detail: 'open & read document content' },
-          { label: 'create', detail: 'start new Google Docs' },
-          { label: 'append', detail: 'add text to the end of a doc' },
-          { label: 'update', detail: 'replace or edit existing content' },
-          { label: 'delete', detail: 'remove documents' },
-        ],
-      },
-      {
-        id: 'drive',
-        name: 'Drive',
-        short: 'app files only',
-        logo: GOOGLE_LOGOS.drive,
-        scopes: [
-          { label: 'read', detail: 'list & inspect files dadei created' },
-          { label: 'search', detail: 'find files by name or type' },
-          { label: 'create', detail: 'upload or create new files' },
-          { label: 'update', detail: 'rename or change file metadata' },
-          { label: 'delete', detail: 'remove app-scoped files' },
-        ],
-      },
-      {
-        id: 'sheets',
-        name: 'Sheets',
-        short: 'sheets & cells',
-        logo: GOOGLE_LOGOS.sheets,
-        scopes: [
-          { label: 'read', detail: 'read ranges & cell values' },
-          { label: 'create', detail: 'start new spreadsheets' },
-          { label: 'append', detail: 'add rows to existing sheets' },
-          { label: 'update', detail: 'write to specific cell ranges' },
-          { label: 'delete', detail: 'remove spreadsheets' },
-        ],
-      },
-    ],
+    id: 'workspace',
+    label: 'Connected accounts',
+    short: 'Google, Microsoft & Apple',
+    workspace: true,
+    tools: WORKSPACE_TOOLS,
   },
   {
     id: 'mapping',
@@ -218,7 +298,6 @@ export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
           { label: 'next track', detail: 'skip forward' },
           { label: 'previous track', detail: 'skip back' },
           { label: 'stop', detail: 'halt playback' },
-          { label: 'now playing', detail: 'read title, artist, app' },
         ],
       },
       {
@@ -231,8 +310,6 @@ export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
           { label: 'sleep', detail: 'put device to sleep' },
           { label: 'dark mode', detail: 'toggle system appearance' },
           { label: 'do not disturb', detail: 'toggle focus / DND mode' },
-          { label: 'fullscreen', detail: 'toggle focused window fullscreen' },
-          { label: 'dismiss notifications', detail: 'clear notification center' },
         ],
       },
       {
@@ -282,8 +359,7 @@ export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
         scopes: [
           { label: 'web results', detail: 'Brave Search title, URL, and snippet' },
           { label: 'top matches', detail: 'ranked result list for the query' },
-          { label: 'public web', detail: 'no Google account required' },
-          { label: 'news & facts', detail: 'time-sensitive public info' },
+          { label: 'public web', detail: 'no account required' },
         ],
       },
       {
@@ -294,7 +370,6 @@ export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
         scopes: [
           { label: 'local', detail: 'weather at your current coords' },
           { label: 'remote', detail: 'weather at any lat/lng or place' },
-          { label: 'current', detail: 'live conditions right now' },
           { label: 'forecast', detail: 'multi-day outlook' },
         ],
       },
@@ -306,10 +381,32 @@ export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
         scopes: [
           { label: 'account timezone', detail: 'your saved IANA zone' },
           { label: 'any timezone', detail: 'convert to Tokyo, UTC, etc.' },
-          { label: 'scheduling', detail: 'sanity-check meeting times' },
           { label: 'always on', detail: 'no authorization needed' },
         ],
       },
     ],
   },
 ];
+
+export function workspaceToolDisplayName(tool: IntegrationTool, provider: WorkspaceProviderId): string {
+  if (provider === 'microsoft' && tool.id === 'sheets') return 'Excel';
+  if (provider === 'microsoft' && tool.id === 'tasks') return 'To Do';
+  return tool.name;
+}
+
+export function toolsForCategory(
+  category: IntegrationCategory,
+  workspaceProvider: WorkspaceProviderId,
+): IntegrationTool[] {
+  if (!category.workspace) return category.tools;
+  return workspaceToolsForProvider(workspaceProvider).map(tool => ({
+    ...tool,
+    name: workspaceToolDisplayName(tool, workspaceProvider),
+    logo: resolveWorkspaceToolLogo(tool.id, workspaceProvider),
+  }));
+}
+
+export const INTEGRATION_TOOL_COUNT = INTEGRATION_CATEGORIES.reduce(
+  (sum, category) => sum + category.tools.length,
+  0,
+);
