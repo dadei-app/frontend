@@ -133,17 +133,9 @@ export default function LoginPage() {
     <div className={cn('relative flex flex-col overflow-x-hidden', viewportFillClass)}>
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-4 py-6">
         <div className="absolute inset-0 bg-zinc-950" aria-hidden />
-        <div
-          className="absolute inset-0 opacity-90"
-          style={{
-            background:
-              'radial-gradient(ellipse 100% 70% at 50% 0%, rgba(16,185,129,0.18), transparent 55%), radial-gradient(circle at 100% 30%, rgba(6,182,212,0.1), transparent 50%)',
-          }}
-          aria-hidden
-        />
-        <div className="absolute -left-24 top-1/3 h-64 w-64 rounded-full bg-emerald-600/15 blur-[90px]" aria-hidden />
-        <div className="absolute -right-20 bottom-1/4 h-72 w-72 rounded-full bg-teal-600/12 blur-[100px]" aria-hidden />
-        <div className="absolute inset-0 backdrop-blur-[28px] backdrop-saturate-150" aria-hidden />
+        <div className="atmosphere-grain absolute inset-0 assistant-shell-atmosphere opacity-95" aria-hidden />
+        <div className="absolute -left-24 top-1/3 h-64 w-64 rounded-full bg-emerald-600/12 blur-[72px]" aria-hidden />
+        <div className="absolute -right-20 bottom-1/4 h-72 w-72 rounded-full bg-teal-600/10 blur-[80px]" aria-hidden />
 
         <div className="relative z-10 mx-auto flex w-full max-w-lg flex-col items-center justify-center">
           <motion.div

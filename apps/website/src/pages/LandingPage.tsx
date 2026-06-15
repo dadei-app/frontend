@@ -62,10 +62,10 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#070a10] text-zinc-100 antialiased lowercase">
-      <div className="pointer-events-none fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_55%_at_50%_-20%,rgba(16,185,129,0.18),transparent)]" />
-        <div className="absolute right-0 top-1/4 h-[620px] w-[620px] translate-x-1/3 rounded-full bg-violet-700/20 blur-3xl" />
-        <div className="absolute bottom-0 left-0 h-[520px] w-[520px] -translate-x-1/3 rounded-full bg-emerald-600/20 blur-3xl" />
+      <div className="pointer-events-none fixed inset-0 -z-10 atmosphere-grain">
+        <div className="absolute inset-0 assistant-shell-atmosphere" />
+        <div className="absolute right-0 top-1/4 h-[620px] w-[620px] translate-x-1/3 rounded-full bg-violet-700/14 blur-[96px]" />
+        <div className="absolute bottom-0 left-0 h-[520px] w-[520px] -translate-x-1/3 rounded-full bg-emerald-600/14 blur-[96px]" />
       </div>
 
       <AnimatePresence>

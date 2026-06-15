@@ -50,7 +50,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
         }
         whileTap={!inputsInert ? { scale: 0.95, transition: { duration: 0.1 } } : {}}
         className={cn(
-          'relative flex h-40 w-40 items-center justify-center rounded-full',
+          'relative flex h-40 w-40 items-center justify-center overflow-visible rounded-full',
           'focus:outline-none focus:ring-4',
           inputsInert && 'cursor-not-allowed focus:ring-zinc-500/20',
           !inputsInert &&

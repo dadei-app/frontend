@@ -1,25 +1,68 @@
 export const MIC_SHELL =
-  'pointer-events-none absolute inset-0 rounded-full border-[3px] backdrop-blur-xl transition-[border-color,box-shadow] duration-700 ease-in-out';
+  'pointer-events-none absolute inset-0 rounded-full border-[3px] transition-[border-color,box-shadow] duration-700 ease-in-out';
+
+/** Soft outer halo — simple 2-stop radials + heavy blur (multi-stop gradients band before blur). */
+export type MicGlowHaloLayer = {
+  inset: string;
+  background: string;
+  blurPx: number;
+};
 
 export const MIC_GLASS = {
   blue: {
-    shell: 'border-sky-100/35 ring-1 ring-sky-200/35',
+    shell: 'border-sky-100/30',
     fill: 'bg-[linear-gradient(132deg,rgba(37,99,235,0.28),rgba(14,165,233,0.25)_45%,rgba(186,230,253,0.22))]',
-    glow: 'shadow-[0_0_32px_rgba(37,99,235,0.35),0_0_68px_rgba(14,165,233,0.22)]',
   },
   red: {
-    shell: 'border-rose-100/35 ring-1 ring-rose-200/35',
+    shell: 'border-rose-100/30',
     fill: 'bg-[linear-gradient(132deg,rgba(225,29,72,0.32),rgba(244,63,94,0.26)_45%,rgba(254,205,211,0.18))]',
-    glow: 'shadow-[0_0_32px_rgba(225,29,72,0.45),0_0_68px_rgba(244,63,94,0.22)]',
   },
   green: {
-    shell: 'border-emerald-100/35 ring-1 ring-emerald-200/35',
+    shell: 'border-emerald-100/30',
     fill: 'bg-[linear-gradient(132deg,rgba(20,184,166,0.28),rgba(16,185,129,0.24)_45%,rgba(167,243,208,0.2))]',
-    glow: 'shadow-[0_0_32px_rgba(16,185,129,0.38),0_0_68px_rgba(16,185,129,0.2)]',
   },
 } as const;
 
 export type MicGlassTone = keyof typeof MIC_GLASS;
+
+export const MIC_GLOW_HALO: Record<MicGlassTone, MicGlowHaloLayer[]> = {
+  blue: [
+    {
+      inset: '-3.5rem',
+      background: 'radial-gradient(circle at center, rgba(14,165,233,0.38) 0%, transparent 68%)',
+      blurPx: 26,
+    },
+    {
+      inset: '-5.5rem',
+      background: 'radial-gradient(circle at center, rgba(37,99,235,0.16) 0%, transparent 72%)',
+      blurPx: 38,
+    },
+  ],
+  red: [
+    {
+      inset: '-3.5rem',
+      background: 'radial-gradient(circle at center, rgba(244,63,94,0.42) 0%, transparent 68%)',
+      blurPx: 26,
+    },
+    {
+      inset: '-5.5rem',
+      background: 'radial-gradient(circle at center, rgba(225,29,72,0.18) 0%, transparent 72%)',
+      blurPx: 38,
+    },
+  ],
+  green: [
+    {
+      inset: '-3rem',
+      background: 'radial-gradient(circle at center, rgba(16,185,129,0.31) 0%, transparent 68%)',
+      blurPx: 23,
+    },
+    {
+      inset: '-4.5rem',
+      background: 'radial-gradient(circle at center, rgba(16,185,129,0.12) 0%, transparent 72%)',
+      blurPx: 33,
+    },
+  ],
+};
 
 export const MIC_GRAY_LOCKED =
   'pointer-events-none absolute inset-0 rounded-full border-[3px] border-white/10 bg-zinc-800/90';

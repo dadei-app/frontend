@@ -4,6 +4,7 @@ import {
   MIC_GLASS,
   MIC_GLASS_CROSSFADE,
   MIC_GLASS_GLOW_TRANSITION,
+  MIC_GLOW_HALO,
   MIC_SHELL,
   type MicGlassTone,
 } from '@dadei/ui/components/command/mic/micChrome';
@@ -33,7 +34,7 @@ const COMMAND_ORB_REST: CommandOrbLayers = {
   caustic:
     'radial-gradient(ellipse 54% 42% at 64% 74%, rgba(56,189,248,0.75) 0%, transparent 70%)',
   boxShadow:
-    'inset 0 10px 18px rgba(255,255,255,0.04), inset 0 -16px 28px rgba(15,23,42,0.22), 0 0 18px rgba(37,99,235,0.1), 0 0 36px rgba(14,165,233,0.06)',
+    'inset 0 10px 18px rgba(255,255,255,0.04), inset 0 -16px 28px rgba(15,23,42,0.22)',
 };
 
 function commandOrbLayersFromMicLevel(level: number): CommandOrbLayers {
@@ -62,17 +63,12 @@ function commandOrbLayersFromMicLevel(level: number): CommandOrbLayers {
   const innerBloom = 12 + t * 70;
   const rimLight = 0.05 + t * 0.26;
   const rimShade = 0.19 + t * 0.18;
-  const outerNear = 20 + t * 50;
-  const outerFar = 40 + t * 84;
-  const outerAlpha = 0.09 + t * 0.4;
 
   const boxShadow = [
     `inset 0 1px 0 rgba(255,255,255,${rimLight})`,
     `inset 0 -18px 36px -10px rgba(15,23,42,${rimShade})`,
     `inset 0 0 ${innerBloom}px rgba(56,189,248,${0.07 + t * 0.62})`,
     `inset 0 0 ${Math.round(innerBloom * 0.48)}px rgba(37,99,235,${0.05 + t * 0.44})`,
-    `0 0 ${outerNear}px rgba(37,99,235,${outerAlpha})`,
-    `0 0 ${outerFar}px rgba(14,165,233,${outerAlpha * 0.84})`,
   ].join(', ');
 
   return {
@@ -142,23 +138,58 @@ export default function MicGlassLayer({
   micLevel = 0,
 }: MicGlassLayerProps) {
   const g = MIC_GLASS[tone];
+  const haloLayers = MIC_GLOW_HALO[tone];
   const liveOrb = modulateGlow && visible ? commandOrbLayersFromMicLevel(micLevel) : null;
+  const haloStrength = liveOrb ? 0.35 + micLevel * 0.85 : 1;
 
   return (
-    <motion.div
-      aria-hidden
-      className={cn(MIC_SHELL, g.shell, !liveOrb && g.fill, !liveOrb && g.glow)}
-      initial={false}
-      animate={{
-        opacity: visible ? 1 : 0,
-        ...(liveOrb ? { boxShadow: liveOrb.boxShadow } : {}),
-      }}
-      transition={{
-        opacity: MIC_GLASS_CROSSFADE,
-        boxShadow: liveOrb ? ORB_FILL_TRANSITION : MIC_GLASS_GLOW_TRANSITION,
-      }}
-    >
-      {liveOrb ? <CommandOrbInterior layers={liveOrb} /> : null}
-    </motion.div>
+    <div className="pointer-events-none absolute inset-0 overflow-visible">
+      <motion.div
+        aria-hidden
+        className="absolute inset-0"
+        initial={false}
+        animate={{ opacity: visible ? haloStrength : 0 }}
+        transition={{ opacity: MIC_GLASS_CROSSFADE }}
+      >
+        {liveOrb ? (
+          <div
+            className="absolute -inset-16 rounded-full"
+            style={{
+              background: `radial-gradient(circle at center, rgba(14,165,233,${0.1 + micLevel * 0.34}) 0%, transparent 72%)`,
+              filter: `blur(${Math.round(22 + micLevel * 18)}px)`,
+              transform: 'translateZ(0)',
+            }}
+          />
+        ) : (
+          haloLayers.map((layer) => (
+            <div
+              key={`${layer.inset}-${layer.blurPx}`}
+              className="absolute rounded-full"
+              style={{
+                inset: layer.inset,
+                background: layer.background,
+                filter: `blur(${layer.blurPx}px)`,
+                transform: 'translateZ(0)',
+              }}
+            />
+          ))
+        )}
+      </motion.div>
+      <motion.div
+        aria-hidden
+        className={cn(MIC_SHELL, g.shell, !liveOrb && g.fill)}
+        initial={false}
+        animate={{
+          opacity: visible ? 1 : 0,
+          ...(liveOrb ? { boxShadow: liveOrb.boxShadow } : {}),
+        }}
+        transition={{
+          opacity: MIC_GLASS_CROSSFADE,
+          boxShadow: liveOrb ? ORB_FILL_TRANSITION : MIC_GLASS_GLOW_TRANSITION,
+        }}
+      >
+        {liveOrb ? <CommandOrbInterior layers={liveOrb} /> : null}
+      </motion.div>
+    </div>
   );
 }

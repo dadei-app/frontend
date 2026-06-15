@@ -93,4 +93,11 @@ describe('normalizeVisibleCommandText', () => {
   it('keeps non-wake text unchanged', () => {
     expect(normalizeVisibleCommandText('turn on the lights')).toBe('turn on the lights');
   });
+
+  it('preserves standalone greetings as valid commands', () => {
+    expect(normalizeVisibleCommandText('hello')).toBe('hello');
+    expect(normalizeVisibleCommandText('Hello!')).toBe('Hello!');
+    expect(normalizeVisibleCommandText("what's up")).toBe("what's up");
+    expect(normalizeVisibleCommandText("hi what's the weather")).toBe("what's the weather");
+  });
 });

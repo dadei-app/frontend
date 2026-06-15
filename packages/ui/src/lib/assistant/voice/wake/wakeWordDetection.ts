@@ -11,6 +11,13 @@ import {
 const LEADING_DISFLUENCY =
   /^[\s,.;:!?'"`]+|^(?:um|uh|ugh|erm|er|hm+|hmm+|hey|hi|hello|ok|okay|so|well)\b[\s,.;:!?'"`]*/iu;
 
+const STANDALONE_GREETING =
+  /^(?:hello|hi|hey|yo|howdy|good\s+(?:morning|afternoon|evening)|what'?s\s+up)\b[.!?,]*$/iu;
+
+export function isStandaloneGreeting(text: string): boolean {
+  return STANDALONE_GREETING.test(text.trim());
+}
+
 /** Max leading filler words to strip before wake-token detection. */
 const MAX_DISFLUENCY_STRIPS = 4;
 
@@ -192,7 +199,9 @@ export function normalizeVisibleCommandText(text: string): string {
   const cleaned = sanitizeCommandTranscript(text);
   if (!cleaned || isInstructionalTranscriptBleed(cleaned)) return '';
 
-  const normalized = normalizeTranscriptForWake(cleaned);
+  const normalized = isStandaloneGreeting(cleaned)
+    ? cleaned.trim()
+    : normalizeTranscriptForWake(cleaned);
   if (!normalized) return '';
 
   let out = normalized;

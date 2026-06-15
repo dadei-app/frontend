@@ -18,7 +18,7 @@ describe('sanitizeTechnicalMessage', () => {
   });
 
   it('emits tool location errors without remapping them to overload copy', () => {
-    const message = 'Live client location unavailable. Ask the user for a location.';
+    const message = 'Live client location unavailable. Ask them directly which city or area to use.';
     const sanitized = sanitizeTechnicalMessage(message);
     const toolMessage = formatToolResultUserMessage(JSON.stringify({ error: message }), false);
     const overloadMapped = sanitizeTechnicalMessage('503 Service Unavailable');

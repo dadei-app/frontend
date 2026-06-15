@@ -28,6 +28,18 @@
     display: none !important;
   }
 
+  .assistant-wake-hint-slot {
+    bottom: calc(
+      var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) +
+        env(safe-area-inset-bottom, 0px) +
+        (
+          100% - var(--assistant-header-h, 4.75rem) -
+            (var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) +
+              env(safe-area-inset-bottom, 0px))
+        ) / 2 + var(--assistant-mic-half, 5rem)
+    ) !important;
+  }
+
   .assistant-hint-row {
     bottom: calc(
       var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) +
@@ -58,6 +70,21 @@
   .assistant-mobile-sheet {
     display: none !important;
   }
+}
+
+/* Wake prompt: vertically centered between panel top and mic button. */
+.assistant-wake-hint-slot {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  bottom: calc(50% + var(--assistant-mic-half, 5rem));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 1rem;
+  pointer-events: none;
+  user-select: none;
 }
 
 @media (max-width: 1023px) {
