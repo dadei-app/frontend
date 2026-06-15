@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
 import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
@@ -8,6 +8,7 @@ import {
   shouldAcceptMicIntent,
 } from '@dadei/ui/lib/assistant/lifecycle/assistantLifecycle';
 import { resolveMicIntentAction } from '@dadei/ui/lib/assistant/lifecycle/micIntent';
+import { deriveMicAppearanceFromRuntime } from '@dadei/ui/lib/assistant/voice/micAppearance';
 
 export function useMicIntent() {
   const runtime = useAssistantRuntimeState();
@@ -16,7 +17,7 @@ export function useMicIntent() {
 
   const tutorialActive = useTutorialEngaged();
   const { toggleService, permissionsGateOpen } = useService();
-  const { cancelCommandService, cancelProcessing } = useCommand();
+  const { assistantBubbleStatus, cancelCommandService, cancelThinking } = useCommand();
 
   const submitMicIntent = useCallback(() => {
     if (!shouldAcceptMicIntent()) return;
@@ -24,13 +25,14 @@ export function useMicIntent() {
     const action = resolveMicIntentAction(runtimeRef.current, {
       tutorialActive,
       permissionsGateBlocked: permissionsGateOpen,
+      assistantBubbleStatus,
     });
     if (action === 'none') return;
 
     markMicIntentHandled();
 
-    if (action === 'cancel_processing') {
-      cancelProcessing();
+    if (action === 'cancel_thinking') {
+      cancelThinking();
       return;
     }
     if (action === 'exit_command_service') {
@@ -40,19 +42,26 @@ export function useMicIntent() {
     void toggleService();
   }, [
     cancelCommandService,
-    cancelProcessing,
+    cancelThinking,
     permissionsGateOpen,
     toggleService,
+    assistantBubbleStatus,
     tutorialActive,
   ]);
 
-  const appearanceAction = resolveMicIntentAction(runtime, {
-    tutorialActive,
-    permissionsGateBlocked: permissionsGateOpen,
-  });
+  const appearance = useMemo(
+    () =>
+      deriveMicAppearanceFromRuntime(runtime, {
+        tutorialActive,
+        permissionsGateBlocked: permissionsGateOpen,
+        assistantBubbleStatus,
+      }),
+    [assistantBubbleStatus, permissionsGateOpen, runtime, tutorialActive],
+  );
 
   return {
     submitMicIntent,
-    inputsInert: appearanceAction === 'none',
+    inputsInert: appearance.action === 'none',
+    appearance,
   };
 }

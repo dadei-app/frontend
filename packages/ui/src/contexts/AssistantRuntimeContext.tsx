@@ -102,8 +102,8 @@ export function useAssistantRuntimeActions() {
         dispatch({ type: 'command/state', commandState }),
       setCommandMode: (commandMode: CommandMode) =>
         dispatch({ type: 'command/mode', commandMode }),
-      setCommandPipelineActive: (active: boolean) =>
-        dispatch({ type: 'command/pipeline_active', active }),
+      setCommandThinkingActive: (active: boolean) =>
+        dispatch({ type: 'command/thinking_active', active }),
       resetRuntime: () => {
         resetAssistantLifecycle();
         dispatch({ type: 'runtime/reset' });

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useContext, useEffect, useRef, useState, Fragment, type CSSProperties } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import type { AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
@@ -14,17 +14,19 @@ import {
   CAPTURE_RELEASE_DEPRESS_Y,
   CAPTURE_RELEASE_MS,
   CAPTURE_RELEASE_SCALE,
+  COMMAND_BUBBLE_STACK_SPACING,
   DOCK_BREATHE_DURATION_S,
   DOCK_BREATHE_SCALE,
   DOCK_POP_ORIGIN_BLUR_PX,
   DOCK_POP_ORIGIN_SCALE,
   DOCK_POP_ORIGIN_Y,
   DOCK_POP_SPRING,
+  ASSISTANT_REVEAL_DELAY_MS,
   DOCK_SLOT_COLLAPSE_MS,
   DOCK_TO_STACK_LAYOUT_TRANSITION,
   TURN_SPLIT_ASSISTANT_ORIGIN_Y,
   TURN_SPLIT_SPRING,
-  TURN_SPLIT_USER_PUSH_PX,
+  commandBubbleStackStyle,
   dockGlowFromMicLevel,
   hasVisibleAssistantContent,
   isUserCaptureLive,
@@ -39,6 +41,8 @@ import type { CommandState } from '@dadei/ui/types/command.types';
 const STATUS_ELLIPSIS_CYCLE_MS = 480;
 const STACK_EDGE_FADE_PX = 28;
 const STACK_SCROLL_EDGE_EPS = 2;
+const BUBBLE_BODY_CLASS = 'font-primary text-[15px] leading-[1.6] sm:text-[16px]';
+const BUBBLE_BODY_MIN_H = 'min-h-[1.6rem]';
 const EMERALD = '0,204,106';
 /** Command-mode dock chrome — aligned with MicrophoneButton MIC_GLASS.blue */
 const COMMAND_SKY = '14,165,233';
@@ -199,14 +203,18 @@ function AssistantLoadingStatus({ line }: { line: string }) {
   const statusBase = formatAssistantStatusLine(line);
   return (
     <span
-      className="flex min-h-[1.625rem] min-w-0 items-center gap-2.5 text-[15px] leading-[1.625rem]"
+      className={cn(
+        'flex min-w-0 items-center gap-2.5',
+        BUBBLE_BODY_CLASS,
+        BUBBLE_BODY_MIN_H,
+      )}
       aria-live="polite"
       aria-busy="true"
     >
-      <span className="flex h-[1.625rem] w-3.5 shrink-0 items-center justify-center self-center">
+      <span className={cn('flex w-3.5 shrink-0 items-center justify-center self-center', BUBBLE_BODY_MIN_H)}>
         <StatusSpinnerRing />
       </span>
-      <span className="relative h-[1.625rem] min-w-0 flex-1 overflow-hidden">
+      <span className={cn('relative min-w-0 flex-1 overflow-hidden', BUBBLE_BODY_MIN_H)}>
         <AnimatePresence initial={false}>
           <motion.span
             key={statusBase}
@@ -214,7 +222,7 @@ function AssistantLoadingStatus({ line }: { line: string }) {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '-100%', opacity: 0.2 }}
             transition={{ duration: 0.3, ease: VOICE_EASE }}
-            className="absolute inset-x-0 top-0 flex h-[1.625rem] min-w-0 items-center truncate"
+            className="absolute inset-x-0 top-0 flex min-w-0 items-center truncate"
           >
             <AnimatedStatusLine base={statusBase} />
           </motion.span>
@@ -354,21 +362,17 @@ export default function CommandBubble({
   const cardStyle = cardStyleFor(role, phase, assistantStatus, captureLive);
   const dockGlow = captureLive ? dockGlowFromMicLevel(micLevel) : 0;
   const isDepressing = !isAssistant && phase === 'settling';
+  const captureFading = isDepressing;
   const justPopped = captureLive && dockPopSeq > 0;
 
   return (
     <motion.div
-      layout
+      layout={!isDepressing}
       className="relative w-full min-w-0 shrink-0"
       initial={false}
       animate={{
-        y: isDepressing ? [0, CAPTURE_RELEASE_DEPRESS_Y, 0] : 0,
-        scale:
-          isDepressing
-            ? [1, CAPTURE_RELEASE_SCALE, 1]
-            : captureLive && !reduce
-              ? DOCK_BREATHE_SCALE
-              : 1,
+        y: isDepressing ? CAPTURE_RELEASE_DEPRESS_Y : 0,
+        scale: captureLive && !reduce && !isDepressing ? DOCK_BREATHE_SCALE : 1,
       }}
       transition={
         isDepressing
@@ -379,13 +383,25 @@ export default function CommandBubble({
       }
     >
       <motion.div
-        layout
+        layout={!isDepressing}
         className={cn('relative overflow-hidden', captureLive && 'shadow-2xl')}
         initial={justPopped ? { borderRadius: 999 } : false}
-        animate={{ borderRadius: captureLive ? 20 : 14 }}
+        animate={{
+          borderRadius: captureLive ? 20 : 14,
+          scale: isDepressing ? CAPTURE_RELEASE_SCALE : 1,
+        }}
         transition={{ duration: isDepressing ? CAPTURE_RELEASE_MS : justPopped ? 0.52 : 0.45, ease: VOICE_EASE }}
         style={cardStyle}
       >
+        {captureFading ? (
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-[inherit]"
+            style={{ ...cardCaptureLive, opacity: 1 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: CAPTURE_RELEASE_MS, ease: VOICE_EASE }}
+          />
+        ) : null}
         {dockGlow > 0 ? (
           <motion.div
             aria-hidden
@@ -421,13 +437,15 @@ export default function CommandBubble({
               {showStatus && statusForDisplay ? (
                 <AssistantLoadingStatus line={statusForDisplay} />
               ) : listeningEmpty ? (
-                <p className="font-primary text-[15px] leading-[1.6] text-zinc-600 sm:text-[16px]">
+                <p className={cn(BUBBLE_BODY_CLASS, BUBBLE_BODY_MIN_H, 'text-zinc-600')}>
                   <Caret reduce={!!reduce} capture={captureLive} />
                 </p>
               ) : (
                 <p
                   className={cn(
-                    'font-primary whitespace-pre-wrap text-[15px] leading-[1.6] wrap-anywhere sm:text-[16px]',
+                    BUBBLE_BODY_CLASS,
+                    BUBBLE_BODY_MIN_H,
+                    'whitespace-pre-wrap wrap-anywhere',
                     interim ? 'text-zinc-400' : 'text-zinc-100',
                   )}
                 >
@@ -451,7 +469,6 @@ function LiveUserBubbleSlot({
   userCaptionInterim,
   micLevel,
   dockPopSeq,
-  splitActive = false,
 }: {
   liveTurnId: string;
   placement: 'dock' | 'stack';
@@ -460,12 +477,26 @@ function LiveUserBubbleSlot({
   userCaptionInterim: boolean;
   micLevel: number;
   dockPopSeq: number;
-  splitActive?: boolean;
 }) {
   const reduce = useReducedMotion();
-  const phase = userBubblePhase(state, placement);
+  const prevPlacementRef = useRef(placement);
+  const [settling, setSettling] = useState(false);
   const isDock = placement === 'dock';
   const layoutTransition = isDock ? BUBBLE_LAYOUT_TRANSITION : DOCK_TO_STACK_LAYOUT_TRANSITION;
+
+  useEffect(() => {
+    const prev = prevPlacementRef.current;
+    prevPlacementRef.current = placement;
+    if (prev === 'dock' && placement === 'stack') {
+      setSettling(true);
+      const t = window.setTimeout(() => setSettling(false), CAPTURE_RELEASE_MS * 1000);
+      return () => window.clearTimeout(t);
+    }
+    if (placement === 'dock') setSettling(false);
+    return undefined;
+  }, [placement]);
+
+  const phase = isDock ? 'thought' : settling ? 'settling' : userBubblePhase(state, placement);
 
   const bubble = (
     <CommandBubble
@@ -483,13 +514,10 @@ function LiveUserBubbleSlot({
 
   return (
     <motion.div
-      layout
+      layout="position"
       layoutId={`cmd-user-${liveTurnId}`}
       className="w-full min-w-0"
       transition={layoutTransition}
-      animate={{
-        marginTop: splitActive && !isDock ? TURN_SPLIT_USER_PUSH_PX : 0,
-      }}
     >
       {isDock && !reduce ? (
         <motion.div
@@ -531,18 +559,16 @@ export function CommandBubbleStack() {
 
   const audioCtx = useContext(AudioContext);
   const micLevel = audioCtx?.micLevel ?? 0;
+  const reduce = useReducedMotion();
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [edgeMask, setEdgeMask] = useState<CSSProperties | undefined>(undefined);
   const [twGen, setTwGen] = useState(0);
   const prevStatus = useRef(assistantBubbleStatus);
   const [dockPopSeq, setDockPopSeq] = useState(0);
-  const [dockRetaining, setDockRetaining] = useState(false);
-  const [turnSplitActive, setTurnSplitActive] = useState(false);
-  const [assistantSplitGen, setAssistantSplitGen] = useState(0);
+  const [assistantStackReady, setAssistantStackReady] = useState(false);
   const prevPlacementRef = useRef<ReturnType<typeof userBubblePlacement>>(null);
   const prevStateRef = useRef(state);
-  const prevShowAssistantRef = useRef(false);
 
   const followUpListenOpen =
     state === 'follow_up' &&
@@ -571,25 +597,24 @@ export function CommandBubbleStack() {
   const showDockPrime =
     followUpDockPrimed && (state === 'responding' || state === 'follow_up') && !dockPlacement;
 
-  useEffect(() => {
-    if (stackPlacement && prevPlacementRef.current === 'dock') {
-      setDockRetaining(true);
-      const t = window.setTimeout(() => setDockRetaining(false), DOCK_SLOT_COLLAPSE_MS * 1000);
-      return () => window.clearTimeout(t);
-    }
-    return undefined;
-  }, [stackPlacement, dockPlacement]);
+  const showAssistantInStack = showVisibleAssistant && assistantStackReady;
+  const useSplitSpawn =
+    showAssistantInStack &&
+    state === 'responding' &&
+    assistantBubbleText.trim().length > 0;
 
   useEffect(() => {
-    if (showVisibleAssistant && !prevShowAssistantRef.current) {
-      setTurnSplitActive(true);
-      setAssistantSplitGen((g) => g + 1);
+    if (!stackPlacement || !showVisibleAssistant) {
+      setAssistantStackReady(false);
+      return undefined;
     }
-    if (!showVisibleAssistant) {
-      setTurnSplitActive(false);
+    if (state === 'responding') {
+      setAssistantStackReady(true);
+      return undefined;
     }
-    prevShowAssistantRef.current = showVisibleAssistant;
-  }, [showVisibleAssistant]);
+    const t = window.setTimeout(() => setAssistantStackReady(true), ASSISTANT_REVEAL_DELAY_MS);
+    return () => window.clearTimeout(t);
+  }, [stackPlacement, showVisibleAssistant, state]);
 
   useEffect(() => {
     const prevPlacement = prevPlacementRef.current;
@@ -663,11 +688,14 @@ export function CommandBubbleStack() {
     <div className="relative flex h-full min-h-0 w-full flex-col overflow-visible">
       <LayoutGroup id="command-bubble-stack">
         <motion.div
-          layout
           className="command-bubble-dock relative z-50 w-full shrink-0 px-1"
           animate={{
-            opacity: dockPlacement || dockRetaining || showDockPrime ? 1 : 0,
-            marginBottom: dockPlacement || dockRetaining || showDockPrime ? 6 : 0,
+            opacity: dockPlacement || showDockPrime ? 1 : 0,
+            marginBottom:
+              dockPlacement || showDockPrime
+                ? COMMAND_BUBBLE_STACK_SPACING.dockMarginBottomPx
+                : 0,
+            pointerEvents: dockPlacement ? 'auto' : 'none',
           }}
           transition={{ duration: DOCK_SLOT_COLLAPSE_MS, ease: VOICE_EASE }}
         >
@@ -695,62 +723,68 @@ export function CommandBubbleStack() {
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden" style={edgeMask ?? undefined}>
           <div
             ref={scrollRef}
-            className="h-full min-h-0 overflow-y-auto overscroll-contain scroll-smooth px-1 py-2 [scrollbar-color:rgba(161,161,170,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45"
+            className="h-full min-h-0 overflow-y-auto overscroll-contain scroll-smooth px-1 [scrollbar-color:rgba(161,161,170,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45"
+            style={{ paddingTop: COMMAND_BUBBLE_STACK_SPACING.scrollPaddingPx, paddingBottom: COMMAND_BUBBLE_STACK_SPACING.scrollPaddingPx }}
           >
-            <div className="mx-auto flex w-full flex-col gap-3">
-              {liveTurnId && (showVisibleAssistant || (showLiveUser && stackPlacement)) ? (
-                <motion.div
-                  layout
-                  className="flex w-full flex-col gap-3"
-                  transition={TURN_SPLIT_SPRING}
-                >
-                  {showVisibleAssistant ? (
-                    <motion.div
-                      key={`split-asst-${liveTurnId}-${assistantSplitGen}`}
-                      layout
-                      layoutId={`cmd-asst-${liveTurnId}`}
-                      className="relative z-10 w-full min-w-0"
-                      initial={{ opacity: 0, y: TURN_SPLIT_ASSISTANT_ORIGIN_Y, scale: 0.97 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      transition={TURN_SPLIT_SPRING}
-                    >
-                      <CommandBubble
-                        role="assistant"
-                        text={assistantBubbleText}
-                        phase="thought"
-                        assistantStatus={assistantBubbleStatus}
-                        statusLine={assistantStatusLine}
-                        commandState={state}
-                        placement="stack"
-                        typewriterEnabled={assistantBubbleStatus === 'revealing'}
-                        typewriterGeneration={twGen}
-                        onTypewriterFirstChar={notifyAssistantRevealStarted}
-                        onTypewriterComplete={notifyAssistantRevealComplete}
-                      />
-                    </motion.div>
-                  ) : null}
-
-                  {showLiveUser && stackPlacement ? (
-                    <LiveUserBubbleSlot
-                      liveTurnId={liveTurnId}
+            <div className="mx-auto flex w-full flex-col" style={commandBubbleStackStyle()}>
+              <AnimatePresence initial={false}>
+                {liveTurnId && showAssistantInStack ? (
+                  <motion.div
+                    key={`asst-${liveTurnId}`}
+                    layout="position"
+                    layoutId={`cmd-asst-${liveTurnId}`}
+                    className="relative z-10 w-full min-w-0"
+                    initial={
+                      reduce
+                        ? false
+                        : useSplitSpawn
+                          ? { opacity: 0, y: TURN_SPLIT_ASSISTANT_ORIGIN_Y, scale: 0.98 }
+                          : { opacity: 0 }
+                    }
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={
+                      useSplitSpawn
+                        ? TURN_SPLIT_SPRING
+                        : { duration: 0.48, ease: VOICE_EASE }
+                    }
+                  >
+                    <CommandBubble
+                      role="assistant"
+                      text={assistantBubbleText}
+                      phase="thought"
+                      assistantStatus={assistantBubbleStatus}
+                      statusLine={assistantStatusLine}
+                      commandState={state}
                       placement="stack"
-                      state={state}
-                      userBubbleText={userBubbleText}
-                      userCaptionInterim={userCaptionInterim}
-                      micLevel={micLevel}
-                      dockPopSeq={dockPopSeq}
-                      splitActive={turnSplitActive}
+                      typewriterEnabled={assistantBubbleStatus === 'revealing'}
+                      typewriterGeneration={twGen}
+                      onTypewriterFirstChar={notifyAssistantRevealStarted}
+                      onTypewriterComplete={notifyAssistantRevealComplete}
                     />
-                  ) : null}
-                </motion.div>
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
+
+              {liveTurnId && showLiveUser && stackPlacement ? (
+                <LiveUserBubbleSlot
+                  liveTurnId={liveTurnId}
+                  placement="stack"
+                  state={state}
+                  userBubbleText={userBubbleText}
+                  userCaptionInterim={userCaptionInterim}
+                  micLevel={micLevel}
+                  dockPopSeq={dockPopSeq}
+                />
               ) : null}
 
               {historyNewestFirst.map((turn) => (
-                <div key={turn.id} className="flex w-full flex-col gap-3">
+                <Fragment key={turn.id}>
                   {turn.assistantText?.trim() ? (
                     <motion.div
                       layout
                       layoutId={`cmd-asst-${turn.id}`}
+                      className="w-full min-w-0"
                       initial={{ opacity: 0, y: -8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={BUBBLE_PRESENCE_TRANSITION}
@@ -765,7 +799,7 @@ export function CommandBubbleStack() {
                     </motion.div>
                   ) : null}
                   {turn.userText?.trim() ? (
-                    <motion.div layout layoutId={`cmd-user-${turn.id}`}>
+                    <motion.div layout layoutId={`cmd-user-${turn.id}`} className="w-full min-w-0">
                       <CommandBubble
                         role="user"
                         text={turn.userText}
@@ -774,7 +808,7 @@ export function CommandBubbleStack() {
                       />
                     </motion.div>
                   ) : null}
-                </div>
+                </Fragment>
               ))}
             </div>
           </div>

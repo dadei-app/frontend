@@ -30,7 +30,7 @@ vi.mock('@dadei/ui/contexts/AssistantRuntimeContext', () => ({
     serviceStateSyncPending: false,
     serviceStateSyncBaselineRevision: null,
     serviceStateRevision: 1,
-    commandPipelineActive: false,
+    commandThinkingActive: false,
   }),
 }));
 
@@ -38,6 +38,14 @@ vi.mock('@dadei/ui/lib/assistant/lifecycle/useMicIntent', () => ({
   useMicIntent: () => ({
     submitMicIntent: mockSubmitMicIntent,
     inputsInert: false,
+    appearance: {
+      grayChrome: 'none',
+      tone: 'red',
+      showThinkingSpinner: false,
+      modulateGlassGlow: false,
+      showAmbientRipples: true,
+      action: 'toggle_service',
+    },
   }),
 }));
 

@@ -1,11 +1,12 @@
 import {
   COMMAND_CAPTURE_STATES,
-  COMMAND_PROCESSING_STATES,
   selectIsAmbientEnabled,
   selectIsCommandService,
+  selectIsCommandThinking,
   selectIsServiceStateSyncPending,
 } from '@dadei/ui/lib/assistant/assistantRuntime';
 import type { AssistantState } from '@dadei/ui/types/assistant.types';
+import type { AssistantBubbleStatus } from '@dadei/ui/types/command.types';
 
 export type MicTone = 'blue' | 'red' | 'green' | 'none';
 
@@ -15,12 +16,12 @@ export type MicAction =
   | 'none'
   | 'toggle_service'
   | 'exit_command_service'
-  | 'cancel_processing';
+  | 'cancel_thinking';
 
 export type MicAppearance = {
   grayChrome: MicGrayChrome;
   tone: MicTone;
-  showProcessingSpinner: boolean;
+  showThinkingSpinner: boolean;
   /** Command capture — modulate blue glass glow from mic level. */
   modulateGlassGlow: boolean;
   /** Ambient service enabled — listening for wake word. */
@@ -33,15 +34,16 @@ export function deriveMicAppearanceFromRuntime(
   options: {
     tutorialActive: boolean;
     permissionsGateBlocked?: boolean;
+    assistantBubbleStatus?: AssistantBubbleStatus | null;
   },
 ): MicAppearance {
-  const { tutorialActive, permissionsGateBlocked = false } = options;
+  const { tutorialActive, permissionsGateBlocked = false, assistantBubbleStatus = null } = options;
 
   if (tutorialActive) {
     return {
       grayChrome: 'locked',
       tone: 'none',
-      showProcessingSpinner: false,
+      showThinkingSpinner: false,
       modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
@@ -52,7 +54,7 @@ export function deriveMicAppearanceFromRuntime(
     return {
       grayChrome: 'locked',
       tone: 'none',
-      showProcessingSpinner: false,
+      showThinkingSpinner: false,
       modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
@@ -63,7 +65,7 @@ export function deriveMicAppearanceFromRuntime(
     return {
       grayChrome: 'loading',
       tone: 'none',
-      showProcessingSpinner: false,
+      showThinkingSpinner: false,
       modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
@@ -74,7 +76,7 @@ export function deriveMicAppearanceFromRuntime(
     return {
       grayChrome: 'loading',
       tone: 'none',
-      showProcessingSpinner: false,
+      showThinkingSpinner: false,
       modulateGlassGlow: false,
       showAmbientRipples: false,
       action: 'none',
@@ -82,16 +84,15 @@ export function deriveMicAppearanceFromRuntime(
   }
 
   if (selectIsCommandService(runtime)) {
-    const processing =
-      COMMAND_PROCESSING_STATES.has(runtime.commandState) || runtime.commandPipelineActive;
-    const capturing = !processing && COMMAND_CAPTURE_STATES.has(runtime.commandState);
+    const thinking = selectIsCommandThinking(runtime, assistantBubbleStatus);
+    const capturing = !thinking && COMMAND_CAPTURE_STATES.has(runtime.commandState);
     return {
       grayChrome: 'none',
       tone: 'blue',
-      showProcessingSpinner: processing,
-      modulateGlassGlow: capturing && !processing,
+      showThinkingSpinner: thinking,
+      modulateGlassGlow: capturing && !thinking,
       showAmbientRipples: false,
-      action: processing ? 'cancel_processing' : 'exit_command_service',
+      action: thinking ? 'cancel_thinking' : 'exit_command_service',
     };
   }
 
@@ -99,7 +100,7 @@ export function deriveMicAppearanceFromRuntime(
     return {
       grayChrome: 'none',
       tone: 'red',
-      showProcessingSpinner: false,
+      showThinkingSpinner: false,
       modulateGlassGlow: false,
       showAmbientRipples: true,
       action: 'toggle_service',
@@ -109,7 +110,7 @@ export function deriveMicAppearanceFromRuntime(
   return {
     grayChrome: 'none',
     tone: 'green',
-    showProcessingSpinner: false,
+    showThinkingSpinner: false,
     modulateGlassGlow: false,
     showAmbientRipples: false,
     action: 'toggle_service',

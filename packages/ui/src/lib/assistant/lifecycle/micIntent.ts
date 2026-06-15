@@ -1,8 +1,9 @@
 import type { AssistantState } from '@dadei/ui/types/assistant.types';
+import type { AssistantBubbleStatus } from '@dadei/ui/types/command.types';
 import {
   COMMAND_CAPTURE_STATES,
-  COMMAND_PROCESSING_STATES,
   selectIsAmbientEnabled,
+  selectIsCommandThinking,
   selectIsCommandService,
 } from '@dadei/ui/lib/assistant/assistantRuntime';
 import type { MicAppearance } from '@dadei/ui/lib/assistant/voice/micAppearance';
@@ -15,14 +16,18 @@ export function resolveMicIntentAction(
   options: {
     tutorialActive: boolean;
     permissionsGateBlocked?: boolean;
+    assistantBubbleStatus?: AssistantBubbleStatus | null;
   },
 ): MicIntentAction {
   return deriveMicAppearanceFromRuntime(runtime, options).action;
 }
 
-export function describeMicIntent(runtime: AssistantState): string {
+export function describeMicIntent(
+  runtime: AssistantState,
+  assistantBubbleStatus?: AssistantBubbleStatus | null,
+): string {
   if (selectIsCommandService(runtime)) {
-    if (COMMAND_PROCESSING_STATES.has(runtime.commandState)) return 'cancel_processing';
+    if (selectIsCommandThinking(runtime, assistantBubbleStatus)) return 'cancel_thinking';
     if (COMMAND_CAPTURE_STATES.has(runtime.commandState)) return 'exit_command_service';
     return 'exit_command_service';
   }

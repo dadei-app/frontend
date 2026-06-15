@@ -13,7 +13,7 @@ import {
   useAssistantRuntimeActions,
   useAssistantRuntimeState,
 } from '@dadei/ui/contexts/AssistantRuntimeContext';
-import { selectCommandMode, selectIsCommandOwner, selectVoiceEnrollmentActive, selectCanClaimCommandService } from '@dadei/ui/lib/assistant/assistantRuntime';
+import { selectCommandMode, selectIsCommandOwner, selectIsCommandThinking, selectVoiceEnrollmentActive, selectCanClaimCommandService } from '@dadei/ui/lib/assistant/assistantRuntime';
 import {
   markMicIntentHandled,
   runAssistantTransition,
@@ -75,7 +75,6 @@ import {
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import { CommandBubbleStack } from '@dadei/ui/components/command/CommandBubble';
 import { formatForUser } from '@dadei/ui/lib/platform/shared/time';
-import { COMMAND_PROCESSING_STATES } from '@dadei/ui/lib/assistant/assistantRuntime';
 import { motion } from 'framer-motion';
 import { VOICE_EASE } from '@dadei/ui/lib/assistant/voice/constants';
 import { DOCK_POP_LEAD_MS } from '@dadei/ui/lib/assistant/voice/ui/commandBubbleMotion';
@@ -100,7 +99,7 @@ interface CommandContextValue {
   userCaptionInterim: boolean;
   assistantBubbleText: string;
   assistantBubbleStatus: AssistantBubbleStatus;
-  /** Single in-bubble status while processing (Thinking… / current tool); cleared when text streams. */
+  /** Single in-bubble status while thinking (Thinking… / current tool); cleared when text streams. */
   assistantStatusLine: string | null;
   bubbleHistory: CommandTurnHistory[];
   /** Stable id for the in-flight user+assistant pair (shared with history on commit). */
@@ -108,7 +107,7 @@ interface CommandContextValue {
   /** Leave command service and return to ambient listening; service on/off unchanged. */
   cancelCommandService: () => void;
   /** Abort in-flight transcription/response and re-open the mic in command service. */
-  cancelProcessing: () => void;
+  cancelThinking: () => void;
   /** Manual command start without wake word (idle → listening). */
   startListening: () => void;
   /** Tutorial handoff → introduction enrollment on POST /service/command/text. */
@@ -300,6 +299,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const [assistantBubbleText, setAssistantBubbleText] = useState('');
   const [assistantBubbleStatus, setAssistantBubbleStatus] =
     useState<AssistantBubbleStatus>('pending');
+  const assistantBubbleStatusRef = useRef<AssistantBubbleStatus>('pending');
+  assistantBubbleStatusRef.current = assistantBubbleStatus;
   const [assistantStatusLine, setAssistantStatusLine] = useState<string | null>(null);
   const [bubbleHistory, setBubbleHistory] = useState<CommandTurnHistory[]>([]);
   const [liveTurnId, setLiveTurnId] = useState<string | null>(null);
@@ -330,9 +331,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const transcribeFromFollowUpRef = useRef(false);
   const responseRevealStartedRef = useRef(false);
   const revealCompleteHandledRef = useRef(false);
-  /** Bumped on cancelProcessing so stale inference loops no-op. */
-  const commandProcessingEpochRef = useRef(0);
-  /** Epoch of the active /command/text SSE consumer; must match commandProcessingEpochRef. */
+  /** Bumped on cancelThinking so stale inference loops no-op. */
+  const commandThinkingEpochRef = useRef(0);
+  /** Epoch of the active /command/text SSE consumer; must match commandThinkingEpochRef. */
   const activeCommandStreamEpochRef = useRef(0);
   /** After a terminal stream error, ignore late tokens from the same HTTP response. */
   const streamTerminalErrorRef = useRef(false);
@@ -342,6 +343,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   const userInitiatedCancelRef = useRef(false);
   /** Drop the next WS final after cancel while a live caption is in flight. */
   const suppressNextTranscriptFinalRef = useRef(false);
+  const cancelThinkingRef = useRef<(() => void) | null>(null);
   const lastServerUtteranceIdRef = useRef<number | null>(null);
   const setAssistantBubbleTextSynced = useCallback(
     (value: string | ((prev: string) => string)) => {
@@ -362,9 +364,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     [runtimeActions],
   );
 
-  const isAssistantProcessingState = useCallback(
+  const isAssistantThinkingState = useCallback(
     (commandState: CommandState = stateRef.current) =>
-      commandState === 'thinking' || commandState === 'responding',
+      selectIsCommandThinking(
+        { ...runtimeRef.current, commandState },
+        assistantBubbleStatusRef.current,
+      ),
     [],
   );
 
@@ -378,7 +383,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           setAssistantStatusLine(null);
           return;
         }
-        if (isAssistantProcessingState()) {
+        if (isAssistantThinkingState()) {
           setAssistantStatusLine((prev) => {
             if (prev?.trim()) return prev;
             return formatAssistantStatusLine(ASSISTANT_STATUS_THINKING);
@@ -391,12 +396,12 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
       setAssistantStatusLine(formatAssistantStatusLine(trimmed));
     },
-    [isAssistantProcessingState],
+    [isAssistantThinkingState],
   );
 
-  const setCommandPipelineActive = useCallback(
+  const setCommandThinkingActive = useCallback(
     (active: boolean) => {
-      runtimeActions.setCommandPipelineActive(active);
+      runtimeActions.setCommandThinkingActive(active);
     },
     [runtimeActions],
   );
@@ -560,10 +565,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastSubmittedTextRef.current = null;
     lastCommittedTurnRef.current = '';
     setBubbleHistory([]);
-    setCommandPipelineActive(false);
+    setCommandThinkingActive(false);
     setCommandState('idle');
     resetLiveBubbles();
-  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles, setCommandPipelineActive]);
+  }, [abortActiveStream, clearFollowUpTimer, clearWakeTimeout, resetLiveBubbles, setCommandThinkingActive]);
 
   const endSession = useCallback(() => {
     endVoiceEnrollmentMode();
@@ -587,24 +592,22 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   ]);
 
   const cancelCommandService = useCallback(() => {
+    if (
+      selectIsCommandThinking(runtimeRef.current, assistantBubbleStatusRef.current)
+    ) {
+      cancelThinkingRef.current?.();
+      return;
+    }
     void runAssistantTransition(async () => {
-      const hadProcessing = COMMAND_PROCESSING_STATES.has(stateRef.current);
       userInitiatedCancelRef.current = true;
-      commandProcessingEpochRef.current += 1;
-      activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
+      commandThinkingEpochRef.current += 1;
+      activeCommandStreamEpochRef.current = commandThinkingEpochRef.current;
       suppressNextTranscriptFinalRef.current = false;
       endVoiceEnrollmentMode();
       clearFollowUpTimer();
       clearWakeTimeout();
       abortActiveStream();
       sendRealtimeMessage({ type: 'command_audio_cancel' });
-      if (hadProcessing) {
-        const sessionId = getRealtimeSessionId();
-        sendRealtimeMessage({
-          type: 'command_inference_cancel',
-          ...(sessionId ? { session_id: sessionId } : {}),
-        });
-      }
       const baseline = runtimeRef.current.serviceStateRevision;
       if (ownsCommandSessionRef.current) {
         try {
@@ -635,7 +638,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
   ]);
 
   const rollbackVoiceEnrollmentAttempt = useCallback(async () => {
-    commandProcessingEpochRef.current += 1;
+    commandThinkingEpochRef.current += 1;
     suppressNextTranscriptFinalRef.current = true;
     endVoiceEnrollmentMode();
     abortActiveStream();
@@ -681,10 +684,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     }, WAKE_FALSE_POSITIVE_MS);
   }, [clearWakeTimeout, endVoiceEnrollmentMode, goIdle, releaseCommandService]);
 
-  const cancelProcessing = useCallback(() => {
+  const cancelThinking = useCallback(() => {
     if (
-      !COMMAND_PROCESSING_STATES.has(stateRef.current) &&
-      !runtimeRef.current.commandPipelineActive
+      !selectIsCommandThinking(runtimeRef.current, assistantBubbleStatusRef.current)
     ) {
       return;
     }
@@ -696,8 +698,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     userInitiatedCancelRef.current = true;
     streamTerminalErrorRef.current = false;
     replaceNextStreamTokensRef.current = false;
-    commandProcessingEpochRef.current += 1;
-    activeCommandStreamEpochRef.current = commandProcessingEpochRef.current;
+    commandThinkingEpochRef.current += 1;
+    activeCommandStreamEpochRef.current = commandThinkingEpochRef.current;
     suppressNextTranscriptFinalRef.current = cancellingLiveCaption;
 
     const sessionId = getRealtimeSessionId();
@@ -723,7 +725,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     lastToolBubbleSnippetRef.current = '';
     resetLiveBubbles();
     commandStreamInFlightRef.current = false;
-    setCommandPipelineActive(false);
+    setCommandThinkingActive(false);
     setCommandState(inVoiceEnrollment ? 'follow_up' : 'listening');
     if (!inVoiceEnrollment) {
       scheduleWakeFalsePositiveRelease();
@@ -734,9 +736,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       ...(sessionId ? { session_id: sessionId } : {}),
     });
     notifyCommandCaptureRearm();
-    console.debug('[Voice][Cancel] cancelProcessing', {
+    console.debug('[Voice][Cancel] cancelThinking', {
       state: stateRef.current,
-      epoch: commandProcessingEpochRef.current,
+      epoch: commandThinkingEpochRef.current,
     });
   }, [
     clearFollowUpTimer,
@@ -744,8 +746,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     endVoiceEnrollmentMode,
     resetLiveBubbles,
     scheduleWakeFalsePositiveRelease,
-    setCommandPipelineActive,
+    setCommandThinkingActive,
   ]);
+
+  cancelThinkingRef.current = cancelThinking;
 
   const clearWakeFalsePositiveIfCommandInProgress = useCallback((text: string) => {
     const cleaned = cleanTranscript(text);
@@ -848,7 +852,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const handleStreamEvent = useCallback(
     (ev: CommandSSEEvent) => {
-      if (activeCommandStreamEpochRef.current !== commandProcessingEpochRef.current) {
+      if (activeCommandStreamEpochRef.current !== commandThinkingEpochRef.current) {
         return;
       }
       if (
@@ -914,7 +918,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamHadOutputRef.current = true;
           pendingNewResponseRef.current = false;
           applyAssistantStatusLine(null);
-          setCommandPipelineActive(false);
+          setCommandThinkingActive(false);
           setAssistantBubbleTextSynced(
             formatCommandStreamError(ev.message, 'code' in ev ? String(ev.code) : undefined),
           );
@@ -931,7 +935,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           pendingNewResponseRef.current = false;
           applyAssistantStatusLine(null);
           commandStreamInFlightRef.current = false;
-          setCommandPipelineActive(false);
+          setCommandThinkingActive(false);
           if (!assistantBubbleTextRef.current.trim()) {
             if (streamHadOutputRef.current) {
               setAssistantBubbleStatus('revealing');
@@ -955,7 +959,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           break;
       }
     },
-    [applyAssistantStatusLine, endSession, primeFollowUpDockSoon, queryClient, setAssistantBubbleTextSynced, setCommandPipelineActive, setCommandState],
+    [applyAssistantStatusLine, endSession, primeFollowUpDockSoon, queryClient, setAssistantBubbleTextSynced, setCommandThinkingActive, setCommandState],
   );
 
   const submitVisibleCommandText = useCallback(
@@ -992,7 +996,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       const last = lastSubmittedTextRef.current;
       if (last && last.text === submitText && nowMs - last.atMs < 1500) return;
       if (commandStreamInFlightRef.current) return;
-      const processingEpoch = commandProcessingEpochRef.current;
+      const thinkingEpoch = commandThinkingEpochRef.current;
       userInitiatedCancelRef.current = false;
       streamTerminalErrorRef.current = false;
       replaceNextStreamTokensRef.current = false;
@@ -1014,15 +1018,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       transcribeFromFollowUpRef.current = false;
       setUserCaptionInterim(false);
       setUserBubbleText(displayText);
-      if (processingEpoch !== commandProcessingEpochRef.current) return;
-      setCommandPipelineActive(true);
+      if (thinkingEpoch !== commandThinkingEpochRef.current) return;
+      setCommandThinkingActive(true);
       setCommandState('thinking');
 
       void (async () => {
         const claimed = await claimCommandService();
-        if (processingEpoch !== commandProcessingEpochRef.current) return;
+        if (thinkingEpoch !== commandThinkingEpochRef.current) return;
         if (!claimed) {
-          setCommandPipelineActive(false);
+          setCommandThinkingActive(false);
           const msg = fromFollowUp
             ? ERROR_CODES.command_mode_not_owner
             : ERROR_CODES.invalid_session;
@@ -1034,9 +1038,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         }
 
         const accessToken = await getAccessToken();
-        if (processingEpoch !== commandProcessingEpochRef.current) return;
+        if (thinkingEpoch !== commandThinkingEpochRef.current) return;
         if (!accessToken) {
-          setCommandPipelineActive(false);
+          setCommandThinkingActive(false);
           setAssistantBubbleTextSynced('Sign in to use the assistant.');
           setAssistantBubbleStatus('revealing');
           setCommandState('responding');
@@ -1044,7 +1048,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         }
 
         if (!isConnected || !getRealtimeSessionToken()) {
-          setCommandPipelineActive(false);
+          setCommandThinkingActive(false);
           setAssistantBubbleTextSynced(ERROR_CODES.invalid_session);
           setAssistantBubbleStatus('revealing');
           setCommandState('responding');
@@ -1052,7 +1056,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         }
 
         commandStreamInFlightRef.current = true;
-        activeCommandStreamEpochRef.current = processingEpoch;
+        activeCommandStreamEpochRef.current = thinkingEpoch;
         abortActiveStream();
         const abortController = new AbortController();
         streamAbortRef.current = abortController;
@@ -1064,14 +1068,14 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             signal: abortController.signal,
             mode: streamMode,
           })) {
-            if (processingEpoch !== commandProcessingEpochRef.current) break;
+            if (thinkingEpoch !== commandThinkingEpochRef.current) break;
             if (abortController.signal.aborted) break;
             if (ev.type === 'error' && abortController.signal.aborted) continue;
             if (ev.type === 'done') sawDone = true;
             handleStreamEvent(ev);
           }
           if (
-            processingEpoch === commandProcessingEpochRef.current &&
+            thinkingEpoch === commandThinkingEpochRef.current &&
             !sawDone &&
             !abortController.signal.aborted &&
             (stateRef.current === 'responding' || stateRef.current === 'thinking')
@@ -1094,8 +1098,8 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         } finally {
           streamAbortRef.current = null;
           commandStreamInFlightRef.current = false;
-          if (processingEpoch !== commandProcessingEpochRef.current) {
-            setCommandPipelineActive(false);
+          if (thinkingEpoch !== commandThinkingEpochRef.current) {
+            setCommandThinkingActive(false);
           }
         }
       })();
@@ -1114,7 +1118,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       scheduleFollowUpExpiry,
       setAssistantBubbleTextSynced,
       primeFollowUpDockSoon,
-      setCommandPipelineActive,
+      setCommandThinkingActive,
       startNewTurn,
       startRequestActivity,
     ],
@@ -1146,10 +1150,10 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       awaitingTranscriptRef.current = false;
       transcribeFromFollowUpRef.current = false;
       setUserBubbleText(ENROLLMENT_TRANSCRIPT_OPENER);
-      const kickoffEpoch = commandProcessingEpochRef.current;
+      const kickoffEpoch = commandThinkingEpochRef.current;
       commandStreamInFlightRef.current = true;
       activeCommandStreamEpochRef.current = kickoffEpoch;
-      setCommandPipelineActive(true);
+      setCommandThinkingActive(true);
 
       try {
         const claimed = await claimCommandService();
@@ -1181,7 +1185,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           signal: abortController.signal,
           mode: enrollmentMode,
         })) {
-          if (kickoffEpoch !== commandProcessingEpochRef.current) break;
+          if (kickoffEpoch !== commandThinkingEpochRef.current) break;
           if (abortController.signal.aborted) break;
           if (ev.type === 'error' && abortController.signal.aborted) continue;
           if (ev.type === 'error') kickoffErrored = true;
@@ -1189,7 +1193,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           handleStreamEvent(ev);
         }
         if (
-          kickoffEpoch === commandProcessingEpochRef.current &&
+          kickoffEpoch === commandThinkingEpochRef.current &&
           !sawDone &&
           !abortController.signal.aborted &&
           (['responding', 'thinking'] as CommandState[]).includes(stateRef.current as CommandState)
@@ -1198,7 +1202,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         }
 
         const kickoffOk =
-          kickoffEpoch === commandProcessingEpochRef.current &&
+          kickoffEpoch === commandThinkingEpochRef.current &&
           !kickoffErrored &&
           !abortController.signal.aborted &&
           (streamHadOutputRef.current || assistantBubbleTextRef.current.trim().length > 0);
@@ -1500,14 +1504,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     if (current === 'idle' && !isCommandOwner && !isCommandService) return;
     markMicIntentHandled();
     if (
-      COMMAND_PROCESSING_STATES.has(current) ||
-      runtimeRef.current.commandPipelineActive
+      selectIsCommandThinking(runtimeRef.current, assistantBubbleStatusRef.current)
     ) {
-      cancelProcessing();
+      cancelThinking();
       return;
     }
     cancelCommandService();
-  }, [cancelCommandService, cancelProcessing, isCommandService, isCommandOwner]);
+  }, [cancelCommandService, cancelThinking, isCommandService, isCommandOwner]);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -1536,7 +1539,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     bubbleHistory,
     liveTurnId,
     cancelCommandService,
-    cancelProcessing,
+    cancelThinking,
     startListening,
     beginIntroduction,
     beginRetraining,

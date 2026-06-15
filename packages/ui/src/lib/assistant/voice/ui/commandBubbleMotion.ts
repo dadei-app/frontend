@@ -43,11 +43,10 @@ export function userBubblePlacement(
 }
 
 export function userBubblePhase(
-  state: CommandState,
+  _state: CommandState,
   placement: UserBubblePlacement,
 ): UserBubblePhase {
   if (placement === 'dock') return 'thought';
-  if (state === 'thinking') return 'settling';
   return 'settled';
 }
 
@@ -62,7 +61,7 @@ export function shouldShowLiveUserBubble(
   return userText.trim().length > 0;
 }
 
-/** Assistant bubble visible while processing; `anchored` latches on once the turn starts. */
+/** Assistant bubble visible while thinking; `anchored` latches on once the turn starts. */
 export function hasVisibleAssistantContent(
   text: string,
   statusLine: string | null,
@@ -97,22 +96,42 @@ export const BUBBLE_LAYOUT_TRANSITION = {
 
 /** Extra-soft morph when the user bubble leaves the dock for the stack. */
 export const DOCK_TO_STACK_LAYOUT_TRANSITION = {
-  type: 'spring' as const,
-  stiffness: 165,
-  damping: 28,
-  mass: 1.18,
+  type: 'tween' as const,
+  duration: 1.08,
+  ease: VOICE_EASE,
 };
 
-/** User command slides down as dadei's bubble spawns above it. */
+/** Single source of truth for command-bubble stack rhythm. */
+export const COMMAND_BUBBLE_STACK_SPACING = {
+  /** Uniform gap between every bubble in the scroll stack. */
+  stackGapPx: 12,
+  dockMarginBottomPx: 6,
+  scrollPaddingPx: 8,
+} as const;
+
+/** @deprecated Use COMMAND_BUBBLE_STACK_SPACING.stackGapPx */
+export const LIVE_PAIR_GAP_PX = COMMAND_BUBBLE_STACK_SPACING.stackGapPx;
+
+/** @deprecated Use COMMAND_BUBBLE_STACK_SPACING.stackGapPx */
+export const HISTORY_BLOCK_GAP_PX = COMMAND_BUBBLE_STACK_SPACING.stackGapPx;
+
+export function commandBubbleStackStyle(): { gap: number } {
+  return { gap: COMMAND_BUBBLE_STACK_SPACING.stackGapPx };
+}
+
+/** User lands in the stack before dadei's thinking bubble fades in above. */
+export const ASSISTANT_REVEAL_DELAY_MS = 340;
+
+/** Split motion only when response text is streaming — not on thinking entry. */
 export const TURN_SPLIT_SPRING = {
   type: 'spring' as const,
-  stiffness: 220,
-  damping: 30,
-  mass: 1.05,
+  stiffness: 260,
+  damping: 32,
+  mass: 0.95,
 };
 
-export const TURN_SPLIT_ASSISTANT_ORIGIN_Y = 22;
-export const TURN_SPLIT_USER_PUSH_PX = 14;
+export const TURN_SPLIT_ASSISTANT_ORIGIN_Y = 8;
+export const TURN_SPLIT_USER_PUSH_PX = 0;
 
 /** Opacity / scale polish on stack entry. */
 export const BUBBLE_PRESENCE_TRANSITION = {
@@ -136,12 +155,12 @@ export const DOCK_ENTRY_OFFSET_Y = DOCK_POP_ORIGIN_Y;
 /** @deprecated Use DOCK_POP_* */
 export const DOCK_ENTRY_SCALE = DOCK_POP_ORIGIN_SCALE;
 
-/** Listening ends — bubble depresses and sheds capture chrome before joining the stack. */
-export const CAPTURE_RELEASE_DEPRESS_Y = 6;
-export const CAPTURE_RELEASE_SCALE = 0.968;
-export const CAPTURE_RELEASE_MS = 0.92;
+/** Listening ends — gentle settle into the stack (single ease, no bounce). */
+export const CAPTURE_RELEASE_DEPRESS_Y = 4;
+export const CAPTURE_RELEASE_SCALE = 0.985;
+export const CAPTURE_RELEASE_MS = 1.05;
 
-export const DOCK_SLOT_COLLAPSE_MS = 0.88;
+export const DOCK_SLOT_COLLAPSE_MS = 0.72;
 
 /** Live dock breathing — subtle idle pulse layered under mic reactivity. */
 export const DOCK_BREATHE_SCALE = [1, 1.01, 1] as const;

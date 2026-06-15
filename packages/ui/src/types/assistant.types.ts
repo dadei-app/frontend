@@ -26,9 +26,9 @@ export interface AssistantState {
   serviceStateRevision: number;
   /**
    * A /command/text inference is starting or in flight (claim, RAG, SSE).
-   * Drives mic cancel-processing chrome before `commandState` reaches `thinking`.
+   * Drives mic cancel-thinking chrome before `commandState` reaches `thinking`.
    */
-  commandPipelineActive: boolean;
+  commandThinkingActive: boolean;
 }
 
 export const INITIAL_ASSISTANT_STATE: AssistantState = {
@@ -42,7 +42,7 @@ export const INITIAL_ASSISTANT_STATE: AssistantState = {
   serviceStateSyncPending: false,
   serviceStateSyncBaselineRevision: null,
   serviceStateRevision: 0,
-  commandPipelineActive: false,
+  commandThinkingActive: false,
 };
 
 export type AssistantAction =
@@ -65,5 +65,5 @@ export type AssistantAction =
     }
   | { type: 'command/state'; commandState: CommandState }
   | { type: 'command/mode'; commandMode: CommandMode }
-  | { type: 'command/pipeline_active'; active: boolean }
+  | { type: 'command/thinking_active'; active: boolean }
   | { type: 'runtime/reset' };

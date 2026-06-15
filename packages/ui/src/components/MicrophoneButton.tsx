@@ -1,12 +1,8 @@
-import { useContext, useEffect, useMemo } from 'react';
+import { useContext, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
-import { useService } from '@dadei/ui/contexts/ServiceContext';
-import { useAssistantRuntimeState } from '@dadei/ui/contexts/AssistantRuntimeContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
-import { useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
-import { deriveMicAppearanceFromRuntime } from '@dadei/ui/lib/assistant/voice/micAppearance';
 import { useMicIntent } from '@dadei/ui/lib/assistant/lifecycle/useMicIntent';
 import MicAmbientRipples from '@dadei/ui/components/command/mic/MicAmbientRipples';
 import MicGlassLayer from '@dadei/ui/components/command/mic/MicGlassLayer';
@@ -21,19 +17,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const audioContext = useContext(AudioContext);
   const micLevel = audioContext?.micLevel ?? 0;
   const { matchesHotkey } = useSystem();
-  const { permissionsGateOpen } = useService();
-  const runtime = useAssistantRuntimeState();
-  const tutorialActive = useTutorialEngaged();
-  const { submitMicIntent, inputsInert } = useMicIntent();
-
-  const appearance = useMemo(
-    () =>
-      deriveMicAppearanceFromRuntime(runtime, {
-        tutorialActive,
-        permissionsGateBlocked: permissionsGateOpen,
-      }),
-    [permissionsGateOpen, runtime, tutorialActive],
-  );
+  const { submitMicIntent, inputsInert, appearance } = useMicIntent();
 
   useEffect(() => {
     if (disableSpaceToggle) return;
@@ -109,7 +93,7 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
         {appearance.grayChrome === 'loading' ? (
           <MicSpinner className="border-t-zinc-300" />
         ) : null}
-        {appearance.showProcessingSpinner ? <MicSpinner className="border-t-sky-200" /> : null}
+        {appearance.showThinkingSpinner ? <MicSpinner className="border-t-sky-200" /> : null}
       </motion.button>
     </div>
   );

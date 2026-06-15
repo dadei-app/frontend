@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 /**
- * Mirrors the capture re-arm generation rules used after cancelProcessing.
+ * Mirrors the capture re-arm generation rules used after cancelThinking.
  */
 function canCommitUtteranceEnd(
   captureRearmGeneration: number,

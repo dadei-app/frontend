@@ -1,4 +1,4 @@
-import type { CommandMode, CommandState } from '@dadei/ui/types/command.types';
+import type { AssistantBubbleStatus, CommandMode, CommandState } from '@dadei/ui/types/command.types';
 import {
   INITIAL_ASSISTANT_STATE,
   type AssistantAction,
@@ -87,8 +87,8 @@ export function assistantRuntimeReducer(
     case 'command/mode':
       return { ...state, commandMode: action.commandMode };
 
-    case 'command/pipeline_active':
-      return { ...state, commandPipelineActive: action.active };
+    case 'command/thinking_active':
+      return { ...state, commandThinkingActive: action.active };
 
     case 'runtime/reset':
       return { ...INITIAL_ASSISTANT_STATE };
@@ -183,9 +183,25 @@ export function selectIsAssistantBusy(state: AssistantState): boolean {
   return BUSY_STATES.has(state.commandState);
 }
 
-export const COMMAND_PROCESSING_STATES: ReadonlySet<CommandState> = new Set([
+export const COMMAND_THINKING_STATES: ReadonlySet<CommandState> = new Set([
   'thinking',
   'responding',
 ]);
+
+/** True while inference, streaming, or typewriter readout is in progress (not follow-up capture). */
+export function selectIsCommandThinking(
+  state: AssistantState,
+  assistantBubbleStatus?: AssistantBubbleStatus | null,
+): boolean {
+  if (state.commandThinkingActive) return true;
+  if (COMMAND_THINKING_STATES.has(state.commandState)) return true;
+  if (
+    assistantBubbleStatus === 'streaming' ||
+    assistantBubbleStatus === 'revealing'
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export const COMMAND_CAPTURE_STATES: ReadonlySet<CommandState> = new Set(['listening', 'follow_up']);
