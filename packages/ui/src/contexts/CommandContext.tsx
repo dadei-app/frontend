@@ -70,7 +70,6 @@ import {
 } from '@dadei/ui/lib/assistant/voice/labels/commandToolLabels';
 import { isSessionEndUtterance } from '@dadei/ui/lib/assistant/voice/session/sessionEndDetection';
 import {
-  notifyCommandCaptureCommit,
   notifyCommandCaptureRearm,
   subscribeVoiceSpeechActivity,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
@@ -608,6 +607,15 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     releaseCommandService,
   ]);
 
+  /** Dismiss phrases (e.g. "thank you") — never paint into the stack; tear down immediately. */
+  const dismissSessionFromFollowUp = useCallback(() => {
+    clearFollowUpDockPrime();
+    setUserCaptionInterim(false);
+    setUserBubbleText('');
+    userBubbleTextRef.current = '';
+    endSession();
+  }, [clearFollowUpDockPrime, endSession]);
+
   const cancelCommandService = useCallback(() => {
     if (isCommandThinkingNow()) {
       cancelThinkingRef.current?.();
@@ -713,6 +721,9 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       runtimeActions.setCommandCaptureSyncPending(false);
       pendingCancelSessionIdRef.current = null;
       setCommandThinkingActive(false);
+      if (!liveTurnIdRef.current) {
+        assignLiveTurnId();
+      }
       setCommandState(inVoiceEnrollment ? 'follow_up' : 'listening');
       if (!inVoiceEnrollment) {
         scheduleWakeFalsePositiveRelease();
@@ -720,6 +731,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       notifyCommandCaptureRearm();
     },
     [
+      assignLiveTurnId,
       clearCaptureSyncTimer,
       runtimeActions,
       scheduleWakeFalsePositiveRelease,
@@ -1011,10 +1023,6 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
   const submitVisibleCommandText = useCallback(
     (raw: string, fromFollowUp: boolean) => {
-      const captureState = stateRef.current;
-      if (captureState === 'listening' || captureState === 'follow_up') {
-        notifyCommandCaptureCommit();
-      }
       const cleaned = cleanTranscript(raw);
       if (!cleaned) return;
       const displayText = liveCommandCaptionText(cleaned, fromFollowUp);
@@ -1034,8 +1042,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
 
       if (fromFollowUp && isSessionEndUtterance(submitText)) {
         console.debug('[Voice][SessionEnd] matched follow-up submit', { text: submitText });
-        setUserBubbleText(displayText);
-        endSession();
+        dismissSessionFromFollowUp();
         return;
       }
 
@@ -1156,7 +1163,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       assignLiveTurnId,
       claimCommandService,
       clearFollowUpTimer,
-      endSession,
+      dismissSessionFromFollowUp,
       getAccessToken,
       goIdle,
       handleStreamEvent,
@@ -1424,9 +1431,18 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        userBubbleTextRef.current = raw;
-        setUserCaptionInterim(true);
-        setUserBubbleText(raw);
+        const fromFollowUpInterim =
+          transcribeFromFollowUpRef.current || current === 'follow_up';
+        const interimCleaned = cleanTranscript(raw);
+        const interimDismiss =
+          fromFollowUpInterim &&
+          interimCleaned.trim() &&
+          isSessionEndUtterance(interimCleaned);
+        if (!interimDismiss) {
+          userBubbleTextRef.current = raw;
+          setUserCaptionInterim(true);
+          setUserBubbleText(raw);
+        }
         return;
       }
 
@@ -1469,8 +1485,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
             if (commandStreamInFlightRef.current) return;
             if (isSessionEndUtterance(trimmed)) {
               console.debug('[Voice][SessionEnd] matched follow-up final', { text: trimmed });
-              setUserBubbleText(trimmed);
-              endSession();
+              dismissSessionFromFollowUp();
               return;
             }
             if (trimmed.length < MIN_FOLLOW_UP_FINAL_CHARS) {
@@ -1489,7 +1504,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     armWakeListening,
     clearWakeFalsePositiveIfCommandInProgress,
     clearWakeTimeout,
-    endSession,
+    dismissSessionFromFollowUp,
     goIdle,
     onFollowUpSpeechActivity,
     releaseCommandService,

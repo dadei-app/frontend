@@ -17,15 +17,12 @@ import {
 import { getRealtimeSessionId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import { sendRealtimeMessage, subscribeRealtimeMessages } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
 import {
-  notifyCommandCaptureCommit,
   notifyVoiceSpeechActivity,
-  subscribeCommandCaptureCommit,
   subscribeCommandCaptureRearm,
 } from '@dadei/ui/lib/assistant/voice/session/voiceSessionActivity';
 import {
   COMMAND_MIC_LEVEL_GAIN,
-  COMMAND_SPEECH_RMS_THRESHOLD,
-  COMMAND_UTTERANCE_END_MS,
+  FOLLOW_UP_SPEECH_RMS,
 } from '@dadei/ui/lib/assistant/voice/constants';
 import {
   OpenWakeWordDetector,
@@ -38,7 +35,7 @@ import { useService } from '@dadei/ui/contexts/ServiceContext';
 import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/TutorialContext';
 
 const COMMAND_START_RETRY_MS = 500;
-const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 1024;
+const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 256;
 const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
 const MIC_LEVEL_ANALYSER_FFT = 256;
@@ -172,12 +169,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const wakeDetectorRef = useRef<OpenWakeWordDetector | null>(null);
   const wakeDetectorFailureLoggedRef = useRef(false);
-  const commandAudioEndSentRef = useRef(false);
-  const speechCaptureRef = useRef({
-    hadSpeech: false,
-    speaking: false,
-    silenceTimer: null as ReturnType<typeof setTimeout> | null,
-  });
+  const followUpSpeakingRef = useRef(false);
   const audioSettingsRef = useRef<AudioSettings>(DEFAULT_AUDIO_SETTINGS);
   const micPreviewRequestsRef = useRef(0);
   const voiceEnrollmentRef = useRef(false);
@@ -185,7 +177,6 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   const rearmIntroductionCapture = useCallback(() => {
     if (!voiceEnrollmentRef.current || !commandStreamActiveRef.current) return;
-    commandAudioEndSentRef.current = false;
     commandStreamReadyRef.current = false;
     sendRealtimeMessage({ type: 'command_audio_discard' });
     sendRealtimeMessage({
@@ -242,30 +233,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     }
   }, [stopMicPreviewStream]);
 
-  const commitCommandCapture = useCallback(() => {
-    forwardChunksRef.current = false;
-    if (!commandStreamActiveRef.current || commandAudioEndSentRef.current) return;
-    commandAudioEndSentRef.current = true;
-    sendRealtimeMessage({ type: 'command_audio_end' });
-  }, []);
-
-  const resetSpeechCapture = useCallback(() => {
-    const capture = speechCaptureRef.current;
-    if (capture.silenceTimer != null) {
-      clearTimeout(capture.silenceTimer);
-    }
-    speechCaptureRef.current = { hadSpeech: false, speaking: false, silenceTimer: null };
-  }, []);
-
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
-
-  useEffect(() => {
-    forwardChunksRef.current = selectShouldForwardAudioChunks(runtime);
-  }, [runtime]);
-
-  useEffect(() => subscribeCommandCaptureCommit(commitCommandCapture), [commitCommandCapture]);
 
   useEffect(() => {
     const prev = prevStateRef.current;
@@ -296,13 +266,14 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, [state, rearmIntroductionCapture]);
 
   useEffect(() => {
-    if (state === 'listening' || state === 'follow_up') {
-      commandAudioEndSentRef.current = false;
-      resetSpeechCapture();
-    } else {
-      resetSpeechCapture();
+    forwardChunksRef.current = selectShouldForwardAudioChunks(runtime);
+  }, [runtime]);
+
+  useEffect(() => {
+    if (state !== 'follow_up') {
+      followUpSpeakingRef.current = false;
     }
-  }, [state, resetSpeechCapture]);
+  }, [state]);
 
   useEffect(() => {
     const commandAnalyser = streamAnalyserReady ? analyserRef.current : null;
@@ -325,35 +296,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       if (meterFromCommand) {
         const inCapture =
           stateRef.current === 'listening' || stateRef.current === 'follow_up';
-        if (inCapture) {
-          const speaking = level >= COMMAND_SPEECH_RMS_THRESHOLD;
-          const capture = speechCaptureRef.current;
-          if (speaking) {
-            if (capture.silenceTimer != null) {
-              clearTimeout(capture.silenceTimer);
-              capture.silenceTimer = null;
-            }
-            if (!capture.speaking && stateRef.current === 'follow_up') {
-              notifyVoiceSpeechActivity();
-            }
-            capture.speaking = true;
-            capture.hadSpeech = true;
-          } else if (capture.hadSpeech && capture.silenceTimer == null && !commandAudioEndSentRef.current) {
-            capture.speaking = false;
-            capture.silenceTimer = setTimeout(() => {
-              speechCaptureRef.current.silenceTimer = null;
-              if (
-                stateRef.current === 'listening' ||
-                stateRef.current === 'follow_up'
-              ) {
-                notifyCommandCaptureCommit();
-              }
-            }, COMMAND_UTTERANCE_END_MS);
-          } else if (!speaking) {
-            capture.speaking = false;
+        if (inCapture && stateRef.current === 'follow_up') {
+          const speaking = level >= FOLLOW_UP_SPEECH_RMS;
+          if (speaking && !followUpSpeakingRef.current) {
+            notifyVoiceSpeechActivity();
           }
-        } else {
-          resetSpeechCapture();
+          followUpSpeakingRef.current = speaking;
         }
       }
 
@@ -362,7 +310,7 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [streamAnalyserReady, previewAnalyserReady, state, resetSpeechCapture]);
+  }, [streamAnalyserReady, previewAnalyserReady, state]);
 
   const onWakeWordDetected = useCallback(
     (_timestampMs: number, wakeWord: WakeWordLabel) => {
@@ -441,13 +389,12 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const rearmCommandCapture = useCallback(() => {
-    commandAudioEndSentRef.current = false;
     commandStreamReadyRef.current = false;
-    resetSpeechCapture();
+    followUpSpeakingRef.current = false;
     if (commandStreamActiveRef.current) {
       ensureCommandSessionStarted(Date.now(), true);
     }
-  }, [ensureCommandSessionStarted, resetSpeechCapture]);
+  }, [ensureCommandSessionStarted]);
 
   useEffect(() => subscribeCommandCaptureRearm(rearmCommandCapture), [rearmCommandCapture]);
 

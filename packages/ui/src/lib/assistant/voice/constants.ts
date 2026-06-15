@@ -27,13 +27,9 @@ export const COMMAND_TURN_PAIR_LAYOUT_MS = 0.62;
 
 /**
  * Mic level gain while capturing a command (listening / follow-up).
- * End-of-utterance timing is server-side (same segmentation as ambient pipeline).
+ * End-of-utterance is Deepgram utterance_end_ms only — no client silence VAD.
  */
 export const COMMAND_MIC_LEVEL_GAIN = 2.45;
 
 /** Follow-up idle timer reset when user speaks again (follow_up state only). */
 export const FOLLOW_UP_SPEECH_RMS = 0.12;
-
-/** Client-side utterance seal after speech drops (aligns with server command silence finalize). */
-export const COMMAND_SPEECH_RMS_THRESHOLD = 0.12;
-export const COMMAND_UTTERANCE_END_MS = 400;

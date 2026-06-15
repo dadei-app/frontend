@@ -396,13 +396,12 @@ export function ServiceProvider({ children }: { children: React.ReactNode }) {
   const maybePromptForActiveServicePermissions = useCallback(
     async (enabled: boolean) => {
       if (!enabled || permissionsGateOpen) return;
-      const tutorialPlatform = toTutorialPlatform(platform, isElectron);
-      const missing = await hasMissingClientPermissions(tutorialPlatform, isElectron);
-      if (missing) {
+      const missingRequired = !(await checkRequiredPermissions());
+      if (missingRequired) {
         openPermissionsGate('active-service');
       }
     },
-    [isElectron, openPermissionsGate, permissionsGateOpen, platform],
+    [checkRequiredPermissions, openPermissionsGate, permissionsGateOpen],
   );
 
   const handleAssistantStateSnapshot = useCallback(

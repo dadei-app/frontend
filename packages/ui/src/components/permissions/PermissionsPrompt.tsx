@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import {
@@ -16,6 +16,31 @@ const ROW_VARIANTS = {
   visible: { opacity: 1, y: 0 },
 };
 
+const GRANT_POLL_MS = 200;
+const GRANT_POLL_MAX_MS = 8_000;
+
+async function pollUntilGranted(
+  entry: PermissionEntry,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const started = Date.now();
+  while (!signal.aborted && Date.now() - started < GRANT_POLL_MAX_MS) {
+    const result = await entry.check();
+    if (result === 'granted') return true;
+    await new Promise(resolve => window.setTimeout(resolve, GRANT_POLL_MS));
+  }
+  return false;
+}
+
+function resolveUiStatus(
+  requestResult: 'granted' | 'denied',
+  checkResult: 'granted' | 'denied' | 'unknown',
+): PermissionUiStatus {
+  if (requestResult === 'granted' || checkResult === 'granted') return 'granted';
+  if (checkResult === 'denied') return 'denied';
+  return 'denied';
+}
+
 export function PermissionsPrompt({
   onRequiredGrantedChange,
   onAllGrantedChange,
@@ -31,6 +56,13 @@ export function PermissionsPrompt({
     [tutorialPlatform, isElectron],
   );
   const [statusById, setStatusById] = useState<Record<string, PermissionUiStatus>>({});
+  const pollAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      pollAbortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,13 +101,35 @@ export function PermissionsPrompt({
   }, [allGranted, onAllGrantedChange]);
 
   const handleAllow = useCallback(async (entry: PermissionEntry) => {
+    pollAbortRef.current?.abort();
+    const pollAbort = new AbortController();
+    pollAbortRef.current = pollAbort;
+
     setStatusById(prev => ({ ...prev, [entry.id]: 'pending' }));
-    await entry.request();
+
+    const pollGranted = pollUntilGranted(entry, pollAbort.signal).then(granted => {
+      if (granted && !pollAbort.signal.aborted) {
+        setStatusById(prev => ({ ...prev, [entry.id]: 'granted' }));
+      }
+      return granted;
+    });
+
+    const requestResult = await entry.request();
+    if (pollAbort.signal.aborted) return;
+
+    if (requestResult === 'granted') {
+      pollAbort.abort();
+      setStatusById(prev => ({ ...prev, [entry.id]: 'granted' }));
+      return;
+    }
+
+    const polledGranted = await pollGranted;
+    if (pollAbort.signal.aborted || polledGranted) return;
+
     const recheck = await entry.check();
-    const granted = recheck === 'granted';
     setStatusById(prev => ({
       ...prev,
-      [entry.id]: granted ? 'granted' : 'denied',
+      [entry.id]: resolveUiStatus(requestResult, recheck),
     }));
   }, []);
 
@@ -83,14 +137,14 @@ export function PermissionsPrompt({
   const progress = entries.length > 0 ? grantedCount / entries.length : 0;
 
   return (
-    <div className="max-h-[min(52vh,22rem)] overflow-y-auto [scrollbar-width:thin]">
-      <p className="text-sm leading-relaxed text-zinc-400 font-secondary">
+    <div>
+      <p className="text-sm leading-snug text-zinc-400 font-secondary">
         Microphone is required before the assistant can listen on this device. Other permissions
         improve weather, location, and desktop actions — you can skip those once the mic is allowed.
       </p>
 
       {entries.length > 0 ? (
-        <div className="mt-3">
+        <div className="mt-2.5">
           <div className="flex items-center justify-between gap-3 text-xs text-zinc-500 font-secondary">
             <span>
               {grantedCount} of {entries.length} allowed
@@ -113,7 +167,7 @@ export function PermissionsPrompt({
               </motion.span>
             ) : null}
           </div>
-          <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-800/90">
+          <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-800/90">
             <motion.div
               className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
               initial={{ width: 0 }}
@@ -125,7 +179,7 @@ export function PermissionsPrompt({
       ) : null}
 
       <motion.ul
-        className="mt-4 space-y-2.5"
+        className="mt-3 space-y-2"
         initial="hidden"
         animate="visible"
         variants={{
@@ -141,7 +195,13 @@ export function PermissionsPrompt({
           const status = statusById[entry.id] ?? 'idle';
           const required = isRequiredPermission(entry);
           const label =
-            status === 'pending' ? 'Requesting…' : status === 'granted' ? 'Allowed' : 'Allow';
+            status === 'pending'
+              ? 'Requesting…'
+              : status === 'granted'
+                ? 'Allowed'
+                : status === 'denied'
+                  ? 'Try again'
+                  : 'Allow';
 
           return (
             <motion.li
@@ -150,7 +210,7 @@ export function PermissionsPrompt({
               transition={{ duration: reduceMotion ? 0 : 0.28, ease: 'easeOut' }}
               layout
               className={cn(
-                'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border p-3.5',
+                'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl border p-3',
                 status === 'granted'
                   ? 'border-emerald-500/25 bg-emerald-950/20'
                   : 'border-white/10 bg-zinc-900/55',
@@ -165,7 +225,7 @@ export function PermissionsPrompt({
                     </span>
                   ) : null}
                 </div>
-                <p className="mt-1 text-xs leading-relaxed text-zinc-500 font-secondary">
+                <p className="mt-0.5 text-xs leading-snug text-zinc-500 font-secondary">
                   {entry.description}
                 </p>
               </div>
@@ -173,7 +233,7 @@ export function PermissionsPrompt({
                 type="button"
                 disabled={status === 'pending' || status === 'granted'}
                 className={cn(
-                  'shrink-0 whitespace-nowrap rounded-lg border px-3.5 py-2 text-sm font-medium transition',
+                  'shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 text-sm font-medium transition',
                   status === 'granted' &&
                     'cursor-default border-emerald-500/20 bg-emerald-950/40 text-emerald-300/80',
                   status === 'pending' &&

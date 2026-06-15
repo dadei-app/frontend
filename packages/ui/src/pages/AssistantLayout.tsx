@@ -204,8 +204,8 @@ function AssistantLayoutShell() {
             >
               <BannerStackHost />
             </div>
+            <ServicePermissionsGate />
             <div className="relative min-h-0 flex-1 overflow-hidden">
-              <ServicePermissionsGate />
               {/* Mic: geometric center of the left panel; hints are out of flow. */}
               <div
                 className={cn(

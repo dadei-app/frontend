@@ -39,49 +39,49 @@ const COMMAND_ORB_REST: CommandOrbLayers = {
 function commandOrbLayersFromMicLevel(level: number): CommandOrbLayers {
   const clamped = Math.min(1, Math.max(0, level));
   const raw = clamped < 0.02 ? 0 : clamped;
-  const t = Math.min(1, Math.pow(raw, 0.82));
+  const t = Math.min(1, Math.pow(raw, 0.88));
 
   if (t === 0) return COMMAND_ORB_REST;
 
-  const coreStop = 22 + t * 44;
-  const midStop = 44 + t * 34;
-  const bloomStop = Math.min(92, 62 + t * 30);
+  const coreStop = 20 + t * 36;
+  const midStop = 42 + t * 28;
+  const bloomStop = Math.min(86, 60 + t * 24);
 
   const body = [
-    `radial-gradient(circle at 50% 54%, rgba(125,211,252,${0.06 + t * 0.34}) 0%, rgba(14,165,233,${0.04 + t * 0.44}) ${coreStop}%, rgba(37,99,235,${0.03 + t * 0.5}) ${midStop}%, transparent ${bloomStop}%)`,
-    `radial-gradient(circle at 50% 50%, transparent ${42 - t * 14}%, rgba(15,23,42,${0.18 + t * 0.16}) 100%)`,
-    `radial-gradient(ellipse 90% 70% at 50% 112%, rgba(30,64,175,${0.04 + t * 0.42}) 0%, transparent 62%)`,
+    `radial-gradient(circle at 50% 54%, rgba(125,211,252,${0.07 + t * 0.28}) 0%, rgba(14,165,233,${0.05 + t * 0.36}) ${coreStop}%, rgba(37,99,235,${0.04 + t * 0.42}) ${midStop}%, transparent ${bloomStop}%)`,
+    `radial-gradient(circle at 50% 50%, transparent ${44 - t * 10}%, rgba(15,23,42,${0.17 + t * 0.14}) 100%)`,
+    `radial-gradient(ellipse 90% 70% at 50% 112%, rgba(30,64,175,${0.04 + t * 0.34}) 0%, transparent 60%)`,
   ].join(', ');
 
-  const energy = `radial-gradient(circle at 50% 55%, rgba(186,230,253,${0.42 + t * 0.58}) 0%, rgba(56,189,248,${0.22 + t * 0.56}) ${16 + t * 28}%, rgba(14,165,233,${0.1 + t * 0.46}) ${36 + t * 30}%, transparent ${58 + t * 26}%)`;
+  const energy = `radial-gradient(circle at 50% 55%, rgba(186,230,253,${0.38 + t * 0.48}) 0%, rgba(56,189,248,${0.2 + t * 0.46}) ${15 + t * 22}%, rgba(14,165,233,${0.09 + t * 0.38}) ${34 + t * 24}%, transparent ${56 + t * 20}%)`;
 
-  const specular = `radial-gradient(ellipse 46% 38% at 34% 28%, rgba(255,255,255,${0.5 + t * 0.5}) 0%, rgba(186,230,253,${0.14 + t * 0.32}) 34%, transparent 72%)`;
+  const specular = `radial-gradient(ellipse 46% 38% at 34% 28%, rgba(255,255,255,${0.46 + t * 0.42}) 0%, rgba(186,230,253,${0.13 + t * 0.26}) 34%, transparent 72%)`;
 
-  const caustic = `radial-gradient(ellipse 58% 46% at 64% 74%, rgba(125,211,252,${0.3 + t * 0.62}) 0%, rgba(37,99,235,${0.12 + t * 0.38}) 38%, transparent 72%)`;
+  const caustic = `radial-gradient(ellipse 58% 46% at 64% 74%, rgba(125,211,252,${0.26 + t * 0.5}) 0%, rgba(37,99,235,${0.11 + t * 0.3}) 38%, transparent 72%)`;
 
-  const innerBloom = 14 + t * 86;
-  const rimLight = 0.05 + t * 0.32;
-  const rimShade = 0.2 + t * 0.2;
-  const outerNear = 22 + t * 58;
-  const outerFar = 44 + t * 96;
-  const outerAlpha = 0.08 + t * 0.48;
+  const innerBloom = 12 + t * 70;
+  const rimLight = 0.05 + t * 0.26;
+  const rimShade = 0.19 + t * 0.18;
+  const outerNear = 20 + t * 50;
+  const outerFar = 40 + t * 84;
+  const outerAlpha = 0.09 + t * 0.4;
 
   const boxShadow = [
     `inset 0 1px 0 rgba(255,255,255,${rimLight})`,
     `inset 0 -18px 36px -10px rgba(15,23,42,${rimShade})`,
-    `inset 0 0 ${innerBloom}px rgba(56,189,248,${0.06 + t * 0.72})`,
-    `inset 0 0 ${Math.round(innerBloom * 0.5)}px rgba(37,99,235,${0.04 + t * 0.52})`,
+    `inset 0 0 ${innerBloom}px rgba(56,189,248,${0.07 + t * 0.62})`,
+    `inset 0 0 ${Math.round(innerBloom * 0.48)}px rgba(37,99,235,${0.05 + t * 0.44})`,
     `0 0 ${outerNear}px rgba(37,99,235,${outerAlpha})`,
-    `0 0 ${outerFar}px rgba(14,165,233,${outerAlpha * 0.85})`,
+    `0 0 ${outerFar}px rgba(14,165,233,${outerAlpha * 0.84})`,
   ].join(', ');
 
   return {
     body,
-    energyOpacity: 0.15 + t * 1.05,
+    energyOpacity: 0.18 + t * 0.88,
     energy,
-    specularOpacity: 0.1 + t * 1,
+    specularOpacity: 0.1 + t * 0.85,
     specular,
-    causticOpacity: t * 0.95,
+    causticOpacity: t * 0.8,
     caustic,
     boxShadow,
   };

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState, Fragment, type CSSProperties } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, useCallback, Fragment, type CSSProperties } from 'react';
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'framer-motion';
 import type { AssistantBubbleStatus } from '@dadei/ui/contexts/CommandContext';
 import { useCommand } from '@dadei/ui/contexts/CommandContext';
@@ -18,14 +18,21 @@ import {
   COMMAND_DOCK_PLACEHOLDER,
   DOCK_POP_ORIGIN_BLUR_PX,
   DOCK_POP_ORIGIN_SCALE,
-  DOCK_POP_ORIGIN_Y,
   DOCK_POP_SPRING,
+  dockPopOriginY,
   ASSISTANT_REVEAL_DELAY_MS,
   DOCK_TO_STACK_LAYOUT_TRANSITION,
+  STACK_SCROLL_EDGE_EPS,
+  stackEdgeMaskStyle,
+  TURN_SPLIT_ASSISTANT_ORIGIN_BLUR_PX,
+  TURN_SPLIT_ASSISTANT_ORIGIN_ROTATE_X,
+  TURN_SPLIT_ASSISTANT_ORIGIN_SCALE,
   TURN_SPLIT_ASSISTANT_ORIGIN_Y,
   TURN_SPLIT_SPRING,
+  TURN_SPLIT_USER_PUSH_PX,
+  TURN_SPLIT_USER_SCALE,
+  TURN_SPLIT_USER_SPRING,
   commandBubbleStackStyle,
-  dockGlowFromMicLevel,
   hasVisibleAssistantContent,
   isUserCaptureLive,
   shouldShowLiveUserBubble,
@@ -37,16 +44,32 @@ import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import type { CommandState } from '@dadei/ui/types/command.types';
 
 const STATUS_ELLIPSIS_CYCLE_MS = 480;
-const STACK_EDGE_FADE_PX = 28;
-const STACK_SCROLL_EDGE_EPS = 2;
 const BUBBLE_BODY_CLASS = 'font-primary text-[15px] leading-[1.6] sm:text-[16px]';
 const BUBBLE_BODY_MIN_H = 'min-h-[1.6rem]';
-const EMERALD = '0,204,106';
+/** Shared speaker line — one family/size so dadei and user labels read as a pair. */
+const SPEAKER_MARK_CLASS =
+  'font-primary text-[11px] font-medium leading-none tracking-[0.12em] lowercase';
 /** Command-mode dock chrome — aligned with MicrophoneButton MIC_GLASS.blue */
 const COMMAND_SKY = '14,165,233';
-const COMMAND_BLUE = '37,99,235';
 
 type BubblePhase = 'thought' | 'settling' | 'settled';
+
+const userCardSettledChrome = {
+  background: 'linear-gradient(180deg, rgba(26,26,30,0.60) 0%, rgba(15,15,18,0.68) 100%)',
+  borderColor: 'rgba(255,255,255,0.07)',
+  boxShadow: [
+    'inset 0 1px 0 0 rgba(255,255,255,0.07)',
+    '0 1px 2px rgba(0,0,0,0.35)',
+    '0 24px 48px -30px rgba(0,0,0,0.78)',
+  ].join(', '),
+} as const;
+
+const userCardCaptureChrome = {
+  background:
+    'linear-gradient(152deg, rgba(22,30,48,0.97) 0%, rgba(14,18,28,0.98) 55%, rgba(12,14,22,0.99) 100%)',
+  borderColor: `rgba(${COMMAND_SKY},0.32)`,
+  boxShadow: 'inset 0 1px 0 0 rgba(255,255,255,0.09), 0 1px 2px rgba(0,0,0,0.35)',
+} as const;
 
 const cardSettled: CSSProperties = {
   backdropFilter: 'blur(24px) saturate(135%)',
@@ -61,18 +84,9 @@ const cardSettled: CSSProperties = {
 };
 
 const cardCaptureLive: CSSProperties = {
-  backdropFilter: 'blur(26px) saturate(150%)',
-  WebkitBackdropFilter: 'blur(26px) saturate(150%)',
-  background:
-    'linear-gradient(152deg, rgba(37,99,235,0.22) 0%, rgba(14,165,233,0.14) 42%, rgba(15,18,28,0.66) 100%)',
-  border: `1px solid rgba(${COMMAND_SKY},0.30)`,
-  boxShadow: [
-    'inset 0 1px 0 0 rgba(255,255,255,0.11)',
-    `inset 0 -22px 44px -34px rgba(${COMMAND_BLUE},0.20)`,
-    `0 0 28px rgba(${COMMAND_BLUE},0.24)`,
-    '0 1px 2px rgba(0,0,0,0.4)',
-    '0 28px 56px -30px rgba(0,0,0,0.8)',
-  ].join(', '),
+  background: userCardCaptureChrome.background,
+  border: `1px solid ${userCardCaptureChrome.borderColor}`,
+  boxShadow: userCardCaptureChrome.boxShadow,
 };
 
 const cardAssistantBusy: CSSProperties = {
@@ -100,15 +114,30 @@ function cardStyleFor(
   return cardSettled;
 }
 
-function stackEdgeMaskStyle(fadeTop: boolean, fadeBottom: boolean): CSSProperties | undefined {
-  if (!fadeTop && !fadeBottom) return undefined;
-  const fade = `${STACK_EDGE_FADE_PX}px`;
-  let g: string;
-  if (fadeTop && fadeBottom)
-    g = `linear-gradient(to bottom, transparent 0, #000 ${fade}, #000 calc(100% - ${fade}), transparent 100%)`;
-  else if (fadeTop) g = `linear-gradient(to bottom, transparent 0, #000 ${fade}, #000 100%)`;
-  else g = `linear-gradient(to bottom, #000 0, #000 calc(100% - ${fade}), transparent 100%)`;
-  return { maskImage: g, WebkitMaskImage: g };
+function applyStackEdgeMask(
+  wrap: HTMLDivElement | null,
+  scrollEl: HTMLDivElement | null,
+): void {
+  if (!wrap || !scrollEl) return;
+  const { scrollTop, scrollHeight, clientHeight } = scrollEl;
+  if (scrollHeight <= clientHeight + STACK_SCROLL_EDGE_EPS) {
+    wrap.style.maskImage = '';
+    wrap.style.webkitMaskImage = '';
+    return;
+  }
+  const mask = stackEdgeMaskStyle(
+    scrollTop > STACK_SCROLL_EDGE_EPS,
+    scrollTop + clientHeight < scrollHeight - STACK_SCROLL_EDGE_EPS,
+    scrollHeight,
+    clientHeight,
+  );
+  if (!mask) {
+    wrap.style.maskImage = '';
+    wrap.style.webkitMaskImage = '';
+    return;
+  }
+  wrap.style.maskImage = mask.maskImage;
+  wrap.style.webkitMaskImage = mask.WebkitMaskImage;
 }
 
 function SpeakerMark({
@@ -116,22 +145,17 @@ function SpeakerMark({
   live,
   reduce,
   commandState,
+  commandBlue = false,
 }: {
   role: 'user' | 'assistant';
   live: boolean;
   reduce: boolean;
   commandState?: CommandState;
+  commandBlue?: boolean;
 }) {
   const isAssistant = role === 'assistant';
   const captureAccent = live && !isAssistant;
-  const brandAccent = isAssistant;
-  const accentRgb = captureAccent ? COMMAND_SKY : EMERALD;
-  const dotColor = captureAccent
-    ? `rgb(${COMMAND_SKY})`
-    : brandAccent
-      ? `rgb(${EMERALD})`
-      : 'rgba(244,244,245,0.40)';
-  const showPulse = (captureAccent || brandAccent) && !reduce;
+  const showDot = (captureAccent || commandBlue) && !reduce;
 
   const userLabel =
     live && commandState === 'follow_up'
@@ -141,36 +165,42 @@ function SpeakerMark({
         : 'you';
 
   return (
-    <span className="flex items-center gap-2">
-      <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
-        {showPulse ? (
-          <motion.span
-            aria-hidden
-            className="absolute inset-0 rounded-full"
-            style={{ background: `rgba(${accentRgb},0.45)` }}
-            animate={{ scale: [1, 2.8], opacity: [0.4, 0] }}
-            transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
-          />
-        ) : null}
-        <span
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: dotColor,
-            boxShadow:
-              captureAccent || brandAccent
-                ? `0 0 6px rgba(${accentRgb},0.45)`
-                : undefined,
-          }}
-        />
-      </span>
+    <span className={cn('flex items-center', showDot ? 'gap-2' : 'gap-0')}>
+      {showDot ? (
+        <span className="relative inline-flex h-1.5 w-1.5 shrink-0">
+          <AnimatePresence initial={false}>
+            <motion.span
+              key="live-dot"
+              className="absolute inset-0"
+              initial={{ opacity: 0, scale: 0.55 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.55 }}
+              transition={{ duration: 0.3, ease: VOICE_EASE }}
+            >
+              {captureAccent ? (
+                <motion.span
+                  aria-hidden
+                  className="absolute inset-0 rounded-full"
+                  style={{ background: `rgba(${COMMAND_SKY},0.45)` }}
+                  animate={{ scale: [1, 2.8], opacity: [0.4, 0] }}
+                  transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
+                />
+              ) : null}
+              <span
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: `rgb(${COMMAND_SKY})`,
+                  boxShadow: `0 0 6px rgba(${COMMAND_SKY},0.45)`,
+                }}
+              />
+            </motion.span>
+          </AnimatePresence>
+        </span>
+      ) : null}
       {isAssistant ? (
-        <span className="font-brand text-[13px] leading-none tracking-[0.05em] text-zinc-200">
-          dadei
-        </span>
+        <span className={cn(SPEAKER_MARK_CLASS, 'text-zinc-300')}>dadei</span>
       ) : (
-        <span className="font-secondary text-[10px] font-medium uppercase leading-none tracking-[0.22em] text-zinc-500">
-          {userLabel}
-        </span>
+        <span className={cn(SPEAKER_MARK_CLASS, 'text-zinc-500')}>{userLabel}</span>
       )}
     </span>
   );
@@ -179,7 +209,7 @@ function SpeakerMark({
 function StatusSpinnerRing() {
   return (
     <motion.span
-      className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 border-zinc-600/70 border-t-emerald-300/90"
+      className="inline-block h-3.5 w-3.5 shrink-0 rounded-full border-2 border-zinc-600/70 border-t-sky-300/90"
       animate={{ rotate: 360 }}
       transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
       aria-hidden
@@ -197,7 +227,13 @@ function AnimatedStatusLine({ base }: { base: string }) {
   return <span className="text-zinc-400">{dotPhase === 0 ? base : `${base}${'.'.repeat(dotPhase)}`}</span>;
 }
 
-function AssistantLoadingStatus({ line }: { line: string }) {
+function AssistantLoadingStatus({
+  line,
+  commandBlue = false,
+}: {
+  line: string;
+  commandBlue?: boolean;
+}) {
   const statusBase = formatAssistantStatusLine(line);
   return (
     <span
@@ -361,11 +397,17 @@ export default function CommandBubble({
       : COMMAND_DOCK_PLACEHOLDER.listening;
   const showBody = showStatus || visible.length > 0 || listeningEmpty;
 
+  const commandBlueAccent =
+    captureLive ||
+    (isAssistant &&
+      !!commandState &&
+      (commandState === 'thinking' || commandState === 'responding'));
+
   const cardStyle = cardStyleFor(role, phase, assistantStatus, captureLive);
-  const dockGlow = captureLive ? dockGlowFromMicLevel(micLevel) : 0;
   const isDepressing = !isAssistant && phase === 'settling';
   const captureFading = isDepressing;
   const justPopped = captureLive && dockPopSeq > 0;
+  const chromeReleaseMs = captureFading ? CAPTURE_RELEASE_MS : 0.45;
 
   return (
     <motion.div
@@ -384,56 +426,62 @@ export default function CommandBubble({
     >
       <motion.div
         layout={!isDepressing}
-        className={cn('relative overflow-hidden', captureLive && 'shadow-2xl')}
-        initial={justPopped ? { borderRadius: 999 } : false}
-        animate={{
-          borderRadius: captureLive ? 20 : 14,
-          scale: isDepressing ? CAPTURE_RELEASE_SCALE : 1,
+        className="relative overflow-hidden"
+        initial={false}
+        animate={
+          isAssistant
+            ? {
+                borderRadius: 14,
+                scale: 1,
+              }
+            : {
+                borderRadius: captureLive ? 20 : 14,
+                scale: isDepressing ? CAPTURE_RELEASE_SCALE : 1,
+                background: captureLive ? userCardCaptureChrome.background : userCardSettledChrome.background,
+                borderColor: captureLive ? userCardCaptureChrome.borderColor : userCardSettledChrome.borderColor,
+                boxShadow: captureLive ? userCardCaptureChrome.boxShadow : userCardSettledChrome.boxShadow,
+              }
+        }
+        transition={{
+          borderRadius: { duration: isDepressing ? CAPTURE_RELEASE_MS : justPopped ? 0.52 : chromeReleaseMs, ease: VOICE_EASE },
+          scale: { duration: isDepressing ? CAPTURE_RELEASE_MS : chromeReleaseMs, ease: VOICE_EASE },
+          background: { duration: chromeReleaseMs, ease: VOICE_EASE },
+          borderColor: { duration: chromeReleaseMs, ease: VOICE_EASE },
+          boxShadow: { duration: chromeReleaseMs, ease: VOICE_EASE },
         }}
-        transition={{ duration: isDepressing ? CAPTURE_RELEASE_MS : justPopped ? 0.52 : 0.45, ease: VOICE_EASE }}
-        style={cardStyle}
+        style={
+          isAssistant
+            ? { ...cardStyle, borderWidth: 1, borderStyle: 'solid' }
+            : {
+                borderWidth: 1,
+                borderStyle: 'solid',
+                ...(!captureLive
+                  ? {
+                      backdropFilter: cardSettled.backdropFilter,
+                      WebkitBackdropFilter: cardSettled.WebkitBackdropFilter,
+                    }
+                  : {}),
+              }
+        }
       >
-        {captureFading ? (
-          <motion.div
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-[inherit]"
-            style={{ ...cardCaptureLive, opacity: 1 }}
-            animate={{ opacity: 0 }}
-            transition={{ duration: CAPTURE_RELEASE_MS, ease: VOICE_EASE }}
-          />
-        ) : null}
-        {dockGlow > 0 ? (
-          <motion.div
-            aria-hidden
-            className="pointer-events-none absolute -inset-px rounded-[inherit] opacity-70"
-            animate={{
-              boxShadow: `0 0 ${32 + dockGlow * 52}px rgba(${COMMAND_BLUE},${dockGlow * 0.5})`,
-            }}
-            transition={{ duration: 0.14, ease: 'easeOut' }}
-          />
-        ) : null}
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-4 top-0 h-px rounded-full bg-gradient-to-r from-transparent via-white/15 to-transparent"
         />
 
-        {captureLive && !reduce ? (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 opacity-50"
-            style={{
-              background: `linear-gradient(to top, rgba(${COMMAND_BLUE},0.12), transparent)`,
-            }}
-          />
-        ) : null}
-
         <div className="relative min-w-0 px-5 py-3.5 sm:px-6 sm:py-4">
-          <SpeakerMark role={role} live={live} reduce={!!reduce} commandState={commandState} />
+          <SpeakerMark
+            role={role}
+            live={live}
+            reduce={!!reduce}
+            commandState={commandState}
+            commandBlue={commandBlueAccent}
+          />
 
           {showBody ? (
             <div className="mt-2.5 min-w-0">
               {showStatus && statusForDisplay ? (
-                <AssistantLoadingStatus line={statusForDisplay} />
+                <AssistantLoadingStatus line={statusForDisplay} commandBlue={commandBlueAccent} />
               ) : listeningEmpty ? (
                 <p className={cn(BUBBLE_BODY_CLASS, BUBBLE_BODY_MIN_H, 'text-zinc-500')}>
                   {dockPlaceholder}
@@ -512,7 +560,7 @@ function LiveUserBubbleSlot({
 
   return (
     <motion.div
-      layout="position"
+      layout={isDock ? 'position' : false}
       layoutId={`cmd-user-${liveTurnId}`}
       className="w-full min-w-0"
       transition={layoutTransition}
@@ -521,9 +569,10 @@ function LiveUserBubbleSlot({
         <motion.div
           key={`dock-pop-${dockPopSeq}`}
           className="w-full min-w-0"
+          style={{ transformOrigin: '50% 0%' }}
           initial={{
             opacity: 0,
-            y: DOCK_POP_ORIGIN_Y,
+            y: dockPopOriginY(),
             scale: DOCK_POP_ORIGIN_SCALE,
             filter: `blur(${DOCK_POP_ORIGIN_BLUR_PX}px)`,
           }}
@@ -549,7 +598,6 @@ export function CommandBubbleStack() {
     assistantBubbleText,
     assistantBubbleStatus,
     assistantStatusLine,
-    followUpDockPrimed,
     assistantBubbleAnchored,
     notifyAssistantRevealStarted,
     notifyAssistantRevealComplete,
@@ -560,9 +608,8 @@ export function CommandBubbleStack() {
   const reduce = useReducedMotion();
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const dockMeasureRef = useRef<HTMLDivElement | null>(null);
-  const [stackDockInsetPx, setStackDockInsetPx] = useState(0);
-  const [edgeMask, setEdgeMask] = useState<CSSProperties | undefined>(undefined);
+  const maskWrapRef = useRef<HTMLDivElement | null>(null);
+  const scrollMetricsRef = useRef({ height: 0, top: 0, pinnedTop: true });
   const [twGen, setTwGen] = useState(0);
   const prevStatus = useRef(assistantBubbleStatus);
   const [dockPopSeq, setDockPopSeq] = useState(0);
@@ -594,47 +641,25 @@ export function CommandBubbleStack() {
     assistantBubbleAnchored,
   );
 
-  const showDockPrime =
-    followUpDockPrimed && (state === 'responding' || state === 'follow_up') && !dockPlacement;
-
-  const dockLaneOpen = dockPlacement || showDockPrime;
-  const dockCapturesStackInset = dockPlacement && Boolean(showLiveUser && liveTurnId);
-
-  useLayoutEffect(() => {
-    if (!dockCapturesStackInset) {
-      setStackDockInsetPx(0);
-      return undefined;
-    }
-
-    setStackDockInsetPx(COMMAND_BUBBLE_STACK_SPACING.dockFallbackMinPx);
-
-    const node = dockMeasureRef.current;
-    if (!node) return undefined;
-
-    const measure = () => {
-      const height = node.getBoundingClientRect().height;
-      if (height > 0) {
-        setStackDockInsetPx(height + COMMAND_BUBBLE_STACK_SPACING.dockStackGapPx);
-      }
-    };
-
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(node);
-    return () => ro.disconnect();
-  }, [
-    dockCapturesStackInset,
-    dockPopSeq,
-    state,
-    userBubbleText,
-    userCaptionInterim,
-  ]);
-
   const showAssistantInStack = showVisibleAssistant && assistantStackReady;
   const useSplitSpawn =
     showAssistantInStack &&
     state === 'responding' &&
     assistantBubbleText.trim().length > 0;
+
+  const splitNudgeRef = useRef(false);
+  const [splitUserNudge, setSplitUserNudge] = useState(false);
+
+  useEffect(() => {
+    if (useSplitSpawn && !splitNudgeRef.current) {
+      splitNudgeRef.current = true;
+      setSplitUserNudge(true);
+    }
+    if (!useSplitSpawn) {
+      splitNudgeRef.current = false;
+      setSplitUserNudge(false);
+    }
+  }, [useSplitSpawn]);
 
   useEffect(() => {
     if (!stackPlacement || !showVisibleAssistant) {
@@ -670,61 +695,79 @@ export function CommandBubbleStack() {
     prevStatus.current = assistantBubbleStatus;
   }, [assistantBubbleStatus]);
 
-  const sync = () => {
+  const historyNewestFirst = [...bubbleHistory].reverse();
+  const pinnedStackTurn = state === 'follow_up' ? historyNewestFirst[0] : undefined;
+  const scrollHistoryTurns = pinnedStackTurn ? historyNewestFirst.slice(1) : historyNewestFirst;
+
+  const sync = useCallback(() => {
+    applyStackEdgeMask(maskWrapRef.current, scrollRef.current);
+  }, []);
+
+  const anchorScrollAfterResize = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    const { scrollTop, scrollHeight, clientHeight } = el;
-    if (scrollHeight <= clientHeight + STACK_SCROLL_EDGE_EPS) {
-      setEdgeMask(undefined);
-      el.scrollTop = 0;
-      return;
+
+    const prev = scrollMetricsRef.current;
+    const nextHeight = el.scrollHeight;
+    const heightDelta = nextHeight - prev.height;
+
+    if (heightDelta > 0 && prev.height > 0) {
+      if (prev.pinnedTop) {
+        el.scrollTop = 0;
+      } else {
+        el.scrollTop = prev.top + heightDelta;
+      }
     }
-    setEdgeMask(
-      stackEdgeMaskStyle(
-        scrollTop > STACK_SCROLL_EDGE_EPS,
-        scrollTop + clientHeight < scrollHeight - STACK_SCROLL_EDGE_EPS,
-      ),
-    );
-  };
+
+    scrollMetricsRef.current = {
+      height: el.scrollHeight,
+      top: el.scrollTop,
+      pinnedTop: el.scrollTop <= STACK_SCROLL_EDGE_EPS,
+    };
+    sync();
+  }, [sync]);
+
+  useLayoutEffect(() => {
+    anchorScrollAfterResize();
+  }, [
+    anchorScrollAfterResize,
+    bubbleHistory.length,
+    liveTurnId,
+    pinnedStackTurn?.id,
+    showAssistantInStack,
+    showLiveUser && stackPlacement,
+    showLiveUser && dockPlacement,
+    splitUserNudge,
+  ]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
 
-    const syncEdges = () => sync();
-
-    const scrollToTop = () => {
-      el.scrollTop = 0;
+    const onScroll = () => {
+      scrollMetricsRef.current = {
+        height: el.scrollHeight,
+        top: el.scrollTop,
+        pinnedTop: el.scrollTop <= STACK_SCROLL_EDGE_EPS,
+      };
       sync();
     };
 
-    scrollToTop();
-    el.addEventListener('scroll', syncEdges, { passive: true });
-    const ro = new ResizeObserver(syncEdges);
+    onScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    const ro = new ResizeObserver(() => anchorScrollAfterResize());
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => {
-      el.removeEventListener('scroll', syncEdges);
+      el.removeEventListener('scroll', onScroll);
       ro.disconnect();
     };
-  }, [
-    bubbleHistory,
-    liveTurnId,
-    userBubbleText,
-    assistantBubbleText,
-    assistantStatusLine,
-    assistantBubbleStatus,
-  ]);
-
-  const historyNewestFirst = [...bubbleHistory].reverse();
-  const pinnedStackTurn = state === 'follow_up' ? historyNewestFirst[0] : undefined;
-  const scrollHistoryTurns = pinnedStackTurn ? historyNewestFirst.slice(1) : historyNewestFirst;
+  }, [anchorScrollAfterResize, sync]);
 
   const renderHistoryTurn = (turn: (typeof bubbleHistory)[number], skipEnter = false) => (
     <Fragment key={turn.id}>
       {turn.assistantText?.trim() ? (
         <motion.div
-          layout
           layoutId={`cmd-asst-${turn.id}`}
           className="w-full min-w-0"
           initial={skipEnter ? false : { opacity: 0, y: -8 }}
@@ -741,7 +784,7 @@ export function CommandBubbleStack() {
         </motion.div>
       ) : null}
       {turn.userText?.trim() ? (
-        <motion.div layout layoutId={`cmd-user-${turn.id}`} className="w-full min-w-0">
+        <motion.div layoutId={`cmd-user-${turn.id}`} className="w-full min-w-0">
           <CommandBubble
             role="user"
             text={turn.userText}
@@ -754,22 +797,18 @@ export function CommandBubbleStack() {
   );
 
   return (
-    <div className="relative h-full min-h-0 w-full overflow-visible">
+    <div className="relative flex h-full min-h-0 w-full flex-col overflow-visible">
       <LayoutGroup id="command-bubble-stack">
-        <motion.div
-          className="command-bubble-dock pointer-events-none absolute inset-x-0 top-0 isolate z-50 px-1"
-          initial={false}
-          animate={{ opacity: dockLaneOpen ? 1 : 0 }}
-          transition={{ duration: 0.22, ease: VOICE_EASE }}
-        >
-          <div className={cn(dockPlacement ? 'pointer-events-auto' : 'pointer-events-none')}>
-            {showDockPrime && !dockPlacement ? (
-              <div
-                aria-hidden
-                className="mx-auto h-2 w-2 rounded-full bg-sky-400/70 shadow-[0_0_20px_rgba(56,189,248,0.45)]"
-              />
-            ) : null}
-            <div ref={dockMeasureRef} className="w-full min-w-0">
+        <div ref={maskWrapRef} className="flex h-full min-h-0 flex-col overflow-hidden">
+          <div
+            ref={scrollRef}
+            className="h-full min-h-0 overflow-y-auto overscroll-contain px-1 [overflow-anchor:none] [scrollbar-color:rgba(161,161,170,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45"
+            style={{
+              paddingTop: COMMAND_BUBBLE_STACK_SPACING.scrollPaddingPx,
+              paddingBottom: COMMAND_BUBBLE_STACK_SPACING.scrollPaddingPx,
+            }}
+          >
+            <div className="mx-auto flex w-full flex-col" style={commandBubbleStackStyle()}>
               {showLiveUser && dockPlacement && liveTurnId ? (
                 <LiveUserBubbleSlot
                   liveTurnId={liveTurnId}
@@ -781,45 +820,44 @@ export function CommandBubbleStack() {
                   dockPopSeq={dockPopSeq}
                 />
               ) : null}
-            </div>
-          </div>
-        </motion.div>
 
-        <div className="flex h-full min-h-0 flex-col overflow-hidden" style={edgeMask ?? undefined}>
-          <div
-            ref={scrollRef}
-            className="h-full min-h-0 overflow-y-auto overscroll-contain scroll-smooth px-1 [scrollbar-color:rgba(161,161,170,0.45)_transparent] [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-zinc-600/45"
-            style={{ paddingTop: COMMAND_BUBBLE_STACK_SPACING.scrollPaddingPx, paddingBottom: COMMAND_BUBBLE_STACK_SPACING.scrollPaddingPx }}
-          >
-            <div
-              className="mx-auto flex w-full flex-col"
-              style={{
-                ...commandBubbleStackStyle(),
-                paddingTop: stackDockInsetPx,
-              }}
-            >
               {pinnedStackTurn ? renderHistoryTurn(pinnedStackTurn, true) : null}
 
               {liveTurnId && showAssistantInStack ? (
                 <motion.div
                   key={`asst-${liveTurnId}`}
-                  layout="position"
                   layoutId={`cmd-asst-${liveTurnId}`}
                   className="relative z-10 w-full min-w-0"
+                  style={{ transformPerspective: 900 }}
                   initial={
                     reduce
                       ? false
                       : useSplitSpawn
-                        ? { opacity: 0, y: TURN_SPLIT_ASSISTANT_ORIGIN_Y, scale: 0.98 }
+                        ? {
+                            opacity: 0,
+                            y: TURN_SPLIT_ASSISTANT_ORIGIN_Y,
+                            scale: TURN_SPLIT_ASSISTANT_ORIGIN_SCALE,
+                            filter: `blur(${TURN_SPLIT_ASSISTANT_ORIGIN_BLUR_PX}px)`,
+                            rotateX: TURN_SPLIT_ASSISTANT_ORIGIN_ROTATE_X,
+                          }
                         : { opacity: 0 }
                   }
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', rotateX: 0 }}
                   transition={
                     useSplitSpawn
                       ? TURN_SPLIT_SPRING
                       : { duration: 0.48, ease: VOICE_EASE }
                   }
                 >
+                  {useSplitSpawn && !reduce ? (
+                    <motion.div
+                      aria-hidden
+                      className="pointer-events-none absolute -bottom-2 left-1/2 z-0 h-px w-[72%] -translate-x-1/2 bg-gradient-to-r from-transparent via-sky-400/55 to-transparent"
+                      initial={{ opacity: 0, scaleX: 0.2 }}
+                      animate={{ opacity: [0, 0.9, 0], scaleX: [0.2, 1, 1] }}
+                      transition={{ duration: 0.55, ease: VOICE_EASE, times: [0, 0.35, 1] }}
+                    />
+                  ) : null}
                   <CommandBubble
                     role="assistant"
                     text={assistantBubbleText}
@@ -837,15 +875,25 @@ export function CommandBubbleStack() {
               ) : null}
 
               {liveTurnId && showLiveUser && stackPlacement ? (
-                <LiveUserBubbleSlot
-                  liveTurnId={liveTurnId}
-                  placement="stack"
-                  state={state}
-                  userBubbleText={userBubbleText}
-                  userCaptionInterim={userCaptionInterim}
-                  micLevel={micLevel}
-                  dockPopSeq={dockPopSeq}
-                />
+                <motion.div
+                  className="w-full min-w-0"
+                  animate={
+                    reduce || !splitUserNudge
+                      ? { y: 0, scale: 1 }
+                      : { y: TURN_SPLIT_USER_PUSH_PX, scale: TURN_SPLIT_USER_SCALE }
+                  }
+                  transition={TURN_SPLIT_USER_SPRING}
+                >
+                  <LiveUserBubbleSlot
+                    liveTurnId={liveTurnId}
+                    placement="stack"
+                    state={state}
+                    userBubbleText={userBubbleText}
+                    userCaptionInterim={userCaptionInterim}
+                    micLevel={micLevel}
+                    dockPopSeq={dockPopSeq}
+                  />
+                </motion.div>
               ) : null}
 
               {scrollHistoryTurns.map((turn) => renderHistoryTurn(turn))}

@@ -7,6 +7,7 @@ import {
   hasVisibleAssistantContent,
   isUserCaptureLive,
   shouldShowLiveUserBubble,
+  stackEdgeMaskStyle,
   userBubblePhase,
   userBubblePlacement,
 } from '@dadei/ui/lib/assistant/voice/ui/commandBubbleMotion';
@@ -57,5 +58,29 @@ describe('commandBubbleMotion', () => {
     expect(hasVisibleAssistantContent('', 'Thinking', 'pending', 'thinking', false)).toBe(true);
     expect(hasVisibleAssistantContent('', null, 'pending', 'thinking', true)).toBe(true);
     expect(hasVisibleAssistantContent('Hello', null, 'streaming', 'responding', false)).toBe(true);
+  });
+
+  it('avoids dual-edge stack masks when scroll range is shorter than both fade bands', () => {
+    const clientHeight = 400;
+    const scrollHeight = clientHeight + 40;
+    const dual = stackEdgeMaskStyle(true, true, scrollHeight, clientHeight);
+    expect(dual).toBeDefined();
+    expect(dual?.maskImage).toContain('transparent 100%');
+    expect(dual?.maskImage).not.toContain('transparent 0, #000');
+
+    const tinyRange = stackEdgeMaskStyle(true, true, clientHeight + 8, clientHeight);
+    expect(tinyRange?.maskImage).not.toContain('transparent 0');
+
+    const noScroll = stackEdgeMaskStyle(true, true, clientHeight + 1, clientHeight);
+    expect(noScroll).toBeUndefined();
+  });
+
+  it('keeps a single bottom fade when pinned to the top of a scrollable stack', () => {
+    const clientHeight = 400;
+    const scrollHeight = clientHeight + 120;
+    const topPinned = stackEdgeMaskStyle(false, true, scrollHeight, clientHeight);
+    expect(topPinned?.maskImage).toContain('#000 0');
+    expect(topPinned?.maskImage).toContain('transparent 100%');
+    expect(topPinned?.maskImage).not.toContain('transparent 0');
   });
 });

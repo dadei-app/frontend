@@ -78,7 +78,7 @@ export async function requestRendererPermission(
           if (err?.code === 1) resolve('denied');
           else resolve('not-determined');
         },
-        { enableHighAccuracy: false, timeout: 12_000, maximumAge: 0 },
+        { enableHighAccuracy: false, timeout: 4_000, maximumAge: 0 },
       );
     });
   }
