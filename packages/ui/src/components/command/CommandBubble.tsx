@@ -227,27 +227,15 @@ function AnimatedStatusLine({ base }: { base: string }) {
   return <span className="text-zinc-400">{dotPhase === 0 ? base : `${base}${'.'.repeat(dotPhase)}`}</span>;
 }
 
-function AssistantLoadingStatus({
-  line,
-  commandBlue = false,
-}: {
-  line: string;
-  commandBlue?: boolean;
-}) {
+function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean }) {
   const statusBase = formatAssistantStatusLine(line);
   return (
     <span
-      className={cn(
-        'flex min-w-0 items-center gap-2.5',
-        BUBBLE_BODY_CLASS,
-        BUBBLE_BODY_MIN_H,
-      )}
+      className={cn('flex min-w-0 items-center gap-2.5', BUBBLE_BODY_CLASS, BUBBLE_BODY_MIN_H)}
       aria-live="polite"
       aria-busy="true"
     >
-      <span className={cn('flex w-3.5 shrink-0 items-center justify-center self-center', BUBBLE_BODY_MIN_H)}>
-        <StatusSpinnerRing />
-      </span>
+      <StatusSpinnerRing />
       <span className={cn('relative min-w-0 flex-1 overflow-hidden', BUBBLE_BODY_MIN_H)}>
         <AnimatePresence initial={false}>
           <motion.span
@@ -256,7 +244,7 @@ function AssistantLoadingStatus({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '-100%', opacity: 0.2 }}
             transition={{ duration: 0.3, ease: VOICE_EASE }}
-            className="absolute inset-x-0 top-0 flex min-w-0 items-center truncate"
+            className="absolute inset-0 flex min-w-0 items-center truncate"
           >
             <AnimatedStatusLine base={statusBase} />
           </motion.span>

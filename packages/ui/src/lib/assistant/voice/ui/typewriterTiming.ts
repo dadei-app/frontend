@@ -1,28 +1,31 @@
+/** Playback at 70% of prior speed (30% slower). */
+const TYPEWRITER_PACE = 1 / 0.7;
+
 /** Rush when the stream finished far ahead of playback. */
 const CATCH_UP_BACKLOG = 36;
 
-const RUSH_MS_MIN = 6;
-const RUSH_MS_MAX = 14;
+const RUSH_MS_MIN = 6 * TYPEWRITER_PACE;
+const RUSH_MS_MAX = 14 * TYPEWRITER_PACE;
 
 /** Typical human inter-key intervals are ~50–120ms; we bias slower for readability. */
-const CHAR_MS_MIN = 18;
-const CHAR_MS_MAX = 52;
+const CHAR_MS_MIN = 18 * TYPEWRITER_PACE;
+const CHAR_MS_MAX = 52 * TYPEWRITER_PACE;
 
-const SPACE_MS_MIN = 32;
-const SPACE_MS_MAX = 72;
+const SPACE_MS_MIN = 32 * TYPEWRITER_PACE;
+const SPACE_MS_MAX = 72 * TYPEWRITER_PACE;
 
-const PUNCTUATION_STRONG_MS_MIN = 95;
-const PUNCTUATION_STRONG_MS_MAX = 165;
+const PUNCTUATION_STRONG_MS_MIN = 95 * TYPEWRITER_PACE;
+const PUNCTUATION_STRONG_MS_MAX = 165 * TYPEWRITER_PACE;
 
-const PUNCTUATION_LIGHT_MS_MIN = 48;
-const PUNCTUATION_LIGHT_MS_MAX = 88;
+const PUNCTUATION_LIGHT_MS_MIN = 48 * TYPEWRITER_PACE;
+const PUNCTUATION_LIGHT_MS_MAX = 88 * TYPEWRITER_PACE;
 
-const NEWLINE_MS_MIN = 140;
-const NEWLINE_MS_MAX = 220;
+const NEWLINE_MS_MIN = 140 * TYPEWRITER_PACE;
+const NEWLINE_MS_MAX = 220 * TYPEWRITER_PACE;
 
 const HESITATION_CHANCE = 0.028;
-const HESITATION_MS_MIN = 90;
-const HESITATION_MS_MAX = 200;
+const HESITATION_MS_MIN = 90 * TYPEWRITER_PACE;
+const HESITATION_MS_MAX = 200 * TYPEWRITER_PACE;
 
 function randBetween(min: number, max: number): number {
   return min + Math.random() * (max - min);

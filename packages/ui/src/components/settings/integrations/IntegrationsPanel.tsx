@@ -51,7 +51,7 @@ const REALTIME_SOURCES = [
   {
     name: 'Web Search',
     description:
-      'Used when the answer needs fresh public information—news, facts, or topics not in Gmail, Drive, or memory. Queries DuckDuckGo for instant answers and related links (no Google account).',
+      'Used when the answer needs fresh public information—news, facts, or topics not in Gmail, Drive, or memory. Queries the web via Brave Search for result snippets and links (no Google account).',
     Icon: Globe,
   },
   {
