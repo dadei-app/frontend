@@ -507,13 +507,13 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       clearFollowUpTimer();
       clearWakeTimeout();
       abortActiveStream();
+      sendRealtimeMessage({ type: 'command_audio_cancel' });
       if (hadProcessing) {
         const sessionId = getRealtimeSessionId();
         sendRealtimeMessage({
           type: 'command_inference_cancel',
           ...(sessionId ? { session_id: sessionId } : {}),
         });
-        sendRealtimeMessage({ type: 'command_audio_discard' });
       }
       if (ownsCommandSessionRef.current) {
         await releaseCommandService();

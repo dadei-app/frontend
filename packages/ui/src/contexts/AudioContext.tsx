@@ -264,8 +264,11 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const prev = prevStateRef.current;
-    if (prev === 'listening' && (state === 'transcribing' || ASSISTANT_BUSY_STATES.includes(state))) {
-      commitCommandCapture();
+    if (
+      state === 'thinking' &&
+      (prev === 'listening' || prev === 'follow_up' || prev === 'transcribing')
+    ) {
+      sendRealtimeMessage({ type: 'command_audio_discard' });
     } else if (
       (ASSISTANT_BUSY_STATES.includes(state) && prev === 'follow_up') ||
       (state === 'follow_up' &&
@@ -285,10 +288,10 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
       rearmIntroductionCapture();
     }
     prevStateRef.current = state;
-  }, [state, commitCommandCapture, rearmIntroductionCapture]);
+  }, [state, rearmIntroductionCapture]);
 
   useEffect(() => {
-    if (state === 'listening' || state === 'follow_up') {
+    if (state === 'listening' || state === 'follow_up' || state === 'transcribing') {
       commandAudioEndSentRef.current = false;
     }
   }, [state]);
@@ -314,7 +317,9 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
 
       if (meterFromCommand) {
         const inCapture =
-          stateRef.current === 'listening' || stateRef.current === 'follow_up';
+          stateRef.current === 'listening' ||
+          stateRef.current === 'follow_up' ||
+          stateRef.current === 'transcribing';
         if (inCapture) {
           const speaking = level >= FOLLOW_UP_SPEECH_RMS;
           if (speaking && !speechActive && stateRef.current === 'follow_up') {

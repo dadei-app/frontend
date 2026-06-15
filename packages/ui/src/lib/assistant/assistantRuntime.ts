@@ -175,7 +175,7 @@ export function selectShouldStreamAudio(state: AssistantState): boolean {
   return state.commandState !== 'locked';
 }
 
-const CAPTURE_STATES: ReadonlySet<CommandState> = new Set(['listening', 'follow_up']);
+const CAPTURE_STATES: ReadonlySet<CommandState> = new Set(['listening', 'follow_up', 'transcribing']);
 const BUSY_STATES: ReadonlySet<CommandState> = new Set(['transcribing', 'thinking', 'responding']);
 
 export function selectShouldForwardAudioChunks(state: AssistantState): boolean {

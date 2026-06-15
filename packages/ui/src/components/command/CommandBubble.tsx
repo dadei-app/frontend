@@ -14,28 +14,42 @@ const STATUS_ELLIPSIS_CYCLE_MS = 480;
 const STACK_EDGE_FADE_PX = 28;
 const STACK_SCROLL_EDGE_EPS = 2;
 const FLOAT_TOP_PAD = '6.5rem';
+const EMERALD = '0,204,106';
 
 type BubblePhase = 'thought' | 'settling' | 'settled';
 
-/* ── Material: one glass recipe, one light source, one shadow ──────────── */
-/* Differentiation is structural (mark + edge), not additive glow. */
-const cardBase: CSSProperties = {
-  backdropFilter: 'blur(14px) saturate(115%)',
-  WebkitBackdropFilter: 'blur(14px) saturate(115%)',
-  background: 'rgba(19, 19, 22, 0.80)',
+/* ──────────────────────────────────────────────────────────────────────────
+   Material
+   The whole quality bet is here, not in motion. One glass recipe with a real
+   vertical light gradient, a crisp 1px inset top highlight, and a two-part
+   shadow (tight contact + soft ambient) so the card reads physically lifted.
+   The live state is the SAME recipe with an emerald border and a contained
+   wash rising from the lower inner edge — "alive" without atmosphere cosplay.
+   ────────────────────────────────────────────────────────────────────────── */
+
+const cardSettled: CSSProperties = {
+  backdropFilter: 'blur(20px) saturate(140%)',
+  WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+  background: 'linear-gradient(180deg, rgba(28,28,32,0.78) 0%, rgba(16,16,19,0.85) 100%)',
   border: '1px solid rgba(255,255,255,0.075)',
-  boxShadow:
-    'inset 0 1px 0 rgba(255,255,255,0.06), 0 18px 40px -28px rgba(0,0,0,0.75)',
+  boxShadow: [
+    'inset 0 1px 0 0 rgba(255,255,255,0.07)',
+    '0 1px 2px rgba(0,0,0,0.38)',
+    '0 24px 48px -30px rgba(0,0,0,0.8)',
+  ].join(', '),
 };
 
-// Live thought: same recipe, lifted one notch + a lit emerald hairline.
 const cardLive: CSSProperties = {
-  backdropFilter: 'blur(16px) saturate(120%)',
-  WebkitBackdropFilter: 'blur(16px) saturate(120%)',
-  background: 'rgba(21, 22, 24, 0.84)',
-  border: '1px solid rgba(0,204,106,0.20)',
-  boxShadow:
-    'inset 0 1px 0 rgba(255,255,255,0.08), 0 22px 50px -26px rgba(0,0,0,0.8)',
+  backdropFilter: 'blur(22px) saturate(150%)',
+  WebkitBackdropFilter: 'blur(22px) saturate(150%)',
+  background: `linear-gradient(180deg, rgba(31,33,35,0.84) 0%, rgba(14,16,16,0.88) 100%)`,
+  border: `1px solid rgba(${EMERALD},0.24)`,
+  boxShadow: [
+    'inset 0 1px 0 0 rgba(255,255,255,0.10)',
+    `inset 0 -22px 44px -30px rgba(${EMERALD},0.30)`,
+    '0 1px 2px rgba(0,0,0,0.45)',
+    '0 30px 60px -30px rgba(0,0,0,0.84)',
+  ].join(', '),
 };
 
 function stackEdgeMaskStyle(fadeTop: boolean, fadeBottom: boolean): CSSProperties | undefined {
@@ -49,7 +63,13 @@ function stackEdgeMaskStyle(fadeTop: boolean, fadeBottom: boolean): CSSPropertie
   return { maskImage: g, WebkitMaskImage: g };
 }
 
-/* ── Speaker mark: a leading node + label. The only ownership signal. ──── */
+/* ──────────────────────────────────────────────────────────────────────────
+   Speaker mark — the single ownership signal.
+   Dot and pulse are the SAME size and share one center point (the prior bug
+   was a 6px dot inside an 8px box with an inset-0 pulse → off-center at scale).
+   Emerald means one honest thing: Dadei's presence (assistant) or active
+   listening (live user). A settled user is a quiet neutral node.
+   ────────────────────────────────────────────────────────────────────────── */
 function SpeakerMark({
   role,
   live,
@@ -60,27 +80,35 @@ function SpeakerMark({
   reduce: boolean;
 }) {
   const isAssistant = role === 'assistant';
-  const dotColor = isAssistant || live ? 'rgb(0,204,106)' : 'rgba(244,244,245,0.45)';
+  const emerald = isAssistant || live;
+  const dotColor = emerald ? `rgb(${EMERALD})` : 'rgba(244,244,245,0.40)';
+
   return (
     <span className="flex items-center gap-2">
-      <span className="relative flex h-2 w-2 items-center justify-center">
-        {live && !reduce ? (
+      <span className="relative inline-flex h-1.5 w-1.5 shrink-0 items-center justify-center">
+        {emerald && !reduce ? (
           <motion.span
-            className="absolute inset-0 rounded-full"
-            style={{ background: 'rgba(0,204,106,0.45)' }}
-            animate={{ scale: [1, 2.1], opacity: [0.5, 0] }}
-            transition={{ duration: 1.8, repeat: Infinity, ease: 'easeOut' }}
             aria-hidden
+            className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+            style={{ background: `rgba(${EMERALD},0.5)` }}
+            animate={{ scale: [1, 2.8], opacity: [0.45, 0] }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeOut' }}
           />
         ) : null}
-        <span className="h-1.5 w-1.5 rounded-full" style={{ background: dotColor }} />
+        <span
+          className="relative h-1.5 w-1.5 rounded-full"
+          style={{
+            background: dotColor,
+            boxShadow: emerald ? `0 0 8px rgba(${EMERALD},0.55)` : undefined,
+          }}
+        />
       </span>
       {isAssistant ? (
-        <span className="font-brand text-[13px] leading-none tracking-[0.04em] text-zinc-200">
+        <span className="font-brand text-[13px] leading-none tracking-[0.05em] text-zinc-200">
           dadei
         </span>
       ) : (
-        <span className="font-secondary text-[10px] font-medium uppercase leading-none tracking-[0.2em] text-zinc-500">
+        <span className="font-secondary text-[10px] font-medium uppercase leading-none tracking-[0.22em] text-zinc-500">
           {live ? 'listening' : 'you'}
         </span>
       )}
@@ -99,6 +127,7 @@ function StatusSpinnerRing() {
     />
   );
 }
+
 function AnimatedStatusLine({ base }: { base: string }) {
   const [dotPhase, setDotPhase] = useState(0);
   useEffect(() => setDotPhase(0), [base]);
@@ -108,6 +137,7 @@ function AnimatedStatusLine({ base }: { base: string }) {
   }, [base]);
   return <span className="text-zinc-400">{dotPhase === 0 ? base : `${base}${'.'.repeat(dotPhase)}`}</span>;
 }
+
 function AssistantLoadingStatus({ line }: { line: string }) {
   const statusBase = formatAssistantStatusLine(line);
   return (
@@ -181,7 +211,10 @@ function useTypewriterText(
     };
     setOut('');
     i = 0;
-    timer.current = window.setTimeout(step, target.length ? typewriterDelayBeforeChar(target[0], target.length) : 0);
+    timer.current = window.setTimeout(
+      step,
+      target.length ? typewriterDelayBeforeChar(target[0], target.length) : 0,
+    );
     return () => {
       cancelled = true;
       if (timer.current != null) window.clearTimeout(timer.current);
@@ -190,7 +223,22 @@ function useTypewriterText(
   return enabled ? out : target;
 }
 
-/* ── The bubble ────────────────────────────────────────────────────────── */
+/* ── A single quiet caret. Used for the empty live state and interim text. ── */
+function Caret({ reduce, dim = false }: { reduce: boolean; dim?: boolean }) {
+  return (
+    <motion.span
+      aria-hidden
+      className="ml-px inline-block h-[1.05em] w-px translate-y-[2px] rounded-full bg-emerald-300 align-middle"
+      style={{ opacity: dim ? 0.8 : 1 }}
+      animate={reduce ? undefined : { opacity: [1, 0.12, 1] }}
+      transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
+    />
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Bubble
+   ══════════════════════════════════════════════════════════════════════════ */
 export interface CommandBubbleProps {
   role: 'user' | 'assistant';
   text: string;
@@ -224,13 +272,19 @@ export default function CommandBubble({
   const target = text.trim();
 
   const useTw = isAssistant && typewriterEnabled && assistantStatus === 'revealing';
-  const typed = useTypewriterText(target, useTw, typewriterGeneration, onTypewriterFirstChar, onTypewriterComplete);
+  const typed = useTypewriterText(
+    target,
+    useTw,
+    typewriterGeneration,
+    onTypewriterFirstChar,
+    onTypewriterComplete,
+  );
   const visible = useTw ? typed : target;
 
   const showStatus =
     isAssistant && !!statusLine && (assistantStatus === 'pending' || assistantStatus === 'streaming');
-  const showBody = showStatus || visible.length > 0 || live;
   const listeningEmpty = live && !visible.length && !interim;
+  const showBody = showStatus || visible.length > 0 || listeningEmpty;
 
   return (
     <motion.div
@@ -242,51 +296,38 @@ export default function CommandBubble({
     >
       <motion.div
         layout
-        className="relative overflow-hidden"
-        animate={{ borderRadius: live ? 20 : 16 }}
+        className={cn('relative overflow-hidden', floating && 'shadow-2xl')}
+        animate={{ borderRadius: live ? 18 : 14 }}
         transition={{ duration: 0.4, ease: VOICE_EASE }}
-        style={live ? cardLive : cardBase}
+        style={live ? cardLive : cardSettled}
       >
-        {/* single top specular — the one light source */}
+        {/* Contained specular cap. Stops 12px short of each corner so it can
+            never collide with the radius and smear (the old top-right bleed). */}
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-b from-white/[0.05] to-transparent"
+          className="pointer-events-none absolute inset-x-3 top-0 h-px rounded-full bg-gradient-to-r from-transparent via-white/15 to-transparent"
         />
-        {/* lit edge only while live; this is the 'thought' affordance */}
-        {live ? (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/45 to-transparent"
-          />
-        ) : null}
 
-        <div className={cn('relative min-w-0', floating || live ? 'px-5 py-4' : 'px-5 py-3.5')}>
+        <div className="relative min-w-0 px-5 py-3.5">
           <SpeakerMark role={role} live={live} reduce={!!reduce} />
+
           {showBody ? (
-            <div className="mt-2.5 min-w-0">
+            <div className="mt-2 min-w-0">
               {showStatus && statusLine ? (
                 <AssistantLoadingStatus line={statusLine} />
               ) : listeningEmpty ? (
-                <p className="font-primary text-[15px] leading-relaxed text-zinc-500">
-                  Waiting for you
-                  <span className="ml-0.5 inline-block h-[1.05em] w-px translate-y-[2px] bg-emerald-300/80 align-middle" />
+                <p className="font-primary text-[15px] leading-[1.6] text-zinc-600">
+                  <Caret reduce={!!reduce} />
                 </p>
               ) : (
                 <p
                   className={cn(
-                    'font-primary whitespace-pre-wrap text-[15px] leading-[1.65] wrap-anywhere',
+                    'font-primary whitespace-pre-wrap text-[15px] leading-[1.6] wrap-anywhere',
                     interim ? 'text-zinc-400' : 'text-zinc-100',
                   )}
                 >
                   {visible}
-                  {interim ? (
-                    <motion.span
-                      className="ml-0.5 inline-block h-[1.05em] w-px translate-y-[2px] bg-emerald-300 align-middle"
-                      animate={reduce ? undefined : { opacity: [1, 0.1, 1] }}
-                      transition={{ duration: 0.9, repeat: Infinity, ease: 'easeInOut' }}
-                      aria-hidden
-                    />
-                  ) : null}
+                  {interim ? <Caret reduce={!!reduce} /> : null}
                 </p>
               )}
             </div>
@@ -297,7 +338,10 @@ export default function CommandBubble({
   );
 }
 
-/* ── Stack: floating live bubble settles into the column via shared layoutId ── */
+/* ══════════════════════════════════════════════════════════════════════════
+   Stack — live floating bubble settles into the column via shared layoutId.
+   Unchanged structurally from the version you have.
+   ══════════════════════════════════════════════════════════════════════════ */
 export function CommandBubbleStack() {
   const {
     state,
@@ -318,7 +362,9 @@ export function CommandBubbleStack() {
   const prevStatus = useRef(assistantBubbleStatus);
 
   useEffect(() => {
-    if (assistantBubbleStatus === 'revealing' && prevStatus.current !== 'revealing') setTwGen((g) => g + 1);
+    if (assistantBubbleStatus === 'revealing' && prevStatus.current !== 'revealing') {
+      setTwGen((g) => g + 1);
+    }
     prevStatus.current = assistantBubbleStatus;
   }, [assistantBubbleStatus]);
 
@@ -357,10 +403,18 @@ export function CommandBubbleStack() {
       el.removeEventListener('scroll', sync);
       ro.disconnect();
     };
-  }, [bubbleHistory, liveTurnId, userBubbleText, assistantBubbleText, assistantStatusLine, assistantBubbleStatus]);
+  }, [
+    bubbleHistory,
+    liveTurnId,
+    userBubbleText,
+    assistantBubbleText,
+    assistantStatusLine,
+    assistantBubbleStatus,
+  ]);
 
   const assistantBusy = state === 'thinking' || state === 'responding';
-  const hasAssistantLive = assistantBusy || assistantBubbleText.trim().length > 0 || !!assistantStatusLine;
+  const hasAssistantLive =
+    assistantBusy || assistantBubbleText.trim().length > 0 || !!assistantStatusLine;
   const showFloatingUser = !!liveTurnId && (state === 'listening' || state === 'transcribing');
   const showStackedUser =
     !!liveTurnId &&
@@ -384,7 +438,13 @@ export function CommandBubbleStack() {
               exit={{ opacity: 0, y: 8, scale: 0.98, transition: { duration: 0.26, ease: VOICE_EASE } }}
               transition={{ type: 'spring', stiffness: 440, damping: 34 }}
             >
-              <CommandBubble role="user" text={userBubbleText} phase="thought" floating interim={userCaptionInterim} />
+              <CommandBubble
+                role="user"
+                text={userBubbleText}
+                phase="thought"
+                floating
+                interim={userCaptionInterim}
+              />
             </motion.div>
           ) : null}
         </AnimatePresence>
@@ -407,7 +467,12 @@ export function CommandBubbleStack() {
                   ) : null}
                   {turn.assistantText?.trim() ? (
                     <motion.div layout layoutId={`cmd-asst-${turn.id}`}>
-                      <CommandBubble role="assistant" text={turn.assistantText} phase="settled" assistantStatus="done" />
+                      <CommandBubble
+                        role="assistant"
+                        text={turn.assistantText}
+                        phase="settled"
+                        assistantStatus="done"
+                      />
                     </motion.div>
                   ) : null}
                 </div>
