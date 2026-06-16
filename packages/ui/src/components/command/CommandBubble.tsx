@@ -206,7 +206,7 @@ function SpeakerMark({
 function StatusSpinnerRing() {
   return (
     <motion.span
-      className="box-border inline-block size-3.5 shrink-0 rounded-full border-2 border-zinc-600/70 border-t-sky-300/90"
+      className="box-border size-[0.9em] shrink-0 rounded-full border-2 border-zinc-600/70 border-t-sky-300/90"
       animate={{ rotate: 360 }}
       transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
       aria-hidden
@@ -231,12 +231,14 @@ function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean 
   const statusBase = formatAssistantStatusLine(line);
   return (
     <p
-      className={cn(BUBBLE_BODY_CLASS, BUBBLE_BODY_MIN_H, 'flex min-w-0 items-center gap-2.5')}
+      className={cn(
+        'font-primary flex min-h-[1em] min-w-0 items-center gap-2.5 text-[15px] leading-none sm:text-[16px]',
+      )}
       aria-live="polite"
       aria-busy="true"
     >
       <StatusSpinnerRing />
-      <span className="relative min-w-0">
+      <span className="relative min-w-0 text-zinc-400">
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={statusBase}
@@ -244,7 +246,7 @@ function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.28, ease: VOICE_EASE }}
-            className="block min-w-0 whitespace-normal wrap-anywhere text-zinc-400"
+            className="block min-w-0 whitespace-normal wrap-anywhere"
           >
             <AnimatedStatusLine base={statusBase} />
           </motion.span>
