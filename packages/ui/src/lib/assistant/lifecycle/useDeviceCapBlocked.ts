@@ -1,6 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getRealtimeClientId } from '@dadei/ui/lib/assistant/realtime/realtimeClient';
+import {
+  getRealtimeClientId,
+  subscribeRealtimeMessages,
+} from '@dadei/ui/lib/assistant/realtime/realtimeClient';
+import { isDeviceCapBlocked } from '@dadei/ui/lib/assistant/lifecycle/deviceCap';
 import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { useSubscription } from '@dadei/ui/lib/platform/query/queryHooks';
@@ -15,12 +19,16 @@ export function useDeviceCapBlocked(enabled = true): boolean {
     staleTime: 15_000,
     refetchOnWindowFocus: true,
   });
+  const [selfId, setSelfId] = useState<string | null>(() => getRealtimeClientId());
 
-  return useMemo(() => {
-    const maxDevices = sub?.limits.max_devices;
-    if (maxDevices == null) return false;
-    const selfId = getRealtimeClientId();
-    const others = (clientIds ?? []).filter(id => id !== selfId);
-    return others.length >= maxDevices;
-  }, [clientIds, sub?.limits.max_devices]);
+  useEffect(() => {
+    setSelfId(getRealtimeClientId());
+    return subscribeRealtimeMessages(msg => {
+      if (msg.event !== 'session_ready') return;
+      const clientId = typeof msg.client_id === 'string' ? msg.client_id : null;
+      if (clientId) setSelfId(clientId);
+    });
+  }, []);
+
+  return isDeviceCapBlocked(clientIds ?? [], sub?.limits.max_devices, selfId);
 }

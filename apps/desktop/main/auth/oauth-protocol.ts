@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'path';
+import { openDefaultBrowserOAuthWindow } from './browser-oauth-window';
 
 /** Must match backend `DADEI_DESKTOP_OAUTH_ORIGIN`. */
 export const DESKTOP_OAUTH_RETURN_ORIGIN = 'dadei://oauth';
@@ -74,12 +75,9 @@ function settingsSectionFromOAuthNext(next?: string): string {
   return 'integrations';
 }
 
-export function deliverOAuthCallback(rawUrl: string): boolean {
-  const params = parseOAuthCallbackUrl(rawUrl);
-  if (!params) {
-    return false;
-  }
+function finishOAuthFlow(params: OAuthCallbackParams): void {
   settlePending(params);
+
   const win = getMainWindow?.();
   if (win && !win.isDestroyed()) {
     win.show();
@@ -92,6 +90,14 @@ export function deliverOAuthCallback(rawUrl: string): boolean {
       });
     }
   }
+}
+
+export function deliverOAuthCallback(rawUrl: string): boolean {
+  const params = parseOAuthCallbackUrl(rawUrl);
+  if (!params) {
+    return false;
+  }
+  finishOAuthFlow(params);
   return true;
 }
 
@@ -120,7 +126,7 @@ export function registerOAuthProtocol(getWindow: () => BrowserWindow | null): vo
 
       pendingFlow = { resolve, reject, timeout };
 
-      void shell.openExternal(loginUrl).catch((err: unknown) => {
+      void openDefaultBrowserOAuthWindow(loginUrl).catch((err: unknown) => {
         if (pendingFlow) {
           clearTimeout(pendingFlow.timeout);
           pendingFlow = null;

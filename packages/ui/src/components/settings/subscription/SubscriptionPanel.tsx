@@ -39,7 +39,7 @@ function usageFromLimits(limits: SubscriptionLimitsView, remaining: number | nul
   return { used, limit };
 }
 
-/** Emerald under 60%, amber 60–90%, rose at/over 90%. */
+/** Emerald under 60%, amber 60-90%, rose at/over 90%. */
 function meterFillClass(ratio: number): string {
   if (ratio >= 0.9) return 'bg-rose-500';
   if (ratio >= 0.6) return 'bg-amber-400';
@@ -187,21 +187,25 @@ export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsP
   const meterRatio = usage ? Math.min(1, usage.used / Math.max(usage.limit, 1)) : 0;
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-2 pt-8 pb-6">
-      {/* Block 1 — hero plan card */}
-      <div className="settings-tile w-full rounded-xl border border-white/10 bg-zinc-950/55 p-5">
+    <div className="mx-auto grid h-full w-full max-w-4xl grid-cols-1 content-center gap-5 px-2 py-6 lg:grid-cols-5 lg:items-stretch">
+      {/* Block 1 - hero plan card */}
+      <div className="settings-tile flex flex-col rounded-xl border border-white/10 bg-zinc-950/55 p-6 lg:col-span-2">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-2xl leading-none text-zinc-100">{sub.display_name}</h2>
+            <h2 className="font-display text-3xl leading-none text-zinc-100">{sub.display_name}</h2>
             {renewalLine ? (
-              <p className="mt-1.5 text-xs text-zinc-500 font-secondary">{renewalLine}</p>
-            ) : null}
+              <p className="mt-2 text-xs text-zinc-500 font-secondary">{renewalLine}</p>
+            ) : (
+              <p className="mt-2 text-xs text-zinc-600 font-secondary">
+                {isPro ? 'Your active plan' : 'Your current plan'}
+              </p>
+            )}
           </div>
           <StatusPill tone={status.tone} label={status.label} pro={isPro} />
         </div>
 
         {!isPro && usage ? (
-          <div className="mt-5">
+          <div className="mt-auto pt-8">
             <div className="mb-1.5 flex items-center justify-between text-xs text-zinc-500 font-secondary">
               <span>Commands today</span>
               <span className="tabular-nums text-zinc-400">
@@ -218,19 +222,19 @@ export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsP
         ) : null}
       </div>
 
-      {/* Block 2 — Pro card */}
+      {/* Block 2 - Pro card */}
       {isPro ? (
-        <div className="settings-tile flex w-full flex-col items-center gap-3 rounded-xl border border-white/10 bg-zinc-950/55 p-6 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
-            <Check className="h-6 w-6 text-emerald-300" aria-hidden />
+        <div className="settings-tile flex flex-col items-center justify-center gap-3 rounded-xl border border-white/10 bg-zinc-950/55 p-8 text-center lg:col-span-3">
+          <span className="flex h-14 w-14 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
+            <Check className="h-7 w-7 text-emerald-300" aria-hidden />
           </span>
           <div>
-            <p className="font-display text-lg text-zinc-100">You&rsquo;re on Pro</p>
+            <p className="font-display text-xl text-zinc-100">You&rsquo;re on Pro</p>
             <p className="mt-1 text-sm text-zinc-500 font-secondary">Everything unlocked.</p>
           </div>
           <button
             type="button"
-            className={cn(settingsButtonClass, 'mt-1 w-full max-w-xs')}
+            className={cn(settingsButtonClass, 'mt-2 w-full max-w-xs')}
             disabled={busy}
             onClick={() => void openPortal()}
           >
@@ -238,19 +242,19 @@ export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsP
           </button>
         </div>
       ) : (
-        <div className="relative w-full overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/[0.04] p-5 shadow-[0_0_40px_-12px_rgba(16,185,129,0.4)]">
+        <div className="relative flex flex-col overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/[0.04] p-6 shadow-[0_0_40px_-12px_rgba(16,185,129,0.4)] lg:col-span-3">
           <div className="flex items-baseline justify-between">
             <div className="flex items-center gap-1.5">
               <Sparkles className="h-5 w-5 text-emerald-300" aria-hidden />
-              <span className="font-display text-xl text-zinc-100">Pro</span>
+              <span className="font-display text-2xl text-zinc-100">Pro</span>
             </div>
             <div className="flex items-baseline gap-0.5">
-              <span className="font-display text-2xl text-zinc-100">$15</span>
+              <span className="font-display text-3xl text-zinc-100">$15</span>
               <span className="text-sm text-zinc-500 font-secondary">/mo</span>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2.5">
+          <div className="mt-6 flex flex-col gap-3.5">
             <BenefitRow label="Unlimited commands" free={String(sub.limits.daily_command_limit ?? 5)} />
             <BenefitRow label="Unlimited devices" free={String(sub.limits.max_devices ?? 1)} />
             <BenefitRow label="Unlimited people" free={String(sub.limits.max_persons ?? 5)} />
@@ -258,7 +262,7 @@ export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsP
 
           <button
             type="button"
-            className={cn(settingsPrimaryButtonClass, 'mt-5 w-full')}
+            className={cn(settingsPrimaryButtonClass, 'mt-auto w-full')}
             disabled={busy}
             onClick={() => void startCheckout()}
           >
