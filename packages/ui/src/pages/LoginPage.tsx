@@ -1,13 +1,17 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Loader2 } from 'lucide-react';
+import { Link2, Loader2, Sparkles } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
+import { SiApple } from 'react-icons/si';
 import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
-import { triggerGoogleOAuth } from '@dadei/ui/lib/platform/auth/googleAuth';
+import {
+  triggerProviderOAuth,
+  type OAuthProvider,
+} from '@dadei/ui/lib/platform/auth/providerAuth';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 
@@ -15,6 +19,25 @@ const veilEase = [0.22, 1, 0.36, 1] as const;
 
 const glassInput =
   'w-full rounded-xl border border-white/10 bg-zinc-900/55 px-3.5 py-2.5 font-primary text-sm text-zinc-100 shadow-inner shadow-black/30 placeholder:text-zinc-500 backdrop-blur-md transition-[border-color,background-color,box-shadow,opacity] duration-200 focus:border-emerald-500/45 focus:bg-zinc-900/75 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-40';
+
+type ProviderDef = { id: OAuthProvider; label: string; node: React.ReactNode };
+
+function MicrosoftMark() {
+  return (
+    <span className="grid h-5 w-5 shrink-0 grid-cols-2 grid-rows-2 gap-[2px]" aria-hidden>
+      <span className="bg-[#f25022]" />
+      <span className="bg-[#7fba00]" />
+      <span className="bg-[#00a4ef]" />
+      <span className="bg-[#ffb900]" />
+    </span>
+  );
+}
+
+const OAUTH_PROVIDERS: ProviderDef[] = [
+  { id: 'google', label: 'Continue with Google', node: <FcGoogle className="h-5 w-5 shrink-0" aria-hidden /> },
+  { id: 'microsoft', label: 'Continue with Microsoft', node: <MicrosoftMark /> },
+  { id: 'apple', label: 'Continue with Apple', node: <SiApple className="h-5 w-5 shrink-0 text-zinc-100" aria-hidden /> },
+];
 
 function isSafeInternalPath(path: string): boolean {
   if (!path.startsWith('/') || path.startsWith('//') || path.includes('://')) return false;
@@ -34,6 +57,8 @@ export default function LoginPage() {
     return ASSISTANT_PATH;
   }, [searchParams]);
 
+  const [showEmail, setShowEmail] = useState(false);
+  const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(null);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -65,7 +90,7 @@ export default function LoginPage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isLoginMode, error, loading]);
+  }, [isLoginMode, error, loading, showEmail]);
 
   const onAuthenticated = () => navigate(nextPath, { replace: true });
 
@@ -101,20 +126,22 @@ export default function LoginPage() {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleProviderLogin = async (provider: OAuthProvider) => {
     setError('');
-    if (isElectron) {
+    setPendingProvider(provider);
+    if (isElectron && provider === 'google') {
       setLoading(true);
     }
     try {
-      await triggerGoogleOAuth({
+      await triggerProviderOAuth(provider, {
         saveTokens,
         onSuccess: onAuthenticated,
         onError: (msg) => setError(msg),
         webNextPath: nextPath,
       });
     } finally {
-      if (isElectron) {
+      setPendingProvider(null);
+      if (isElectron && provider === 'google') {
         setLoading(false);
       }
     }
@@ -172,101 +199,184 @@ export default function LoginPage() {
                 }}
               >
                 <div ref={authBlockRef}>
-                  <motion.form
-                    key={isLoginMode ? 'login' : 'register'}
-                    initial={{ opacity: 0, y: 10, filter: prefersReducedMotion ? 'none' : 'blur(6px)' }}
-                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-                    transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
-                    onSubmit={handleSubmit}
-                    className="space-y-4"
-                  >
-                    <div>
-                      <label
-                        htmlFor="auth-email"
-                        className="mb-1.5 block text-xs font-medium text-zinc-400 font-secondary"
-                      >
-                        Email
-                      </label>
-                      <input
-                        id="auth-email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                        disabled={loading}
-                        className={glassInput}
-                        placeholder="you@example.com"
-                        autoComplete="email"
-                      />
-                    </div>
+                  <div className="space-y-2.5">
+                    {OAUTH_PROVIDERS.map(p => {
+                      const comingSoon = p.id === 'apple';
+                      const isPending = pendingProvider === p.id;
 
-                    <div>
-                      <label
-                        htmlFor="auth-password"
-                        className="mb-1.5 block text-xs font-medium text-zinc-400 font-secondary"
-                      >
-                        Password
-                      </label>
-                      <input
-                        id="auth-password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        disabled={loading}
-                        className={glassInput}
-                        placeholder={isLoginMode ? '••••••••' : 'At least 6 characters'}
-                        autoComplete={isLoginMode ? 'current-password' : 'new-password'}
-                      />
-                    </div>
+                      if (comingSoon) {
+                        return (
+                          <div key={p.id} className="relative overflow-hidden rounded-xl">
+                            <button
+                              type="button"
+                              disabled
+                              aria-label={`${p.label}, coming soon`}
+                              className="relative flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-xl border border-zinc-500/20 bg-zinc-900/40 px-4 py-3 font-primary text-sm font-medium text-zinc-400 shadow-sm backdrop-blur-md"
+                            >
+                              {p.node}
+                              <span>{p.label}</span>
+                            </button>
+                            <div
+                              className="pointer-events-none absolute inset-x-0 top-0 flex justify-center"
+                              aria-hidden
+                            >
+                              <div className="flex items-center gap-1.5 rounded-b-xl border border-t-0 border-zinc-400/25 bg-gradient-to-r from-zinc-700/90 via-zinc-500/80 to-zinc-700/90 px-3.5 py-1 shadow-[0_6px_18px_rgba(0,0,0,0.35)]">
+                                <Sparkles className="h-3 w-3 text-zinc-100" />
+                                <span className="font-secondary text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-50">
+                                  Coming soon
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
 
-                    <AnimatePresence initial={false}>
-                      {!isLoginMode ? (
-                        <motion.div
-                          key="confirm"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden"
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          disabled={loading || pendingProvider !== null}
+                          onClick={() => void handleProviderLogin(p.id)}
+                          className="relative flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-3 font-primary text-sm font-medium text-zinc-100 shadow-sm backdrop-blur-md transition-[background-color,border-color,box-shadow] hover:border-white/20 hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-50"
                         >
+                          {isPending ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : p.node}
+                          <span>{isPending ? 'Connecting…' : p.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-white/10 bg-zinc-900/40 px-3.5 py-3 backdrop-blur-md">
+                    <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400/90" aria-hidden />
+                    <p className="font-secondary text-xs leading-relaxed text-zinc-400">
+                        One dadei account, all your services. Sign in with any provider — matching
+                        emails link automatically. In Settings you can connect other accounts too,
+                        even when the email differs.
+                    </p>
+                  </div>
+
+                  {!showEmail ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowEmail(true)}
+                      className="mt-5 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-zinc-300"
+                    >
+                      Use email and password instead
+                    </button>
+                  ) : (
+                    <>
+                      <motion.form
+                        key={isLoginMode ? 'login' : 'register'}
+                        initial={{ opacity: 0, y: 10, filter: prefersReducedMotion ? 'none' : 'blur(6px)' }}
+                        animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                        transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
+                        onSubmit={handleSubmit}
+                        className="mt-6 space-y-4"
+                      >
+                        <div>
                           <label
-                            htmlFor="auth-confirm"
+                            htmlFor="auth-email"
                             className="mb-1.5 block text-xs font-medium text-zinc-400 font-secondary"
                           >
-                            Confirm password
+                            Email
                           </label>
                           <input
-                            id="auth-confirm"
-                            type="password"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                            required={!isLoginMode}
+                            id="auth-email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
                             disabled={loading}
                             className={glassInput}
-                            placeholder="Repeat password"
-                            autoComplete="new-password"
+                            placeholder="you@example.com"
+                            autoComplete="email"
                           />
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
+                        </div>
 
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="mt-6 w-full rounded-xl border border-emerald-500/35 bg-linear-to-r from-emerald-600 to-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] drop-shadow-[0_8px_22px_rgba(5,150,105,0.45)] transition-[filter,opacity] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {loading ? (
-                        <span className="flex items-center justify-center gap-2">
-                          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                          {isLoginMode ? 'Signing in…' : 'Creating account…'}
-                        </span>
-                      ) : isLoginMode ? (
-                        'Sign in'
-                      ) : (
-                        'Create account'
-                      )}
-                    </button>
-                  </motion.form>
+                        <div>
+                          <label
+                            htmlFor="auth-password"
+                            className="mb-1.5 block text-xs font-medium text-zinc-400 font-secondary"
+                          >
+                            Password
+                          </label>
+                          <input
+                            id="auth-password"
+                            type="password"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            disabled={loading}
+                            className={glassInput}
+                            placeholder={isLoginMode ? '••••••••' : 'At least 6 characters'}
+                            autoComplete={isLoginMode ? 'current-password' : 'new-password'}
+                          />
+                        </div>
+
+                        <AnimatePresence initial={false}>
+                          {!isLoginMode ? (
+                            <motion.div
+                              key="confirm"
+                              initial={{ opacity: 0, height: 0 }}
+                              animate={{ opacity: 1, height: 'auto' }}
+                              exit={{ opacity: 0, height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <label
+                                htmlFor="auth-confirm"
+                                className="mb-1.5 block text-xs font-medium text-zinc-400 font-secondary"
+                              >
+                                Confirm password
+                              </label>
+                              <input
+                                id="auth-confirm"
+                                type="password"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                                required={!isLoginMode}
+                                disabled={loading}
+                                className={glassInput}
+                                placeholder="Repeat password"
+                                autoComplete="new-password"
+                              />
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="mt-6 w-full rounded-xl border border-emerald-500/35 bg-linear-to-r from-emerald-600 to-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] drop-shadow-[0_8px_22px_rgba(5,150,105,0.45)] transition-[filter,opacity] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {loading ? (
+                            <span className="flex items-center justify-center gap-2">
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                              {isLoginMode ? 'Signing in…' : 'Creating account…'}
+                            </span>
+                          ) : isLoginMode ? (
+                            'Sign in'
+                          ) : (
+                            'Create account'
+                          )}
+                        </button>
+                      </motion.form>
+
+                      <p className="mt-6 text-center text-sm text-zinc-500 font-secondary">
+                        {isLoginMode ? "Don't have an account?" : 'Already have an account?'}{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsLoginMode(!isLoginMode);
+                            setError('');
+                          }}
+                          disabled={loading}
+                          className="font-primary font-semibold text-emerald-400/95 transition-colors hover:text-emerald-300 disabled:opacity-50"
+                        >
+                          {isLoginMode ? 'Create one' : 'Sign In'}
+                        </button>
+                      </p>
+                    </>
+                  )}
 
                   <AnimatePresence initial={false}>
                     {error ? (
@@ -284,52 +394,6 @@ export default function LoginPage() {
                       </motion.div>
                     ) : null}
                   </AnimatePresence>
-                </div>
-              </div>
-
-              <p className="mt-6 text-center text-sm text-zinc-500 font-secondary">
-                {isLoginMode ? "Don't have an account?" : 'Already have an account?'}{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsLoginMode(!isLoginMode);
-                    setError('');
-                  }}
-                  disabled={loading}
-                  className="font-primary font-semibold text-emerald-400/95 transition-colors hover:text-emerald-300 disabled:opacity-50"
-                >
-                  {isLoginMode ? 'Create one' : 'Sign In'}
-                </button>
-              </p>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center" aria-hidden>
-                  <div className="w-full border-t border-white/10" />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className="rounded-full border border-white/10 bg-zinc-950/60 px-3 py-1 font-medium text-zinc-500 shadow-sm backdrop-blur-md font-secondary">
-                    Or continue with
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                <div className="relative pt-1">
-                  <span
-                    className="pointer-events-none absolute right-2 top-[-4px] z-10 rounded-lg border border-sky-400/40 bg-sky-500/30 px-3 py-1 text-xs font-medium leading-none tracking-wide text-sky-50 shadow-md ring-1 ring-sky-300/25 font-secondary"
-                    aria-hidden
-                  >
-                    best option
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleGoogleLogin}
-                    disabled={loading}
-                    className="relative flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-2.5 text-sm font-medium text-zinc-200 shadow-sm backdrop-blur-md transition-[background-color,border-color,box-shadow] hover:border-white/15 hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    <FcGoogle className="h-5 w-5 shrink-0" aria-hidden />
-                    {loading ? 'Connecting…' : 'Google'}
-                  </button>
                 </div>
               </div>
             </div>

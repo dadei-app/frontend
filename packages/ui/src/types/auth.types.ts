@@ -39,6 +39,10 @@ export interface UserMe {
     google_connected: boolean;
     google_granted_scopes: string[];
     google_scopes_stale: boolean;
+    providers_needing_reauth: string[];
+    primary_mail_provider: string | null;
+    primary_calendar_provider: string | null;
+    primary_contacts_provider: string | null;
     tutorial_completed: boolean;
 }
 

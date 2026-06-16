@@ -18,8 +18,7 @@ export const ENDPOINTS = {
   AUTH_LOGIN: '/auth/login',
   AUTH_REGISTER: '/auth/register',
   AUTH_REFRESH: '/auth/refresh',
-  AUTH_GOOGLE_URL: '/auth/google/url',
-  AUTH_GOOGLE_CALLBACK: '/auth/google/callback',
+  AUTH_GOOGLE_WEB_LOGIN: '/auth/google/web/login',
 
   // Service
   SERVICE_CLIENTS: '/service/clients',

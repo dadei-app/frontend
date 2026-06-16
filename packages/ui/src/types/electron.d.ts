@@ -86,11 +86,18 @@ export interface ElectronAPI {
   getTokens: () => Promise<{ success: boolean; tokens?: { accessToken: string | null; refreshToken: string | null }; error?: string }>;
   clearTokens: () => Promise<{ success: boolean; error?: string }>;
   hasTokens: () => Promise<{ success: boolean; hasTokens?: boolean; error?: string }>;
+  startOAuthFlow: (loginUrl: string) => Promise<{
+    access_token?: string;
+    refresh_token?: string;
+    linked?: string;
+    next?: string;
+    error?: string;
+    error_description?: string;
+  }>;
   onAppClosing: (callback: () => void) => void;
   onNewInteraction: (callback: (payload: unknown) => void) => () => void;
   onWebhookAction: (callback: (payload: { event?: string; data?: unknown }) => void) => () => void;
   onServiceStatusChanged: (callback: (status: { enabled: boolean }) => void) => () => void;
-  loginWithGoogle: () => Promise<{ success: boolean; data?: { code: string; state: string }; error?: string }>;
   storeClientName: (clientName: string) => Promise<{ success: boolean; error?: string }>;
   getClientName: () => Promise<{ success: boolean; clientName?: string; error?: string }>;
   setVolume: (level: number) => Promise<{ ok: boolean }>;

@@ -13,7 +13,12 @@ import {
   runPackagedStartupFlow,
 } from './updater';
 import { TokenStorage } from './auth/token-storage';
-import { handleGoogleOAuth } from './auth/oauth-handler';
+import {
+  deliverOAuthCallback,
+  extractProtocolUrlFromArgv,
+  registerDesktopProtocolClient,
+  registerOAuthProtocol,
+} from './auth/oauth-protocol';
 import { registerDeviceControlIpcHandlers } from './device-control';
 import { buildApplicationMenu } from './menu';
 import { isAppQuitting, setAppQuitting } from './app-quit';
@@ -31,6 +36,32 @@ const RENDERER_DEV_URL = `http://127.0.0.1:${RENDERER_DEV_PORT}`;
 let mainWindow: BrowserWindow | null = null;
 
 const isDarwin = process.platform === 'darwin';
+
+registerDesktopProtocolClient();
+
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const protocolUrl = extractProtocolUrlFromArgv(argv);
+    if (protocolUrl) {
+      deliverOAuthCallback(protocolUrl);
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  deliverOAuthCallback(url);
+});
 
 /** Match renderer title strip + Electron titleBarOverlay.height (win32/linux). */
 const TITLE_BAR_HEIGHT = 32;
@@ -149,16 +180,6 @@ ipcMain.handle('auth:has-tokens', async () => {
   }
 });
 
-ipcMain.handle('auth:google-oauth', async () => {
-  try {
-    const result = await handleGoogleOAuth();
-    return { success: true, data: result };
-  } catch (error: any) {
-    console.error('[IPC] Google OAuth error:', error);
-    return { success: false, error: error.message };
-  }
-});
-
 ipcMain.handle('client:store-name', async (_, clientName: string) => {
   try {
     await TokenStorage.storeClientName(clientName);
@@ -209,6 +230,13 @@ ipcMain.handle('bootstrap:get-state', () => getLastBootstrapState());
 
 app.whenReady().then(async () => {
   configureSessionPermissions();
+
+  registerOAuthProtocol(() => mainWindow);
+
+  const protocolUrl = extractProtocolUrlFromArgv(process.argv);
+  if (protocolUrl) {
+    deliverOAuthCallback(protocolUrl);
+  }
 
   const menu = buildApplicationMenu();
   Menu.setApplicationMenu(menu ?? null);

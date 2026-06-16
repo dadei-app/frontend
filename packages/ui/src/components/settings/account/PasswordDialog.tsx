@@ -18,7 +18,7 @@ export type PasswordDialogMode = 'set' | 'change';
 const COPY = {
   set: {
     title: 'Set a password',
-    description: 'Add a password so you can sign in without Google.',
+    description: 'Add a password to your account.',
     submitLabel: 'Save password',
     pendingLabel: 'Saving…',
     successToast: 'Password set',

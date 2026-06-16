@@ -1,39 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Clock3, CloudSun, Globe, Map as MapIcon } from 'lucide-react';
+import { Clock3, CloudSun, Globe, Map as MapIcon, Unplug } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
-import { triggerGoogleOAuth } from '@dadei/ui/lib/platform/auth/googleAuth';
+import {
+  triggerProviderOAuth,
+  type OAuthProvider,
+} from '@dadei/ui/lib/platform/auth/providerAuth';
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
-import { useIntegrationsStatusQuery } from '@dadei/ui/lib/platform/query/queryHooks';
+import { useAuthMeQuery, useIntegrationsStatusQuery } from '@dadei/ui/lib/platform/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { authApi } from '@dadei/ui/lib/workspace/api/auth';
+import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
 import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
-import { SegmentedOption, SegmentedShell } from '@dadei/ui/components/settings/controls';
-import { GOOGLE_LOGOS } from './integrationIcons';
-import { IntegrationCard, type IntegrationStatusKind } from './IntegrationCard';
-
-const GOOGLE_META: Record<string, { name: string; description: string }> = {
-  gmail: { name: 'Gmail', description: 'Inbox & send' },
-  calendar: { name: 'Calendar', description: 'Events & meetings' },
-  contacts: { name: 'Contacts', description: 'People lookup' },
-  tasks: { name: 'Tasks', description: 'To-do lists' },
-  docs: { name: 'Docs', description: 'Docs read/write' },
-  drive: { name: 'Drive', description: 'App files only' },
-  sheets: { name: 'Sheets', description: 'Sheets & cells' },
-};
-
-/** Seven Workspace APIs we request OAuth scopes for. */
-const GOOGLE_INTEGRATION_ORDER = [
-  'gmail',
-  'calendar',
-  'contacts',
-  'tasks',
-  'docs',
-  'drive',
-  'sheets',
-] as const;
+import { GlassAlertModal } from '@dadei/ui/components/ui/GlassModal';
+import type { ProviderHealth } from '@dadei/ui/types/integrations.types';
+import type { UserMe } from '@dadei/ui/types/auth.types';
+import { IntegrationCard } from './IntegrationCard';
+import { PrimaryProviderSelector } from './PrimaryProviderSelector';
+import { ProviderColumn } from './ProviderColumn';
+import { ReconnectBanner } from './ReconnectBanner';
 
 const REALTIME_SOURCES = [
   {
@@ -62,85 +49,138 @@ const REALTIME_SOURCES = [
   },
 ] as const;
 
-/** lg+: 4×2 (reference). Below lg: always 2-col workspace grid (never 1-col). */
-const workspaceGridClass =
-  'settings-integration-grid--workspace grid h-full min-h-0 w-full grid-cols-2 gap-2 lg:grid-cols-4 lg:grid-rows-2 lg:gap-3 [grid-auto-rows:minmax(3.25rem,1fr)] lg:[grid-auto-rows:minmax(0,1fr)]';
-
 const realtimeGridClass =
   'settings-integration-grid--realtime grid h-full min-h-0 w-full grid-cols-2 grid-rows-2 gap-2 lg:grid-cols-4 lg:gap-3 [grid-auto-rows:minmax(4rem,1fr)] lg:[grid-auto-rows:minmax(0,1fr)]';
 
-function googleStatus(
-  status: string,
-  googleConnected: boolean,
-): IntegrationStatusKind {
-  if (!googleConnected) return 'off';
-  if (status === 'connected') return 'on';
-  if (status === 'needs_reauth') return 'reauth';
-  return 'off';
+type PrimaryDomain = 'mail' | 'calendar' | 'contacts';
+
+const DOMAIN_SERVICE_IDS: Record<PrimaryDomain, string[]> = {
+  mail: ['gmail', 'mail'],
+  calendar: ['calendar'],
+  contacts: ['contacts'],
+};
+
+function normalizeOAuthProvider(provider: string): OAuthProvider {
+  if (provider === 'apple_caldav') return 'apple';
+  return provider as OAuthProvider;
 }
+
+function connectedProvidersForDomain(
+  providers: ProviderHealth[],
+  domain: PrimaryDomain,
+): string[] {
+  const serviceIds = DOMAIN_SERVICE_IDS[domain];
+  return providers
+    .filter(
+      p =>
+        p.connected &&
+        p.services.some(s => serviceIds.includes(s.id) && s.status === 'connected'),
+    )
+    .map(p => p.provider);
+}
+
+const PROVIDER_LABEL: Record<string, string> = {
+  google: 'Google',
+  microsoft: 'Microsoft',
+  apple: 'Apple',
+};
 
 export function IntegrationsPanel() {
   const queryClient = useQueryClient();
   const { user: me, refreshUser, saveTokens } = useAuth();
-  const { isElectron } = useSystem();
   const settingsTourActive = useTutorialSettingsTourActive();
   const integrationsStatusQuery = useIntegrationsStatusQuery();
-  const [googleConnectError, setGoogleConnectError] = useState('');
-  const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const authMeQuery = useAuthMeQuery(!settingsTourActive);
+  const profile = authMeQuery.data ?? me;
+
+  const [connectError, setConnectError] = useState('');
+  const [connectingProvider, setConnectingProvider] = useState<OAuthProvider | null>(null);
+  const [disconnectingProvider, setDisconnectingProvider] = useState<string | null>(null);
+  const [disconnectTarget, setDisconnectTarget] = useState<ProviderHealth | null>(null);
+  const [savingDomain, setSavingDomain] = useState<PrimaryDomain | null>(null);
 
   const integrationsStatus = integrationsStatusQuery.data;
   const integrationsLoaded = integrationsStatusQuery.isSuccess && integrationsStatus != null;
-  const googleConnected =
-    integrationsStatus?.google_connected ?? Boolean(me?.google_connected);
-  const googleScopesStale = integrationsStatus?.google_scopes_stale === true;
-  const needsGoogleReauth =
-    googleConnected &&
-    (googleScopesStale ||
-      (integrationsStatus?.integrations ?? []).some(i => i.status === 'needs_reauth'));
+
+  const providers = integrationsStatus?.providers ?? [];
+  const connectedProviderCount = providers.filter(p => p.connected).length;
+  const hasPassword = profile?.has_password === true;
+  const networkEmail = profile?.email ?? '';
+
+  const providersNeedingReauth = useMemo(() => {
+    const fromStatus = integrationsStatus?.providers_needing_reauth;
+    if (fromStatus && fromStatus.length > 0) return fromStatus;
+    return profile?.providers_needing_reauth ?? [];
+  }, [integrationsStatus?.providers_needing_reauth, profile?.providers_needing_reauth]);
 
   useEffect(() => {
     if (settingsTourActive) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
   }, [queryClient, settingsTourActive]);
 
-  const integrationCards = useMemo(() => {
-    const byId = new Map(
-      (integrationsStatus?.integrations ?? []).map(i => [i.id, i]),
-    );
-    return GOOGLE_INTEGRATION_ORDER.map(id => {
-      const row = byId.get(id);
-      const meta = GOOGLE_META[id];
-      const accessList = row?.access ?? [
-        { kind: 'read', granted: false },
-        { kind: 'write', granted: false },
-      ];
-      return {
-        id,
-        name: row?.name ?? meta.name,
-        description: meta.description,
-        status: row?.status ?? 'disconnected',
-        read: accessList.find(a => a.kind === 'read')?.granted ?? false,
-        write: accessList.find(a => a.kind === 'write')?.granted ?? false,
-        logo: GOOGLE_LOGOS[id],
-      };
-    });
-  }, [integrationsStatus?.integrations]);
+  const invalidateAfterAuth = () => {
+    void refreshUser();
+    void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+  };
 
-  const handleGoogleConnect = async () => {
-    setGoogleConnectError('');
-    if (isElectron) setConnectingGoogle(true);
+  const handleProviderConnect = async (provider: string) => {
+    const oauthProvider = normalizeOAuthProvider(provider);
+    setConnectError('');
+    setConnectingProvider(oauthProvider);
     try {
-      await triggerGoogleOAuth({
+      await triggerProviderOAuth(oauthProvider, {
         saveTokens,
-        onSuccess: () => {
-          void refreshUser();
-          void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
-        },
-        onError: msg => setGoogleConnectError(msg),
+        onSuccess: invalidateAfterAuth,
+        onError: msg => setConnectError(msg),
         webNextPath: ASSISTANT_PATH,
+        mode: 'link',
       });
     } finally {
-      if (isElectron) setConnectingGoogle(false);
+      setConnectingProvider(null);
+    }
+  };
+
+  const handlePrimaryChange = async (domain: PrimaryDomain, provider: string | null) => {
+    const field = `primary_${domain}_provider` as const;
+    const previous = queryClient.getQueryData<UserMe>(queryKeys.authMe);
+
+    if (previous) {
+      queryClient.setQueryData<UserMe>(queryKeys.authMe, {
+        ...previous,
+        [field]: provider,
+      });
+    }
+
+    setSavingDomain(domain);
+    try {
+      await serviceApi.updatePrimaryProviders({
+        [field]: provider,
+      } as Parameters<typeof serviceApi.updatePrimaryProviders>[0]);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
+    } catch (err: unknown) {
+      if (previous) {
+        queryClient.setQueryData<UserMe>(queryKeys.authMe, previous);
+      }
+      setConnectError(getUserErrorMessage(err, 'Could not update default account.'));
+    } finally {
+      setSavingDomain(null);
+    }
+  };
+
+  const handleDisconnectConfirm = async () => {
+    if (!disconnectTarget) return;
+    const provider = disconnectTarget.provider;
+    setDisconnectingProvider(provider);
+    setConnectError('');
+    try {
+      await authApi.disconnectOAuthProvider(provider);
+      invalidateAfterAuth();
+      setDisconnectTarget(null);
+    } catch (err: unknown) {
+      setConnectError(getUserErrorMessage(err, 'Could not disconnect this account.'));
+    } finally {
+      setDisconnectingProvider(null);
     }
   };
 
@@ -149,39 +189,20 @@ export function IntegrationsPanel() {
   return (
     <SettingsGrid4 layout="integrations" className="min-h-0 flex-1">
       <GridTile
-        tile="google"
-        title="Google Workspace"
-        hint="Connect once, then re-authorize when scopes change."
-        bodyClassName="min-h-0 gap-3"
+        tile="providers"
+        title="Connected accounts"
+        hint="Providers can use a different email than your network. Set a password in Account to remove your last sign-in method."
+        bodyClassName="min-h-0 gap-4"
       >
-        {!googleConnected ? (
-          <SegmentedShell layout="row" className="w-full shrink-0 sm:w-auto">
-            <SegmentedOption
-              selected={false}
-              disabled={connectingGoogle}
-              onSelect={() => void handleGoogleConnect()}
-              label={connectingGoogle ? 'Connecting…' : 'Connect Google'}
-            />
-          </SegmentedShell>
-        ) : needsGoogleReauth ? (
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
-            <p className="settings-hide-sm text-sm text-amber-200/90 font-secondary">
-              Some Google permissions are missing — re-authorize to turn on Calendar and other
-              integrations.
-            </p>
-            <SegmentedShell layout="row" className="w-full shrink-0 sm:w-auto">
-              <SegmentedOption
-                selected={false}
-                disabled={connectingGoogle}
-                onSelect={() => void handleGoogleConnect()}
-                label={connectingGoogle ? 'Re-authorizing…' : 'Re-authorize Google'}
-              />
-            </SegmentedShell>
-          </div>
+        <ReconnectBanner
+          providers={providersNeedingReauth}
+          onReconnect={provider => void handleProviderConnect(provider)}
+        />
+
+        {connectError ? (
+          <p className="shrink-0 text-sm text-rose-300/90 font-secondary">{connectError}</p>
         ) : null}
-        {googleConnectError ? (
-          <p className="shrink-0 text-sm text-rose-300/90 font-secondary">{googleConnectError}</p>
-        ) : null}
+
         {!integrationsLoaded && !integrationsStatusQuery.isError ? (
           <p className="text-sm text-zinc-500 font-secondary">Loading integrations…</p>
         ) : integrationsStatusQuery.isError ? (
@@ -189,30 +210,69 @@ export function IntegrationsPanel() {
             {fetchErr(integrationsStatusQuery.error)}
           </p>
         ) : (
-          <div className={workspaceGridClass}>
-            {integrationCards.map(integration => (
-              <IntegrationCard
-                key={integration.id}
-                name={integration.name}
-                description={integration.description}
-                logo={integration.logo}
-                status={googleStatus(integration.status, googleConnected)}
-                access={{
-                  read: integration.read,
-                  write: integration.write,
-                  muted: !googleConnected,
-                }}
-                onReauth={
-                  integration.status === 'needs_reauth' && googleConnected
-                    ? () => void handleGoogleConnect()
-                    : undefined
-                }
-                reauthLoading={connectingGoogle}
+          <>
+            <div className="grid min-h-0 shrink-0 grid-cols-1 gap-3 lg:grid-cols-3">
+              {providers.map(health => (
+                <ProviderColumn
+                  key={health.provider}
+                  health={health}
+                  networkEmail={networkEmail}
+                  hasPassword={hasPassword}
+                  connectedProviderCount={connectedProviderCount}
+                  connecting={connectingProvider === normalizeOAuthProvider(health.provider)}
+                  disconnecting={disconnectingProvider === health.provider}
+                  disconnectPending={disconnectTarget?.provider === health.provider}
+                  onConnect={() => void handleProviderConnect(health.provider)}
+                  onDisconnect={() => setDisconnectTarget(health)}
+                />
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <PrimaryProviderSelector
+                domain="mail"
+                connectedProviders={connectedProvidersForDomain(providers, 'mail')}
+                value={profile?.primary_mail_provider ?? null}
+                saving={savingDomain === 'mail'}
+                onChange={provider => void handlePrimaryChange('mail', provider)}
               />
-            ))}
-          </div>
+              <PrimaryProviderSelector
+                domain="calendar"
+                connectedProviders={connectedProvidersForDomain(providers, 'calendar')}
+                value={profile?.primary_calendar_provider ?? null}
+                saving={savingDomain === 'calendar'}
+                onChange={provider => void handlePrimaryChange('calendar', provider)}
+              />
+              <PrimaryProviderSelector
+                domain="contacts"
+                connectedProviders={connectedProvidersForDomain(providers, 'contacts')}
+                value={profile?.primary_contacts_provider ?? null}
+                saving={savingDomain === 'contacts'}
+                onChange={provider => void handlePrimaryChange('contacts', provider)}
+              />
+            </div>
+          </>
         )}
       </GridTile>
+
+      <GlassAlertModal
+        open={disconnectTarget != null}
+        onOpenChange={open => {
+          if (!open) setDisconnectTarget(null);
+        }}
+        variant="destructive"
+        icon={Unplug}
+        title={`Disconnect ${disconnectTarget ? (PROVIDER_LABEL[disconnectTarget.provider] ?? disconnectTarget.provider) : ''}?`}
+        description={
+          disconnectTarget?.account_identifier
+            ? `This removes ${disconnectTarget.account_identifier} from your network. You can reconnect anytime from Connected accounts.`
+            : 'This removes the provider from your network. You can reconnect anytime from Connected accounts.'
+        }
+        confirmLabel="Disconnect"
+        confirmingLabel="Disconnecting…"
+        confirming={disconnectingProvider != null}
+        onConfirm={() => void handleDisconnectConfirm()}
+      />
 
       <GridTile
         tile="realtime"

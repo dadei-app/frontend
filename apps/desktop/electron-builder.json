@@ -54,5 +54,11 @@
     "target": ["AppImage"],
     "icon": "resources/icon.png",
     "category": "Utility"
-  }
+  },
+  "protocols": [
+    {
+      "name": "Dadei OAuth",
+      "schemes": ["dadei"]
+    }
+  ]
 }

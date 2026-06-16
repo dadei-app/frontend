@@ -44,27 +44,15 @@ export const authApi = {
     return data;
   },
 
-  /**
-   * Get Google OAuth URL
-   * GET /api/v1/auth/google/url or /api/v2/... when `BETA=true`
-   */
-  getGoogleOAuthUrl: async (redirectPort: number = 4280): Promise<{ url: string; state: string }> => {
-    const { data } = await api.get<{ url: string; state: string }>(ENDPOINTS.AUTH_GOOGLE_URL, {
-      params: { redirect_port: redirectPort },
+  createOAuthLinkToken: async (provider: string): Promise<string> => {
+    const { data } = await api.post<{ link_token: string }>(ENDPOINTS.AUTH_OAUTH_LINK_TOKEN, {
+      provider,
     });
-    return data;
+    return data.link_token;
   },
 
-  /**
-   * Exchange Google OAuth code for tokens
-   * POST /api/v1/auth/google/callback or /api/v2/... when `BETA=true`
-   */
-  googleCallback: async (code: string, state: string): Promise<AuthResponse> => {
-    const { data } = await api.post<AuthResponse>(ENDPOINTS.AUTH_GOOGLE_CALLBACK, {
-      code,
-      state,
-    });
-    return data;
+  disconnectOAuthProvider: async (provider: string): Promise<void> => {
+    await api.delete(`/auth/oauth/${provider}`);
   },
 
   me: async (): Promise<UserMe> => {

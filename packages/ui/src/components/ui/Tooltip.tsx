@@ -4,8 +4,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
-/** Above people drawer (40) / main; below toasts (180), settings (≈240). */
-const TOOLTIP_PORTAL_Z = 195;
+/** Above settings shell (250); below settings modals (300). */
+const TOOLTIP_PORTAL_Z = 280;
 
 interface TooltipProps {
   content: string;

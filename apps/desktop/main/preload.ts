@@ -59,8 +59,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
   },
 
-  // OAuth
-  loginWithGoogle: () => ipcRenderer.invoke('auth:google-oauth'),
+  // OAuth — unified web flow via dadei://oauth/callback
+  startOAuthFlow: (loginUrl: string) =>
+    ipcRenderer.invoke('auth:start-oauth-flow', loginUrl) as Promise<{
+      access_token?: string;
+      refresh_token?: string;
+      linked?: string;
+      next?: string;
+      error?: string;
+      error_description?: string;
+    }>,
 
   // Client name
   storeClientName: (clientName: string) => ipcRenderer.invoke('client:store-name', clientName),

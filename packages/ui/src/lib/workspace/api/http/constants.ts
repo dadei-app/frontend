@@ -20,10 +20,11 @@ export const ENDPOINTS = {
   AUTH_LOGIN: '/auth/login',
   AUTH_REGISTER: '/auth/register',
   AUTH_REFRESH: '/auth/refresh',
-  AUTH_GOOGLE_URL: '/auth/google/url',
-  AUTH_GOOGLE_CALLBACK: '/auth/google/callback',
+  AUTH_OAUTH_LINK_TOKEN: '/auth/oauth/link-token',
   /** Browser redirect flow (backend must implement). */
   AUTH_GOOGLE_WEB_LOGIN: '/auth/google/web/login',
+  AUTH_MICROSOFT_WEB_LOGIN: '/auth/microsoft/web/login',
+  AUTH_APPLE_WEB_LOGIN: '/auth/apple/web/login',
   AUTH_ME: '/auth/me',
   TUTORIAL_COMPLETE: '/service/tutorial/complete',
 

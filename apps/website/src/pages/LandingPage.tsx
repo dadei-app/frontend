@@ -211,8 +211,8 @@ export default function LandingPage() {
         <section id="capabilities" className="mx-auto w-full max-w-[1240px] px-5 py-14 sm:px-8">
           <SectionHeading
             eyebrow="plugins & integrations"
-            title="dadei plugins turn integrations into action."
-            body="connect once, then let dadei use your tools to help with reminders, recall, planning, and follow-through."
+            title="connect your accounts, then let dadei act."
+            body="Sign in with Google, Microsoft, or Apple. Link work and personal inboxes, pick defaults for mail and calendar, and use always-on realtime data — no extra setup."
           />
           <IntegrationsShowcase />
         </section>

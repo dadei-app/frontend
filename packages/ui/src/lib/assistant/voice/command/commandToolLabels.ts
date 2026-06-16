@@ -16,6 +16,7 @@ const TOOL_LABELS: Record<string, string> = {
 
   // Memory & context
   store_memory: 'Making a mental note',
+  update_memory: 'Updating a memory',
   search_memory: 'Digging through memory',
   query_person_memory: 'Recalling someone\'s information',
   assign_person_name: 'Saving someone\'s name',
@@ -30,11 +31,21 @@ const TOOL_LABELS: Record<string, string> = {
   // Calendar
   calendar_create: 'Adding a calendar event',
   calendar_list: 'Flipping through the calendar',
+  calendar_list_all: 'Checking all your calendars',
+  calendar_list_sources: 'Loading your calendars',
   calendar_get: 'Loading a calendar event',
   calendar_update: 'Updating a calendar event',
   calendar_delete: 'Deleting a calendar event',
 
-  // Gmail
+  // Mail (multi-provider)
+  mail_send: 'Sending an email',
+  mail_read: 'Opening an email',
+  mail_search: 'Searching your inboxes',
+  mail_list: 'Checking your inboxes',
+  mail_delete: 'Trashing an email',
+  mail_modify_labels: 'Updating email labels',
+
+  // Gmail (legacy tool names)
   gmail_send: 'Sending an email',
   gmail_read: 'Opening an email',
   gmail_search: 'Searching the inbox',
@@ -60,21 +71,18 @@ const TOOL_LABELS: Record<string, string> = {
   contacts_update: 'Updating a contact',
   contacts_delete: 'Removing a contact',
 
-  // Docs
-  docs_create: 'Creating a doc',
-  docs_list: 'Flipping through docs',
-  docs_read: 'Reading a doc',
-  docs_append: 'Adding to a doc',
-  docs_update: 'Updating a doc',
-  docs_delete: 'Deleting a doc',
-
-  // Drive
-  drive_list_files: 'Sorting through drive files',
-  drive_search_files: 'Searching drive files',
-  drive_get_file: 'Opening a drive file',
-  drive_create_file: 'Creating a drive file',
-  drive_update_file_metadata: 'Updating a drive file',
-  drive_delete_file: 'Deleting a drive file',
+  // Files & documents
+  files_list: 'Listing your files',
+  files_search: 'Searching your files',
+  files_get: 'Opening file details',
+  files_download: 'Downloading a file',
+  files_upload: 'Uploading a file',
+  files_create_folder: 'Creating a folder',
+  files_delete: 'Deleting a file',
+  files_move: 'Moving a file',
+  document_read: 'Reading a document',
+  document_append: 'Adding to a document',
+  document_replace: 'Updating a document',
 
   // Sheets
   sheets_create: 'Creating a spreadsheet',
@@ -109,6 +117,14 @@ const TOOL_LABELS: Record<string, string> = {
 
 /** Prefix + action suffix fallbacks when a tool is not in TOOL_LABELS. */
 const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
+  mail_: {
+    list: 'Checking your inboxes',
+    read: 'Opening that email',
+    search: 'Searching your inboxes',
+    send: 'Sending an email',
+    delete: 'Moving that to trash',
+    modify_labels: 'Updating email labels',
+  },
   gmail_: {
     list: 'Scanning the inbox',
     read: 'Opening that email',
@@ -119,6 +135,8 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
   },
   calendar_: {
     list: 'Flipping through the calendar',
+    list_all: 'Checking all your calendars',
+    list_sources: 'Loading your calendars',
     create: 'Adding a calendar event',
     get: 'Looking at that calendar event',
     update: 'Updating a calendar event',
@@ -144,21 +162,20 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
     update: 'Updating a contact',
     delete: 'Removing a contact',
   },
-  docs_: {
-    list: 'Flipping through docs',
-    read: 'Opening that doc',
-    create: 'Starting a new doc',
-    append: 'Adding to a doc',
-    update: 'Updating a doc',
-    delete: 'Deleting that doc',
+  files_: {
+    list: 'Listing your files',
+    search: 'Searching your files',
+    get: 'Opening file details',
+    download: 'Downloading a file',
+    upload: 'Uploading a file',
+    create_folder: 'Creating a folder',
+    delete: 'Deleting a file',
+    move: 'Moving a file',
   },
-  drive_: {
-    list_files: 'Sorting through drive files',
-    search_files: 'Searching drive files',
-    get_file: 'Opening that file',
-    create_file: 'Creating a file',
-    update_file_metadata: 'Updating file details',
-    delete_file: 'Removing from drive',
+  document_: {
+    read: 'Reading a document',
+    append: 'Adding to a document',
+    replace: 'Updating a document',
   },
   sheets_: {
     list: 'Flipping through spreadsheets',
@@ -182,25 +199,77 @@ const PREFIX_ACTION_LABELS: Record<string, Record<string, string>> = {
 };
 
 const PREFIX_DEFAULT_LABELS: Record<string, string> = {
+  mail_: 'Checking email',
   gmail_: 'Checking email',
   calendar_: 'Checking the calendar',
   tasks_: 'Checking tasks',
   tasklist_: 'Checking task lists',
   contacts_: 'Flipping through contacts',
-  docs_: 'Working in docs',
-  drive_: 'Sorting through drive files',
+  files_: 'Working with your files',
+  document_: 'Editing a document',
   sheets_: 'Working in spreadsheets',
   device_: 'Adjusting the device',
   media_: 'Controlling playback',
 };
+
+const ACCOUNT_PRODUCT_HINTS: Array<{ pattern: RegExp; product: string }> = [
+  { pattern: /\b(gmail|google)\b/i, product: 'Gmail' },
+  { pattern: /\b(outlook|microsoft|hotmail|live\.com)\b/i, product: 'Outlook' },
+  { pattern: /\b(onedrive|sharepoint)\b/i, product: 'OneDrive' },
+  { pattern: /\b(google drive|drive)\b/i, product: 'Google Drive' },
+  { pattern: /\b(google tasks)\b/i, product: 'Google Tasks' },
+  { pattern: /\b(microsoft to do|todo)\b/i, product: 'Microsoft To Do' },
+  { pattern: /\b(google calendar)\b/i, product: 'Google Calendar' },
+  { pattern: /\b(apple calendar|icloud)\b/i, product: 'Apple Calendar' },
+  { pattern: /\bexcel\b/i, product: 'Excel Online' },
+  { pattern: /\bgoogle sheets?\b/i, product: 'Google Sheets' },
+];
+
+const TOOL_PRODUCT_TEMPLATES: Record<string, string> = {
+  mail_list: 'Digging through {product}',
+  mail_search: 'Searching {product}',
+  mail_read: 'Opening an email in {product}',
+  mail_send: 'Sending via {product}',
+  mail_delete: 'Trashing an email in {product}',
+  mail_modify_labels: 'Updating labels in {product}',
+  calendar_list: 'Flipping through {product}',
+  calendar_list_all: 'Flipping through {product}',
+  calendar_list_sources: 'Loading calendars from {product}',
+  calendar_get: 'Opening a calendar event in {product}',
+  tasks_list: 'Checking tasks in {product}',
+  tasklist_list: 'Loading task lists from {product}',
+  contacts_list: 'Flipping through {product}',
+  contacts_search: 'Searching {product}',
+  files_list: 'Browsing {product}',
+  files_search: 'Searching {product}',
+  sheets_list: 'Flipping through {product}',
+};
+
+function productFromAccountHint(account: string): string | null {
+  for (const { pattern, product } of ACCOUNT_PRODUCT_HINTS) {
+    if (pattern.test(account)) return product;
+  }
+  if (account.includes('@')) {
+    const domain = account.split('@')[1]?.toLowerCase() ?? '';
+    if (domain.includes('gmail') || domain.includes('google')) return 'Gmail';
+    if (domain.includes('outlook') || domain.includes('hotmail') || domain.includes('live.')) return 'Outlook';
+    if (domain.includes('icloud')) return 'Apple Calendar';
+  }
+  return null;
+}
+
+function labelWithProduct(tool: string, product: string): string | null {
+  const template = TOOL_PRODUCT_TEMPLATES[tool];
+  if (!template) return null;
+  return template.replace('{product}', product);
+}
 
 const TOOL_GROUP_LABELS: Record<string, string> = {
   calendar: 'calendar',
   email: 'email',
   tasks: 'tasks',
   contacts: 'contacts',
-  docs: 'docs',
-  drive: 'drive',
+  files: 'files',
   sheets: 'sheets',
   realtime: 'weather & maps',
   web: 'web search',
@@ -373,6 +442,24 @@ function hintForGmailSend(args: Record<string, unknown>): string | null {
   return null;
 }
 
+function hintForAccountTargetedTool(tool: string, args: Record<string, unknown>): string | null {
+  const account = stringArg(args, 'account');
+  if (!account) return null;
+  const product = productFromAccountHint(account);
+  if (!product) return null;
+  return labelWithProduct(tool, product);
+}
+
+function hintForMailSend(args: Record<string, unknown>): string | null {
+  const accountLabel = hintForAccountTargetedTool('mail_send', args);
+  const subject = stringArg(args, 'subject');
+  if (subject) {
+    const base = accountLabel ? accountLabel.replace('Sending via', 'Drafting in') : 'Drafting an email';
+    return `${base}: "${truncateQuery(subject)}"`;
+  }
+  return accountLabel;
+}
+
 function statusHintForTool(
   tool: string,
   args: Record<string, unknown> | null | undefined,
@@ -381,18 +468,38 @@ function statusHintForTool(
   if (!tool || !args || typeof args !== 'object') return null;
 
   const tz = timeZone?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const accountLabel = hintForAccountTargetedTool(tool, args);
 
   switch (tool) {
     case 'load_tool_groups':
       return hintForLoadToolGroups(args);
     case 'calendar_list':
-      return hintForCalendarList(args, tz);
+    case 'calendar_list_all':
+      return accountLabel ?? hintForCalendarList(args, tz);
+    case 'calendar_list_sources':
+      return accountLabel;
     case 'calendar_create':
-      return hintForCalendarCreate(args, tz);
+      return accountLabel ?? hintForCalendarCreate(args, tz);
+    case 'mail_list':
+      return accountLabel ?? hintForSearchTool('Checking your inboxes', args);
+    case 'mail_search':
+      return accountLabel ?? hintForSearchTool('Searching your inboxes', args);
+    case 'mail_read':
+    case 'mail_delete':
+    case 'mail_modify_labels':
+      return accountLabel;
+    case 'mail_send':
+      return hintForMailSend(args);
     case 'gmail_search':
       return hintForSearchTool('Searching the inbox', args);
     case 'gmail_list':
       return hintForSearchTool('Scanning the inbox', args);
+    case 'tasks_list':
+    case 'tasklist_list':
+    case 'contacts_list':
+    case 'files_list':
+    case 'sheets_list':
+      return accountLabel;
     case 'search_memory':
       return hintForSearchTool('Digging through memory', args);
     case 'search_interactions':
@@ -400,7 +507,9 @@ function statusHintForTool(
     case 'web_search':
       return hintForSearchTool('Checking Google', args);
     case 'contacts_search':
-      return hintForSearchTool('Searching contacts', args);
+      return accountLabel ?? hintForSearchTool('Searching contacts', args);
+    case 'files_search':
+      return accountLabel ?? hintForSearchTool('Searching your files', args);
     case 'maps_search_places':
       return hintForSearchTool('Checking the map', args);
     case 'get_client_context':
@@ -412,7 +521,7 @@ function statusHintForTool(
         ? `Checking time in ${stringArg(args, 'timezone')}`
         : null;
     default:
-      return null;
+      return accountLabel;
   }
 }
 
