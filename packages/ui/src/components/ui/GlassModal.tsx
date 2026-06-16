@@ -49,6 +49,11 @@ const modalConfirmButtonClass = cn(
   'w-full text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50',
 );
 
+const modalDestructiveConfirmButtonClass = cn(
+  'rounded-lg border border-rose-500/40 bg-rose-500/10 px-4 py-2.5 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20',
+  'w-full disabled:cursor-not-allowed disabled:opacity-50',
+);
+
 export type GlassAlertModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -73,6 +78,7 @@ export function GlassAlertModal({
   onOpenChange,
   title,
   description,
+  variant = 'default',
   icon: Icon,
   layer = 'settings',
   size = 'md',
@@ -155,7 +161,11 @@ export function GlassAlertModal({
                       type="button"
                       disabled={confirmDisabled || confirming}
                       onClick={() => void onConfirm()}
-                      className={modalConfirmButtonClass}
+                      className={
+                        variant === 'destructive'
+                          ? modalDestructiveConfirmButtonClass
+                          : modalConfirmButtonClass
+                      }
                     >
                       {confirming ? (confirmingLabel ?? confirmLabel) : confirmLabel}
                     </button>

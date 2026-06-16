@@ -916,7 +916,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       }
       if (
         streamTerminalErrorRef.current &&
-        (ev.type === 'token' || ev.type === 'tool_result' || ev.type === 'tool_call')
+        (ev.type === 'token' || ev.type === 'tool_result' || ev.type === 'tool_call' || ev.type === 'tool_progress')
       ) {
         return;
       }
@@ -940,10 +940,21 @@ export function CommandProvider({ children }: { children: ReactNode }) {
           streamHadOutputRef.current = true;
           setCommandState((s) => (s === 'thinking' ? 'responding' : s));
           setAssistantBubbleStatus('pending');
-          const label = commandToolStatusLabel(ev.tool, ev.args, {
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          });
+          const label =
+            (typeof ev.status_label === 'string' && ev.status_label.trim()) ||
+            commandToolStatusLabel(ev.tool, ev.args, {
+              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            });
           applyAssistantStatusLine(label || ASSISTANT_STATUS_THINKING);
+          break;
+        }
+        case 'tool_progress': {
+          streamHadOutputRef.current = true;
+          setCommandState((s) => (s === 'thinking' ? 'responding' : s));
+          setAssistantBubbleStatus('pending');
+          if (typeof ev.status_label === 'string' && ev.status_label.trim()) {
+            applyAssistantStatusLine(ev.status_label.trim());
+          }
           break;
         }
         case 'tool_result':

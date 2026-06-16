@@ -221,6 +221,7 @@ export function IntegrationsPanel() {
                   connectedProviderCount={connectedProviderCount}
                   connecting={connectingProvider === normalizeOAuthProvider(health.provider)}
                   disconnecting={disconnectingProvider === health.provider}
+                  disconnectPending={disconnectTarget?.provider === health.provider}
                   onConnect={() => void handleProviderConnect(health.provider)}
                   onDisconnect={() => setDisconnectTarget(health)}
                 />

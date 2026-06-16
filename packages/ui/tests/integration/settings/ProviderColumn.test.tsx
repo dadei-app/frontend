@@ -93,6 +93,27 @@ describe('ProviderColumn', () => {
     expect(button).toHaveTextContent('Set password');
   });
 
+  it('keeps disconnect styling while confirmation is open', () => {
+    const health: ProviderHealth = {
+      ...baseHealth,
+      connected: true,
+      account_identifier: 'work@company.com',
+      services: [{ id: 'gmail', name: 'Gmail', status: 'connected', read: true, write: true }],
+    };
+    render(
+      <ProviderColumn
+        health={health}
+        {...baseProps}
+        connectedProviderCount={2}
+        disconnectPending
+      />,
+    );
+
+    const button = screen.getByRole('button', { name: /disconnect/i });
+    expect(button).toHaveClass('text-rose-100');
+    expect(button).toHaveTextContent('Disconnect');
+  });
+
   it('shows a coming soon overlay for Apple', () => {
     const health: ProviderHealth = {
       ...baseHealth,

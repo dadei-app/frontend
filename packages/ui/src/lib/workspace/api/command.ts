@@ -9,7 +9,8 @@ export type { CommandMode as CommandStreamMode } from '@dadei/ui/types/command.t
 export type CommandSSEEvent =
   | { type: 'transcript'; text: string }
   | { type: 'token'; text: string }
-  | { type: 'tool_call'; tool: string; status: string; args?: Record<string, unknown> }
+  | { type: 'tool_call'; tool: string; status: string; args?: Record<string, unknown>; status_label?: string }
+  | { type: 'tool_progress'; tool: string; status_label: string }
   | { type: 'tool_result'; tool: string; ok: boolean; summary?: string }
   | { type: 'error'; message: string; code?: string }
   | { type: 'session_end' }

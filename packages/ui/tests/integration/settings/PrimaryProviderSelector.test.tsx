@@ -16,6 +16,30 @@ describe('PrimaryProviderSelector', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('fades in when two or more providers are connected', async () => {
+    const { rerender } = render(
+      <PrimaryProviderSelector
+        domain="mail"
+        connectedProviders={['google']}
+        value="google"
+        saving={false}
+        onChange={vi.fn()}
+      />,
+    );
+
+    rerender(
+      <PrimaryProviderSelector
+        domain="mail"
+        connectedProviders={['google', 'microsoft']}
+        value={null}
+        saving={false}
+        onChange={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByText(/mail — default account/i)).toBeInTheDocument();
+  });
+
   it('calls onChange with a provider when a different option is selected', () => {
     const onChange = vi.fn();
     render(

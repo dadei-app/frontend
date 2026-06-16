@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import type { ProviderHealth } from '@dadei/ui/types/integrations.types';
 import { IntegrationCard } from './IntegrationCard';
+import { workspaceServiceDisplayName } from './serviceDisplayNames';
 
 const PROVIDER_LABEL: Record<string, string> = {
   google: 'Google',
@@ -61,6 +62,7 @@ export function ProviderColumn({
   connectedProviderCount,
   connecting,
   disconnecting,
+  disconnectPending = false,
   onConnect,
   onDisconnect,
 }: {
@@ -70,6 +72,7 @@ export function ProviderColumn({
   connectedProviderCount: number;
   connecting: boolean;
   disconnecting: boolean;
+  disconnectPending?: boolean;
   onConnect: () => void;
   onDisconnect: () => void;
 }) {
@@ -94,12 +97,17 @@ export function ProviderColumn({
       ? `Reconnect ${label}`
       : statusLabel;
 
+  const showDisconnectHover =
+    isHealthyConnected && canDisconnect && !needsPasswordToDisconnect && (ctaHovered || disconnectPending);
+
   const ctaTone = health.needs_reauth
     ? 'border-amber-400/40 bg-amber-500/15 text-amber-100 hover:bg-amber-500/25'
     : isHealthyConnected
       ? needsPasswordToDisconnect
         ? 'group border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90 hover:border-zinc-500/35 hover:bg-zinc-700/40 hover:text-zinc-200'
-        : 'group border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90 hover:border-rose-400/45 hover:bg-rose-500/15 hover:text-rose-100'
+        : showDisconnectHover
+          ? 'border-rose-400/45 bg-rose-500/15 text-rose-100'
+          : 'group border-emerald-500/30 bg-emerald-500/10 text-emerald-200/90 hover:border-rose-400/45 hover:bg-rose-500/15 hover:text-rose-100'
       : 'border-white/10 bg-zinc-900/55 text-zinc-100 hover:bg-zinc-800/65';
 
   const actionButton = comingSoon ? (
@@ -146,7 +154,7 @@ export function ProviderColumn({
             <CrossfadeHoverLabel
               idle={cta}
               hover={needsPasswordToDisconnect ? 'Set password' : 'Disconnect'}
-              active={ctaHovered}
+              active={needsPasswordToDisconnect ? ctaHovered : ctaHovered || disconnectPending}
             />
           ) : (
             cta
@@ -178,7 +186,7 @@ export function ProviderColumn({
           {health.services.map(svc => (
             <IntegrationCard
               key={svc.id}
-              name={svc.name}
+              name={workspaceServiceDisplayName(svc.id, health.provider)}
               description={`${svc.read ? 'read' : ''}${svc.read && svc.write ? ' · ' : ''}${svc.write ? 'write' : ''}` || '—'}
               status={!health.connected ? 'off' : svc.status === 'connected' ? 'on' : svc.status === 'needs_reauth' ? 'reauth' : 'off'}
             />

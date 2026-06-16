@@ -389,8 +389,27 @@ export const INTEGRATION_CATEGORIES: IntegrationCategory[] = [
 ];
 
 export function workspaceToolDisplayName(tool: IntegrationTool, provider: WorkspaceProviderId): string {
-  if (provider === 'microsoft' && tool.id === 'sheets') return 'Excel';
-  if (provider === 'microsoft' && tool.id === 'tasks') return 'To Do';
+  if (provider === 'microsoft') {
+    const microsoftNames: Partial<Record<string, string>> = {
+      mail: 'Outlook',
+      files: 'OneDrive',
+      sheets: 'Excel',
+      tasks: 'To Do',
+    };
+    if (microsoftNames[tool.id]) return microsoftNames[tool.id]!;
+  }
+
+  if (provider === 'google') {
+    const googleNames: Partial<Record<string, string>> = {
+      gmail: 'Gmail',
+      drive: 'Drive',
+      files: 'Drive',
+      sheets: 'Sheets',
+      docs: 'Docs',
+    };
+    if (googleNames[tool.id]) return googleNames[tool.id]!;
+  }
+
   return tool.name;
 }
 
