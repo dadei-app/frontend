@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { Link2, Loader2, Sparkles } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { SiApple } from 'react-icons/si';
 import { Loading } from '@dadei/ui/components/Loading';
@@ -57,7 +57,7 @@ export default function LoginPage() {
     return ASSISTANT_PATH;
   }, [searchParams]);
 
-  const [showEmail, setShowEmail] = useState(false);
+  const [showProviders, setShowProviders] = useState(false);
   const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(null);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
@@ -90,7 +90,7 @@ export default function LoginPage() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [isLoginMode, error, loading, showEmail]);
+  }, [isLoginMode, error, loading, showProviders]);
 
   const onAuthenticated = () => navigate(nextPath, { replace: true });
 
@@ -173,17 +173,21 @@ export default function LoginPage() {
               ease: veilEase,
               delay: prefersReducedMotion ? 0 : 0.05,
             }}
-            className="relative w-full max-w-[420px] rounded-2xl border border-white/10 bg-zinc-900/55 p-8 shadow-[0_24px_80px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-emerald-500/15 backdrop-blur-2xl"
+            className="relative w-full max-w-[420px] rounded-2xl border border-white/10 bg-zinc-900/55 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] ring-1 ring-emerald-500/15 backdrop-blur-2xl sm:p-8"
           >
             <div
               className="pointer-events-none absolute inset-0 rounded-2xl bg-linear-to-b from-emerald-500/10 via-transparent to-zinc-950/40 opacity-90"
               aria-hidden
             />
 
-            <div className="relative mb-8 text-center">
+            <div className="relative mb-6 text-center sm:mb-8">
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 font-primary">Welcome to dadei</h1>
               <p className="mt-2 text-sm text-zinc-500 font-secondary">
                 Sign in to your intelligent voice workspace
+              </p>
+              <p className="mx-auto mt-3 max-w-[340px] font-secondary text-xs leading-relaxed text-zinc-500/85">
+                One dadei account, all your services. Sign in with any provider — matching emails link
+                automatically. In Settings you can connect other accounts too, even when the email differs.
               </p>
             </div>
 
@@ -199,71 +203,7 @@ export default function LoginPage() {
                 }}
               >
                 <div ref={authBlockRef}>
-                  <div className="space-y-2.5">
-                    {OAUTH_PROVIDERS.map(p => {
-                      const comingSoon = p.id === 'apple';
-                      const isPending = pendingProvider === p.id;
-
-                      if (comingSoon) {
-                        return (
-                          <div key={p.id} className="relative overflow-hidden rounded-xl">
-                            <button
-                              type="button"
-                              disabled
-                              aria-label={`${p.label}, coming soon`}
-                              className="relative flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-xl border border-zinc-500/20 bg-zinc-900/40 px-4 py-3 font-primary text-sm font-medium text-zinc-400 shadow-sm backdrop-blur-md"
-                            >
-                              {p.node}
-                              <span>{p.label}</span>
-                            </button>
-                            <div
-                              className="pointer-events-none absolute inset-x-0 top-0 flex justify-center"
-                              aria-hidden
-                            >
-                              <div className="flex items-center gap-1.5 rounded-b-xl border border-t-0 border-zinc-400/25 bg-gradient-to-r from-zinc-700/90 via-zinc-500/80 to-zinc-700/90 px-3.5 py-1 shadow-[0_6px_18px_rgba(0,0,0,0.35)]">
-                                <Sparkles className="h-3 w-3 text-zinc-100" />
-                                <span className="font-secondary text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-50">
-                                  Coming soon
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          disabled={loading || pendingProvider !== null}
-                          onClick={() => void handleProviderLogin(p.id)}
-                          className="relative flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-3 font-primary text-sm font-medium text-zinc-100 shadow-sm backdrop-blur-md transition-[background-color,border-color,box-shadow] hover:border-white/20 hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {isPending ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : p.node}
-                          <span>{isPending ? 'Connecting…' : p.label}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-white/10 bg-zinc-900/40 px-3.5 py-3 backdrop-blur-md">
-                    <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400/90" aria-hidden />
-                    <p className="font-secondary text-xs leading-relaxed text-zinc-400">
-                        One dadei account, all your services. Sign in with any provider — matching
-                        emails link automatically. In Settings you can connect other accounts too,
-                        even when the email differs.
-                    </p>
-                  </div>
-
-                  {!showEmail ? (
-                    <button
-                      type="button"
-                      onClick={() => setShowEmail(true)}
-                      className="mt-5 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-zinc-300"
-                    >
-                      Use email and password instead
-                    </button>
-                  ) : (
+                  {!showProviders ? (
                     <>
                       <motion.form
                         key={isLoginMode ? 'login' : 'register'}
@@ -271,7 +211,7 @@ export default function LoginPage() {
                         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                         transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
                         onSubmit={handleSubmit}
-                        className="mt-6 space-y-4"
+                        className="space-y-4"
                       >
                         <div>
                           <label
@@ -346,7 +286,7 @@ export default function LoginPage() {
                         <button
                           type="submit"
                           disabled={loading}
-                          className="mt-6 w-full rounded-xl border border-emerald-500/35 bg-linear-to-r from-emerald-600 to-emerald-700 px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] drop-shadow-[0_8px_22px_rgba(5,150,105,0.45)] transition-[filter,opacity] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="mt-2 w-full rounded-xl border border-emerald-500/40 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition-[background-color,filter] hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {loading ? (
                             <span className="flex items-center justify-center gap-2">
@@ -361,7 +301,7 @@ export default function LoginPage() {
                         </button>
                       </motion.form>
 
-                      <p className="mt-6 text-center text-sm text-zinc-500 font-secondary">
+                      <p className="mt-5 text-center text-sm text-zinc-500 font-secondary">
                         {isLoginMode ? "Don't have an account?" : 'Already have an account?'}{' '}
                         <button
                           type="button"
@@ -375,6 +315,71 @@ export default function LoginPage() {
                           {isLoginMode ? 'Create one' : 'Sign In'}
                         </button>
                       </p>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowProviders(true)}
+                        className="mt-5 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-emerald-400/90"
+                      >
+                        Continue with a provider
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-2.5">
+                        {OAUTH_PROVIDERS.map(p => {
+                          const comingSoon = p.id === 'apple';
+                          const isPending = pendingProvider === p.id;
+
+                          if (comingSoon) {
+                            return (
+                              <div key={p.id} className="relative overflow-hidden rounded-xl">
+                                <button
+                                  type="button"
+                                  disabled
+                                  aria-label={`${p.label}, coming soon`}
+                                  className="relative flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-xl border border-zinc-500/20 bg-zinc-900/40 px-4 py-3 font-primary text-sm font-medium text-zinc-400 shadow-sm backdrop-blur-md"
+                                >
+                                  {p.node}
+                                  <span>{p.label}</span>
+                                </button>
+                                <div
+                                  className="pointer-events-none absolute inset-x-0 top-0 flex justify-center"
+                                  aria-hidden
+                                >
+                                  <div className="flex items-center gap-1.5 rounded-b-xl border border-t-0 border-zinc-400/25 bg-gradient-to-r from-zinc-700/90 via-zinc-500/80 to-zinc-700/90 px-3.5 py-1 shadow-[0_6px_18px_rgba(0,0,0,0.35)]">
+                                    <Sparkles className="h-3 w-3 text-zinc-100" />
+                                    <span className="font-secondary text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-50">
+                                      Coming soon
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              disabled={loading || pendingProvider !== null}
+                              onClick={() => void handleProviderLogin(p.id)}
+                              className="relative flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-zinc-900/50 px-4 py-3 font-primary text-sm font-medium text-zinc-100 shadow-sm backdrop-blur-md transition-[background-color,border-color,box-shadow] hover:border-white/20 hover:bg-zinc-800/60 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isPending ? <Loader2 className="h-5 w-5 shrink-0 animate-spin" aria-hidden /> : p.node}
+                              <span>{isPending ? 'Connecting…' : p.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowProviders(false)}
+                        className="mt-5 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-emerald-400/90"
+                      >
+                        Use email and password instead
+                      </button>
                     </>
                   )}
 

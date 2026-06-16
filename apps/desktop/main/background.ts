@@ -19,6 +19,10 @@ import {
   registerDesktopProtocolClient,
   registerOAuthProtocol,
 } from './auth/oauth-protocol';
+import {
+  deliverBillingReturn,
+  registerBillingProtocol,
+} from './auth/billing-protocol';
 import { registerDeviceControlIpcHandlers } from './device-control';
 import { buildApplicationMenu } from './menu';
 import { isAppQuitting, setAppQuitting } from './app-quit';
@@ -37,6 +41,13 @@ let mainWindow: BrowserWindow | null = null;
 
 const isDarwin = process.platform === 'darwin';
 
+function deliverDesktopProtocolUrl(protocolUrl: string): void {
+  if (deliverOAuthCallback(protocolUrl)) {
+    return;
+  }
+  deliverBillingReturn(protocolUrl);
+}
+
 registerDesktopProtocolClient();
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
@@ -46,7 +57,7 @@ if (!gotSingleInstanceLock) {
   app.on('second-instance', (_event, argv) => {
     const protocolUrl = extractProtocolUrlFromArgv(argv);
     if (protocolUrl) {
-      deliverOAuthCallback(protocolUrl);
+      deliverDesktopProtocolUrl(protocolUrl);
     }
     if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMinimized()) {
@@ -60,7 +71,7 @@ if (!gotSingleInstanceLock) {
 
 app.on('open-url', (event, url) => {
   event.preventDefault();
-  deliverOAuthCallback(url);
+  deliverDesktopProtocolUrl(url);
 });
 
 /** Match renderer title strip + Electron titleBarOverlay.height (win32/linux). */
@@ -232,10 +243,11 @@ app.whenReady().then(async () => {
   configureSessionPermissions();
 
   registerOAuthProtocol(() => mainWindow);
+  registerBillingProtocol(() => mainWindow);
 
   const protocolUrl = extractProtocolUrlFromArgv(process.argv);
   if (protocolUrl) {
-    deliverOAuthCallback(protocolUrl);
+    deliverDesktopProtocolUrl(protocolUrl);
   }
 
   const menu = buildApplicationMenu();

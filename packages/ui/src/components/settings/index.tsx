@@ -31,7 +31,12 @@ import { veilEase } from '@dadei/ui/lib/platform/shared/motion';
 type AssistantSettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  requestedView?: SidebarView;
+  requestedAction?: string;
+  onBillingReturnConsumed?: () => void;
 };
+
+export type { SidebarView };
 
 type SidebarView =
   | 'integrations'
@@ -84,7 +89,13 @@ const dialogContentClass =
 const dialogContentClassWeb =
   'pointer-events-none fixed inset-0 z-[250] flex items-center justify-center border-0 bg-transparent p-3 shadow-none outline-none focus:outline-none';
 
-export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
+export default function AssistantSettingsModal({
+  open,
+  onOpenChange,
+  requestedView,
+  requestedAction,
+  onBillingReturnConsumed,
+}: AssistantSettingsModalProps) {
   const [view, setView] = useState<SidebarView>('integrations');
   const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
   const prefersReducedMotion = useReducedMotion();
@@ -101,6 +112,19 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const views = useMemo(() => visibleViews(isElectron), [isElectron]);
   const isCenteredPanel = view === 'about' || view === 'subscription';
+
+  useEffect(() => {
+    if (!open) return;
+    if (requestedView && ALL_VIEWS.some(v => v.id === requestedView)) {
+      const target = requestedView;
+      if (target === 'startup' && !isElectron) return;
+      if (target === 'about' && !isElectron) return;
+      setView(target);
+    }
+    if (requestedAction) {
+      setPendingAction(requestedAction);
+    }
+  }, [open, requestedView, requestedAction, isElectron]);
 
   useEffect(() => {
     if (!window.electronAPI?.onOpenSettingsSection) return;
@@ -147,6 +171,9 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && tutorialSettingsStep) return;
+    if (!nextOpen) {
+      onBillingReturnConsumed?.();
+    }
     onOpenChange(nextOpen);
   };
 

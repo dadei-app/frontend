@@ -49,20 +49,23 @@ describe('LoginPage', () => {
     mockTriggerProviderOAuth.mockResolvedValue(undefined);
   });
 
-  it('hides the email form by default and reveals it via the link', () => {
+  it('shows the email form by default and reveals providers via the link', () => {
     renderLoginPage();
-
-    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /use email and password instead/i })).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: /use email and password instead/i }));
 
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /continue with a provider/i }));
+
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
   });
 
-  it('renders three provider buttons', () => {
+  it('renders three provider buttons when provider view is open', () => {
     renderLoginPage();
+
+    fireEvent.click(screen.getByRole('button', { name: /continue with a provider/i }));
 
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /continue with microsoft/i })).toBeInTheDocument();
@@ -72,6 +75,7 @@ describe('LoginPage', () => {
   it('does not invoke OAuth for Apple while coming soon', () => {
     renderLoginPage('/memories');
 
+    fireEvent.click(screen.getByRole('button', { name: /continue with a provider/i }));
     fireEvent.click(screen.getByRole('button', { name: /continue with apple/i }));
 
     expect(mockTriggerProviderOAuth).not.toHaveBeenCalled();

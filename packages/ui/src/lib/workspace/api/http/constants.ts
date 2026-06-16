@@ -55,4 +55,9 @@ export const ENDPOINTS = {
   ACTIONS: '/actions',
   ACTION_BY_ID: '/actions/:actionId',
   COMMAND_TEXT: '/service/command/text',
+
+  // Subscription billing
+  SUBSCRIPTION: '/subscription',
+  SUBSCRIPTION_CHECKOUT: '/subscription/checkout',
+  SUBSCRIPTION_PORTAL: '/subscription/portal',
 } as const;

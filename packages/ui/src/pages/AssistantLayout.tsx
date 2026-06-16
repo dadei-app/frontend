@@ -1,6 +1,6 @@
-import { useLayoutEffect, useState, type CSSProperties } from 'react';
+import { useLayoutEffect, useEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/platform/query/queryHooks';
 import { Loading } from '@dadei/ui/components/Loading';
@@ -21,7 +21,7 @@ import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/Notification
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import MobileInteractionsSheet from '@dadei/ui/components/MobileInteractionsSheet';
-import AssistantSettingsModal from '@dadei/ui/components/settings';
+import AssistantSettingsModal, { type SidebarView } from '@dadei/ui/components/settings';
 import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
@@ -115,7 +115,7 @@ function assistantLoadingSubtitle(
 }
 
 function AssistantLayoutShell() {
-  const { formatHotkey, viewportFillClass } = useSystem();
+  const { formatHotkey, viewportFillClass, isElectron } = useSystem();
   const isMobileAssistant = useMobileAssistant();
   const { isServiceEnabled, permissionsGateOpen } = useService();
   const { state, voiceEnrollmentActive } = useCommand();
@@ -132,6 +132,40 @@ function AssistantLayoutShell() {
     (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [billingReturn, setBillingReturn] = useState<{
+    view: SidebarView;
+    action: string;
+  } | null>(null);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (isElectron) return;
+    const billing = searchParams.get('billing');
+    if (billing === 'success') {
+      setSettingsOpen(true);
+      setBillingReturn({ view: 'subscription', action: 'billing-success' });
+      navigate(ASSISTANT_PATH, { replace: true });
+    } else if (billing === 'cancel') {
+      setSettingsOpen(true);
+      setBillingReturn({ view: 'subscription', action: 'billing-cancel' });
+      navigate(ASSISTANT_PATH, { replace: true });
+    }
+  }, [isElectron, navigate, searchParams]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.onBillingReturn) return;
+    const off = window.electronAPI.onBillingReturn(({ status }) => {
+      if (status === 'success' || status === 'portal') {
+        setSettingsOpen(true);
+        setBillingReturn({ view: 'subscription', action: 'billing-success' });
+      } else if (status === 'cancel') {
+        setSettingsOpen(true);
+        setBillingReturn({ view: 'subscription', action: 'billing-cancel' });
+      }
+    });
+    return off;
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -268,7 +302,18 @@ function AssistantLayoutShell() {
           <TutorialPersonsBridge setIsPeoplePanelOpen={setIsPeoplePanelOpen} />
         </>
       ) : null}
-      <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <AssistantSettingsModal
+        open={settingsOpen || !!billingReturn}
+        onOpenChange={next => {
+          if (!next) {
+            setBillingReturn(null);
+          }
+          setSettingsOpen(next);
+        }}
+        requestedView={billingReturn?.view}
+        requestedAction={billingReturn?.action}
+        onBillingReturnConsumed={() => setBillingReturn(null)}
+      />
       {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
       <ToastStackHost
         className={cn(
