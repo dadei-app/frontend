@@ -13,7 +13,7 @@ import { NotificationProvider } from '@dadei/ui/contexts/NotificationContext';
 import AssistantLayout from '@dadei/ui/pages/AssistantLayout';
 import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@dadei/ui/pages/LoginPage';
-import OAuthCallback from '@dadei/ui/pages/OAuthCallback';
+import { OAuthCallback } from '@dadei/ui/pages/OAuthCallback';
 import { OAUTH_CALLBACK_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 
 export function App() {

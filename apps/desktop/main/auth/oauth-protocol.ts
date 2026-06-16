@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import path from 'path';
 
 /** Must match backend `DADEI_DESKTOP_OAUTH_ORIGIN`. */
 export const DESKTOP_OAUTH_RETURN_ORIGIN = 'dadei://oauth';
@@ -132,9 +133,9 @@ export function registerOAuthProtocol(getWindow: () => BrowserWindow | null): vo
 
 export function registerDesktopProtocolClient(): void {
   if (process.defaultApp) {
-    if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient('dadei', process.execPath, [process.argv[1]!]);
-    }
+    // `electron .` passes "." as argv[1]; protocol callbacks launch from system32, so store an absolute path.
+    const appPath = path.resolve(process.argv[1] ?? process.cwd());
+    app.setAsDefaultProtocolClient('dadei', process.execPath, [appPath]);
   } else {
     app.setAsDefaultProtocolClient('dadei');
   }

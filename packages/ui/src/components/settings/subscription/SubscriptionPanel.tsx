@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Check, Loader2, Sparkles } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   SettingsBento,
@@ -19,10 +19,6 @@ import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 import type { SubscriptionLimitsView } from '@dadei/ui/types/subscription.types';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
-function formatLimit(value: number | null | undefined): string {
-  return value == null ? 'Unlimited' : String(value);
-}
-
 function formatPeriodEnd(iso: string | null | undefined, timeZone: string): string | null {
   if (!iso) return null;
   try {
@@ -36,37 +32,52 @@ function formatPeriodEnd(iso: string | null | undefined, timeZone: string): stri
   }
 }
 
-function TierCompareCell({
-  label,
-  freeValue,
-  proValue,
-}: {
-  label: string;
-  freeValue: string;
-  proValue: string;
-}) {
-  return (
-    <div className="settings-tile rounded-lg border border-white/10 bg-zinc-950/55 p-3 text-left">
-      <p className="text-xs text-zinc-500 font-secondary">{label}</p>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-        <div>
-          <p className="text-[0.65rem] uppercase tracking-wide text-zinc-600">Free</p>
-          <p className="text-zinc-300">{freeValue}</p>
-        </div>
-        <div>
-          <p className="text-[0.65rem] uppercase tracking-wide text-emerald-600/80">Pro</p>
-          <p className="text-emerald-200/90">{proValue}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function usageFromLimits(limits: SubscriptionLimitsView, remaining: number | null) {
   const limit = limits.daily_command_limit;
   if (limit == null) return null;
   const used = remaining == null ? 0 : Math.max(0, limit - remaining);
   return { used, limit };
+}
+
+/** Emerald under 60%, amber 60–90%, rose at/over 90%. */
+function meterFillClass(ratio: number): string {
+  if (ratio >= 0.9) return 'bg-rose-500';
+  if (ratio >= 0.6) return 'bg-amber-400';
+  return 'bg-emerald-500';
+}
+
+type PillTone = 'free' | 'active' | 'cancel' | 'pastdue';
+
+function StatusPill({ tone, label, pro }: { tone: PillTone; label: string; pro: boolean }) {
+  const toneClass: Record<PillTone, string> = {
+    free: 'border-white/10 bg-white/[0.04] text-zinc-400',
+    active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+    cancel: 'border-amber-400/30 bg-amber-400/10 text-amber-200',
+    pastdue: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
+  };
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium capitalize',
+        toneClass[tone],
+      )}
+    >
+      {pro ? <Sparkles className="h-3.5 w-3.5" aria-hidden /> : null}
+      {label}
+    </span>
+  );
+}
+
+function BenefitRow({ label, free }: { label: string; free: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/15">
+        <Check className="h-3 w-3 text-emerald-300" aria-hidden />
+      </span>
+      <span className="text-sm text-zinc-200">{label}</span>
+      <span className="ml-auto text-xs text-zinc-600 font-secondary">{free} &rarr; &infin;</span>
+    </div>
+  );
 }
 
 export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsPanelProps) {
@@ -82,16 +93,16 @@ export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsP
   const isPro = sub?.tier === 'pro';
   const usage = sub ? usageFromLimits(sub.limits, sub.commands_remaining_today) : null;
 
-  const statusLine = useMemo(() => {
-    if (!sub) return '';
+  const status = useMemo<{ tone: PillTone; label: string }>(() => {
+    if (!sub) return { tone: 'free', label: '' };
     if (sub.cancel_at_period_end) {
       const end = formatPeriodEnd(sub.current_period_end, timeZone);
-      return end ? `Cancels ${end}` : 'Cancels at period end';
+      return { tone: 'cancel', label: end ? `Cancels ${end}` : 'Cancels soon' };
     }
-    if (sub.status === 'active') return 'Active';
-    if (sub.status === 'past_due') return 'Past due';
-    return sub.status.replace(/_/g, ' ');
-  }, [sub, timeZone]);
+    if (sub.status === 'past_due') return { tone: 'pastdue', label: 'Past due' };
+    if (sub.status === 'active') return { tone: isPro ? 'active' : 'free', label: 'Active' };
+    return { tone: 'free', label: sub.status.replace(/_/g, ' ') };
+  }, [isPro, sub, timeZone]);
 
   const renewalLine = useMemo(() => {
     if (!sub?.current_period_end || !isPro) return null;
@@ -156,7 +167,7 @@ export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsP
     return (
       <SettingsBento centered>
         <Loader2 className="h-8 w-8 animate-spin text-zinc-500" aria-hidden />
-        <p className="text-sm text-zinc-500 font-secondary">Loading subscription…</p>
+        <p className="text-sm text-zinc-500 font-secondary">Loading subscription&hellip;</p>
       </SettingsBento>
     );
   }
@@ -172,89 +183,89 @@ export function SubscriptionPanel({ pendingAction, onActionConsumed }: SettingsP
     );
   }
 
-  const freeLimits = sub.limits;
-  const proCommands = 'Unlimited';
-  const proDevices = 'Unlimited';
-  const proPersons = 'Unlimited';
+  const busy = actionPending || isFetching;
+  const meterRatio = usage ? Math.min(1, usage.used / Math.max(usage.limit, 1)) : 0;
 
   return (
-    <SettingsBento centered className="max-w-lg">
-      <div className="flex flex-col items-center gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="font-display text-3xl text-zinc-100">{sub.display_name}</h2>
-          {isPro ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-200">
-              <Sparkles className="h-3.5 w-3.5" aria-hidden />
-              Pro
-            </span>
-          ) : null}
+    <div className="mx-auto flex w-full max-w-md flex-col gap-4 px-2 pt-8 pb-6">
+      {/* Block 1 — hero plan card */}
+      <div className="settings-tile w-full rounded-xl border border-white/10 bg-zinc-950/55 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-display text-2xl leading-none text-zinc-100">{sub.display_name}</h2>
+            {renewalLine ? (
+              <p className="mt-1.5 text-xs text-zinc-500 font-secondary">{renewalLine}</p>
+            ) : null}
+          </div>
+          <StatusPill tone={status.tone} label={status.label} pro={isPro} />
         </div>
-      </div>
 
-      <div className="settings-tile w-full rounded-xl border border-white/10 bg-zinc-950/55 p-4 text-left">
-        <p className="text-sm font-medium text-zinc-200">Current plan</p>
-        <p className="mt-1 text-sm text-zinc-400 font-secondary capitalize">{statusLine}</p>
-        {renewalLine ? (
-          <p className="mt-1 text-xs text-zinc-500 font-secondary">{renewalLine}</p>
+        {!isPro && usage ? (
+          <div className="mt-5">
+            <div className="mb-1.5 flex items-center justify-between text-xs text-zinc-500 font-secondary">
+              <span>Commands today</span>
+              <span className="tabular-nums text-zinc-400">
+                {usage.used} / {usage.limit}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
+              <div
+                className={cn('h-full rounded-full transition-all', meterFillClass(meterRatio))}
+                style={{ width: `${meterRatio * 100}%` }}
+              />
+            </div>
+          </div>
         ) : null}
       </div>
 
-      {!isPro && usage ? (
-        <div className="w-full text-left">
-          <div className="mb-1.5 flex items-center justify-between text-xs text-zinc-500 font-secondary">
-            <span>Commands today</span>
-            <span>
-              {usage.used} / {usage.limit}
-            </span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-full rounded-full bg-emerald-500 transition-all"
-              style={{
-                width: `${Math.min(100, (usage.used / Math.max(usage.limit, 1)) * 100)}%`,
-              }}
-            />
-          </div>
-        </div>
-      ) : null}
-
+      {/* Block 2 — Pro card */}
       {isPro ? (
-        <button
-          type="button"
-          className={cn(settingsButtonClass, 'w-full max-w-xs')}
-          disabled={actionPending || isFetching}
-          onClick={() => void openPortal()}
-        >
-          {actionPending ? 'Opening…' : 'Manage billing'}
-        </button>
+        <div className="settings-tile flex w-full flex-col items-center gap-3 rounded-xl border border-white/10 bg-zinc-950/55 p-6 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
+            <Check className="h-6 w-6 text-emerald-300" aria-hidden />
+          </span>
+          <div>
+            <p className="font-display text-lg text-zinc-100">You&rsquo;re on Pro</p>
+            <p className="mt-1 text-sm text-zinc-500 font-secondary">Everything unlocked.</p>
+          </div>
+          <button
+            type="button"
+            className={cn(settingsButtonClass, 'mt-1 w-full max-w-xs')}
+            disabled={busy}
+            onClick={() => void openPortal()}
+          >
+            {actionPending ? 'Opening…' : 'Manage billing'}
+          </button>
+        </div>
       ) : (
-        <button
-          type="button"
-          className={cn(settingsPrimaryButtonClass, 'w-full max-w-xs')}
-          disabled={actionPending || isFetching}
-          onClick={() => void startCheckout()}
-        >
-          {actionPending ? 'Redirecting…' : 'Upgrade to Pro — $15/mo'}
-        </button>
-      )}
+        <div className="relative w-full overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/[0.04] p-5 shadow-[0_0_40px_-12px_rgba(16,185,129,0.4)]">
+          <div className="flex items-baseline justify-between">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-5 w-5 text-emerald-300" aria-hidden />
+              <span className="font-display text-xl text-zinc-100">Pro</span>
+            </div>
+            <div className="flex items-baseline gap-0.5">
+              <span className="font-display text-2xl text-zinc-100">$15</span>
+              <span className="text-sm text-zinc-500 font-secondary">/mo</span>
+            </div>
+          </div>
 
-      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3">
-        <TierCompareCell
-          label="Commands / day"
-          freeValue={formatLimit(freeLimits.daily_command_limit)}
-          proValue={proCommands}
-        />
-        <TierCompareCell
-          label="Devices"
-          freeValue={formatLimit(freeLimits.max_devices)}
-          proValue={proDevices}
-        />
-        <TierCompareCell
-          label="Persons"
-          freeValue={formatLimit(freeLimits.max_persons)}
-          proValue={proPersons}
-        />
-      </div>
-    </SettingsBento>
+          <div className="mt-4 flex flex-col gap-2.5">
+            <BenefitRow label="Unlimited commands" free={String(sub.limits.daily_command_limit ?? 5)} />
+            <BenefitRow label="Unlimited devices" free={String(sub.limits.max_devices ?? 1)} />
+            <BenefitRow label="Unlimited people" free={String(sub.limits.max_persons ?? 5)} />
+          </div>
+
+          <button
+            type="button"
+            className={cn(settingsPrimaryButtonClass, 'mt-5 w-full')}
+            disabled={busy}
+            onClick={() => void startCheckout()}
+          >
+            {actionPending ? 'Redirecting…' : 'Upgrade to Pro — $15/mo'}
+          </button>
+        </div>
+      )}
+    </div>
   );
 }

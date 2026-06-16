@@ -9,7 +9,7 @@ import { resolvePostOAuthPath, OAUTH_LINKED_QUERY } from '@dadei/ui/lib/platform
  * The API redirects here with tokens (login) or `linked` (settings connect) in the query string.
  * Desktop Electron uses the `dadei://oauth/callback` custom protocol instead and does not mount this route.
  */
-export default function OAuthCallback() {
+export function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { saveTokens } = useAuth();
@@ -64,3 +64,5 @@ export default function OAuthCallback() {
 
   return <Loading visible subtitleOverride={message} />;
 }
+
+export default OAuthCallback;
