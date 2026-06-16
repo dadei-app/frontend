@@ -65,7 +65,7 @@ export function IntegrationCard({
   return (
     <article
       className={cn(
-        'relative flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-white/8 bg-zinc-900/55 p-2 sm:p-2.5 lg:p-3',
+        'relative flex h-full min-h-0 flex-col rounded-lg border border-white/8 bg-zinc-900/55 p-2 sm:p-2.5 lg:p-3',
         className,
       )}
     >

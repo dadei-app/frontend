@@ -112,6 +112,7 @@ export default function AssistantSettingsModal({
 
   const views = useMemo(() => visibleViews(isElectron), [isElectron]);
   const isCenteredPanel = view === 'about' || view === 'subscription';
+  const isSubscriptionView = view === 'subscription';
 
   useEffect(() => {
     if (!open) return;
@@ -318,17 +319,31 @@ export default function AssistantSettingsModal({
 
                       <main
                         className={cn(
-                          'settings-shell-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-none p-4 sm:p-5 lg:overflow-hidden',
+                          'settings-shell-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-none',
+                          isSubscriptionView ? 'p-0' : 'p-4 sm:p-5',
+                          !isCenteredPanel && 'lg:overflow-hidden',
                           isCenteredPanel && 'items-center justify-center',
+                          isSubscriptionView && 'lg:overflow-y-auto',
                           tutorialSettingsStep &&
                             tutorialSectionId &&
                             'ring-1 ring-inset ring-emerald-500/15',
                         )}
                       >
-                        <div className="settings-shell-panel-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+                        <div
+                          className={cn(
+                            'settings-shell-panel-host flex min-h-0 w-full min-w-0 flex-1 flex-col',
+                            isSubscriptionView ? 'overflow-visible' : 'overflow-hidden',
+                          )}
+                        >
                           <ActivePanel
                             pendingAction={pendingAction}
-                            onActionConsumed={() => setPendingAction(undefined)}
+                            onActionConsumed={() => {
+                              const action = pendingAction;
+                              setPendingAction(undefined);
+                              if (action === 'billing-success' || action === 'billing-cancel') {
+                                onBillingReturnConsumed?.();
+                              }
+                            }}
                           />
                         </div>
                       </main>

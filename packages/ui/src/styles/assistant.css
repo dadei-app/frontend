@@ -99,6 +99,11 @@
     letter-spacing: 0.14em !important;
   }
 
+  .pro-badge {
+    font-size: 0.625rem !important;
+    padding: 0.2rem 0.45rem !important;
+  }
+
   .assistant-toast-host {
     bottom: calc(
       var(--assistant-mobile-sheet-peek, 4.75rem) + var(--assistant-mobile-sheet-lift, 0.5rem) + 1.25rem +
@@ -145,5 +150,51 @@
         ) / 2 + 6.25rem
     );
     bottom: auto;
+  }
+}
+
+/* Pro plan wordmark badge — translucent gold with a seamless drifting shimmer. */
+.pro-badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  border-radius: 9999px;
+  border: 1px solid rgb(250 204 21 / 0.28);
+  background-image: linear-gradient(
+    90deg,
+    rgb(250 204 21 / 0.14) 0%,
+    rgb(253 224 71 / 0.2) 50%,
+    rgb(250 204 21 / 0.14) 100%
+  );
+  background-repeat: repeat-x;
+  background-size: 2.75rem 100%;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgb(253 230 138 / 0.92);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.12),
+    0 0 18px rgb(250 204 21 / 0.08);
+  backdrop-filter: blur(8px);
+  animation: pro-badge-shimmer 2.75s linear infinite;
+}
+
+@keyframes pro-badge-shimmer {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    /* Exactly one tile width — matches background-size for a gapless loop. */
+    background-position: 2.75rem 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pro-badge {
+    animation: none;
+    background-size: 100% 100%;
   }
 }
