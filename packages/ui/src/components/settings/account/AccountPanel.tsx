@@ -6,7 +6,7 @@ import { authApi } from '@dadei/ui/lib/workspace/api/auth';
 import { triggerProviderOAuth } from '@dadei/ui/lib/platform/auth/providerAuth';
 import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { settingsReturnPath } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
@@ -17,6 +17,7 @@ import {
   settingsInputClass,
   settingsPrimaryButtonClass,
   settingsReadonlyFieldClass,
+  type SettingsPanelProps,
 } from '@dadei/ui/components/settings/layout';
 import { SegmentedControl } from '@dadei/ui/components/settings/controls';
 import { useAuthMeQuery } from '@dadei/ui/lib/platform/query/queryHooks';
@@ -39,7 +40,7 @@ function AccountField({ mobile, children }: { mobile: boolean; children: ReactNo
   return <CenteredField>{children}</CenteredField>;
 }
 
-export function AccountPanel() {
+export function AccountPanel({ pendingAction, onActionConsumed }: SettingsPanelProps) {
   const isMobile = useMobileAssistant();
   const queryClient = useQueryClient();
   const { user: me, updateNetwork, logout, saveTokens, refreshUser } = useAuth();
@@ -79,6 +80,14 @@ export function AccountPanel() {
     await logout();
   };
 
+  useEffect(() => {
+    if (pendingAction !== 'oauth-linked-google') return;
+    void refreshUser();
+    void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
+    showToast('Google account linked', 'success');
+    onActionConsumed?.();
+  }, [onActionConsumed, pendingAction, queryClient, refreshUser, showToast]);
+
   const handleLinkGoogle = async () => {
     setLinkingGoogle(true);
     try {
@@ -87,10 +96,9 @@ export function AccountPanel() {
         onSuccess: () => {
           void refreshUser();
           void queryClient.invalidateQueries({ queryKey: queryKeys.integrationsStatus });
-          showToast('Google account linked', 'success');
         },
         onError: msg => showToast(msg, 'error'),
-        webNextPath: ASSISTANT_PATH,
+        webNextPath: settingsReturnPath('account'),
         mode: 'link',
       });
     } finally {

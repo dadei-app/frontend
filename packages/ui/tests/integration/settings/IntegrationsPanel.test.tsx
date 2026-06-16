@@ -24,6 +24,10 @@ vi.mock('@dadei/ui/contexts/TutorialContext', () => ({
   useTutorialSettingsTourActive: () => false,
 }));
 
+vi.mock('@dadei/ui/contexts/NotificationContext', () => ({
+  useNotifications: () => ({ showToast: vi.fn() }),
+}));
+
 vi.mock('@dadei/ui/lib/platform/query/queryHooks', () => ({
   useIntegrationsStatusQuery: () => ({
     isSuccess: true,

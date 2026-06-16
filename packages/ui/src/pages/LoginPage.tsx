@@ -57,7 +57,7 @@ export default function LoginPage() {
     return ASSISTANT_PATH;
   }, [searchParams]);
 
-  const [showProviders, setShowProviders] = useState(false);
+  const [showProviders, setShowProviders] = useState(true);
   const [pendingProvider, setPendingProvider] = useState<OAuthProvider | null>(null);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
@@ -180,12 +180,12 @@ export default function LoginPage() {
               aria-hidden
             />
 
-            <div className="relative mb-6 text-center sm:mb-8">
+            <div className="relative mb-5 text-center">
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 font-primary">Welcome to dadei</h1>
-              <p className="mt-2 text-sm text-zinc-500 font-secondary">
+              <p className="mt-1.5 text-sm text-zinc-500 font-secondary">
                 Sign in to your intelligent voice workspace
               </p>
-              <p className="mx-auto mt-3 max-w-[340px] font-secondary text-xs leading-relaxed text-zinc-500/85">
+              <p className="mx-auto mt-2 max-w-[340px] font-secondary text-[11px] leading-snug text-zinc-500/80 sm:text-xs sm:leading-relaxed">
                 One dadei account, all your services. Sign in with any provider — matching emails link
                 automatically. In Settings you can connect other accounts too, even when the email differs.
               </p>
@@ -211,7 +211,7 @@ export default function LoginPage() {
                         animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                         transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
                         onSubmit={handleSubmit}
-                        className="space-y-4"
+                        className="space-y-3.5"
                       >
                         <div>
                           <label
@@ -286,7 +286,7 @@ export default function LoginPage() {
                         <button
                           type="submit"
                           disabled={loading}
-                          className="mt-2 w-full rounded-xl border border-emerald-500/40 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition-[background-color,filter] hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="w-full rounded-xl border border-emerald-500/40 bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.15)] transition-[background-color,filter] hover:bg-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {loading ? (
                             <span className="flex items-center justify-center gap-2">
@@ -301,7 +301,7 @@ export default function LoginPage() {
                         </button>
                       </motion.form>
 
-                      <p className="mt-5 text-center text-sm text-zinc-500 font-secondary">
+                      <p className="mt-4 text-center text-sm text-zinc-500 font-secondary">
                         {isLoginMode ? "Don't have an account?" : 'Already have an account?'}{' '}
                         <button
                           type="button"
@@ -319,7 +319,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowProviders(true)}
-                        className="mt-5 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-emerald-400/90"
+                        className="mt-4 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-emerald-400/90"
                       >
                         Continue with a provider
                       </button>
@@ -338,16 +338,18 @@ export default function LoginPage() {
                                   type="button"
                                   disabled
                                   aria-label={`${p.label}, coming soon`}
-                                  className="relative flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-xl border border-zinc-500/20 bg-zinc-900/40 px-4 py-3 font-primary text-sm font-medium text-zinc-400 shadow-sm backdrop-blur-md"
+                                  className="relative flex w-full cursor-not-allowed items-center justify-center gap-3 rounded-xl border border-zinc-500/20 bg-zinc-900/40 px-4 py-3 font-primary text-sm font-medium text-zinc-400 shadow-sm"
                                 >
-                                  {p.node}
-                                  <span>{p.label}</span>
+                                  <span className="flex items-center gap-3 blur-[2px] opacity-65" aria-hidden>
+                                    {p.node}
+                                    <span>{p.label}</span>
+                                  </span>
                                 </button>
                                 <div
-                                  className="pointer-events-none absolute inset-x-0 top-0 flex justify-center"
+                                  className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center"
                                   aria-hidden
                                 >
-                                  <div className="flex items-center gap-1.5 rounded-b-xl border border-t-0 border-zinc-400/25 bg-gradient-to-r from-zinc-700/90 via-zinc-500/80 to-zinc-700/90 px-3.5 py-1 shadow-[0_6px_18px_rgba(0,0,0,0.35)]">
+                                  <div className="flex items-center gap-1.5 rounded-b-xl border border-t-0 border-zinc-400/20 bg-zinc-800/70 px-3.5 py-1 shadow-[0_6px_18px_rgba(0,0,0,0.35)] backdrop-blur-md">
                                     <Sparkles className="h-3 w-3 text-zinc-100" />
                                     <span className="font-secondary text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-50">
                                       Coming soon
@@ -376,7 +378,7 @@ export default function LoginPage() {
                       <button
                         type="button"
                         onClick={() => setShowProviders(false)}
-                        className="mt-5 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-emerald-400/90"
+                        className="mt-4 w-full text-center font-secondary text-xs text-zinc-500 transition-colors hover:text-emerald-400/90"
                       >
                         Use email and password instead
                       </button>

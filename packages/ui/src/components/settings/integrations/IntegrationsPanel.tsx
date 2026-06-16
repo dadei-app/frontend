@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock3, CloudSun, Globe, Map as MapIcon, Unplug } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import {
   triggerProviderOAuth,
@@ -10,10 +11,10 @@ import {
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 import { useAuthMeQuery, useIntegrationsStatusQuery } from '@dadei/ui/lib/platform/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { settingsReturnPath } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 import { authApi } from '@dadei/ui/lib/workspace/api/auth';
 import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
-import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
+import { GridTile, SettingsGrid4, type SettingsPanelProps } from '@dadei/ui/components/settings/layout';
 import { GlassAlertModal } from '@dadei/ui/components/ui/GlassModal';
 import type { ProviderHealth } from '@dadei/ui/types/integrations.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
@@ -85,9 +86,10 @@ const PROVIDER_LABEL: Record<string, string> = {
   apple: 'Apple',
 };
 
-export function IntegrationsPanel() {
+export function IntegrationsPanel({ pendingAction, onActionConsumed }: SettingsPanelProps) {
   const queryClient = useQueryClient();
   const { user: me, refreshUser, saveTokens } = useAuth();
+  const { showToast } = useNotifications();
   const settingsTourActive = useTutorialSettingsTourActive();
   const integrationsStatusQuery = useIntegrationsStatusQuery();
   const authMeQuery = useAuthMeQuery(!settingsTourActive);
@@ -124,6 +126,14 @@ export function IntegrationsPanel() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
   };
 
+  useEffect(() => {
+    if (!pendingAction?.startsWith('oauth-linked-')) return;
+    const provider = pendingAction.slice('oauth-linked-'.length);
+    showToast(`${PROVIDER_LABEL[provider] ?? provider} connected`, 'success');
+    invalidateAfterAuth();
+    onActionConsumed?.();
+  }, [onActionConsumed, pendingAction, queryClient, refreshUser, showToast]);
+
   const handleProviderConnect = async (provider: string) => {
     const oauthProvider = normalizeOAuthProvider(provider);
     setConnectError('');
@@ -133,7 +143,7 @@ export function IntegrationsPanel() {
         saveTokens,
         onSuccess: invalidateAfterAuth,
         onError: msg => setConnectError(msg),
-        webNextPath: ASSISTANT_PATH,
+        webNextPath: settingsReturnPath('integrations'),
         mode: 'link',
       });
     } finally {

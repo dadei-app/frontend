@@ -50,6 +50,29 @@ function settlePending(params: OAuthCallbackParams): void {
   }
 }
 
+function settingsSectionFromOAuthNext(next?: string): string {
+  if (!next) return 'integrations';
+  try {
+    const path = next.startsWith('/') ? next : `/${next}`;
+    const section = new URL(path, 'https://dadei.local').searchParams.get('settings');
+    const valid = new Set([
+      'integrations',
+      'memories',
+      'account',
+      'audio',
+      'startup',
+      'subscription',
+      'about',
+    ]);
+    if (section && valid.has(section)) {
+      return section;
+    }
+  } catch {
+    /* ignore */
+  }
+  return 'integrations';
+}
+
 export function deliverOAuthCallback(rawUrl: string): boolean {
   const params = parseOAuthCallbackUrl(rawUrl);
   if (!params) {
@@ -61,6 +84,12 @@ export function deliverOAuthCallback(rawUrl: string): boolean {
     win.show();
     win.focus();
     win.webContents.send('oauth:callback', params);
+    if (params.linked) {
+      win.webContents.send('app:open-settings-section', {
+        section: settingsSectionFromOAuthNext(params.next),
+        action: `oauth-linked-${params.linked}`,
+      });
+    }
   }
   return true;
 }
