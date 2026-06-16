@@ -169,28 +169,6 @@ const WORKSPACE_TOOLS: IntegrationTool[] = [
     ],
   },
   {
-    id: 'files',
-    name: 'OneDrive',
-    short: 'files & folders',
-    providers: ['microsoft'],
-    scopes: [
-      { label: 'read', detail: 'list & open files across your OneDrive' },
-      { label: 'search', detail: 'find files by name or type' },
-      { label: 'create', detail: 'upload or create new files' },
-      { label: 'update', detail: 'rename, move, or delete files' },
-    ],
-  },
-  {
-    id: 'drive',
-    name: 'Drive',
-    short: 'app files only',
-    providers: ['google'],
-    scopes: [
-      { label: 'create', detail: 'upload or create files opened by dadei' },
-      { label: 'update', detail: 'modify files dadei created' },
-    ],
-  },
-  {
     id: 'sheets',
     name: 'Sheets',
     short: 'spreadsheets',

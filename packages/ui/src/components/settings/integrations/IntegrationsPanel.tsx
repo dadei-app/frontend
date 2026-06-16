@@ -26,26 +26,22 @@ import { ReconnectBanner } from './ReconnectBanner';
 const REALTIME_SOURCES = [
   {
     name: 'Weather',
-    description:
-      'Used when you ask about conditions, rain, temperature, or what to wear. Loads current conditions and short forecasts from Google Weather at coordinates—often paired with your location or a place from Maps.',
+    description: 'Current conditions and short forecasts from Google Weather.',
     Icon: CloudSun,
   },
   {
     name: 'Maps',
-    description:
-      'Used for place search, addresses, directions, travel time, and “near me” questions. Also resolves “where am I” and supplies coordinates when Weather needs a location.',
+    description: 'Place search, directions, travel time, and nearby lookups.',
     Icon: MapIcon,
   },
   {
     name: 'Web Search',
-    description:
-      'Used when the answer needs fresh public information—news, facts, or topics not in Gmail, Drive, or memory. Queries the web via Brave Search for result snippets and links (no Google account).',
+    description: 'Fresh public info from the web via Brave Search—no account needed.',
     Icon: Globe,
   },
   {
     name: 'Current Time',
-    description:
-      'Used for “what time is it”, scheduling in your timezone, and sanity-checking meeting times. Reads your account timezone and IANA zones via Google’s timezone API—always on, no Workspace sign-in.',
+    description: 'Your timezone and local time—always on, no sign-in.',
     Icon: Clock3,
   },
 ] as const;
