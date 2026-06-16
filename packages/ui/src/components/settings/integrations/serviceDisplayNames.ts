@@ -17,6 +17,7 @@ const MICROSOFT_SERVICE_NAMES: Record<string, string> = {
   contacts: 'Contacts',
   tasks: 'To Do',
   files: 'OneDrive',
+  docs: 'Word',
   sheets: 'Excel',
   onedrive: 'OneDrive',
   excel: 'Excel',
