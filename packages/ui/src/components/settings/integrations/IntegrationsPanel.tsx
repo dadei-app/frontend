@@ -211,7 +211,7 @@ export function IntegrationsPanel() {
           </p>
         ) : (
           <>
-            <div className="grid min-h-0 shrink-0 grid-cols-1 gap-3 xl:grid-cols-3">
+            <div className="grid min-h-0 shrink-0 grid-cols-1 gap-3 lg:grid-cols-3">
               {providers.map(health => (
                 <ProviderColumn
                   key={health.provider}

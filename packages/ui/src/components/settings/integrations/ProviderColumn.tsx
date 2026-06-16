@@ -182,7 +182,15 @@ export function ProviderColumn({
           <span className="font-primary text-sm font-semibold tracking-wide text-zinc-100">{label}</span>
           {actionButton}
         </div>
-        <div className="grid auto-rows-min grid-cols-2 gap-2">
+
+        {comingSoon ? (
+          <div className="grid min-h-[7rem] grid-cols-2 gap-2 lg:hidden" aria-hidden>
+            <div className="rounded-lg border border-white/8 bg-zinc-900/55" />
+            <div className="rounded-lg border border-white/8 bg-zinc-900/55" />
+          </div>
+        ) : null}
+
+        <div className={cn('grid auto-rows-min grid-cols-2 gap-2', comingSoon && 'hidden lg:grid')}>
           {health.services.map(svc => (
             <IntegrationCard
               key={svc.id}
@@ -195,14 +203,14 @@ export function ProviderColumn({
       </div>
 
       {comingSoon ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-zinc-950/50 backdrop-blur-[3px]">
-          <div className="mx-3 flex max-w-[15rem] flex-col items-center gap-2.5 rounded-2xl border border-white/12 bg-zinc-900/85 px-5 py-4 text-center shadow-[0_12px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-500/30 bg-zinc-800/80">
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-zinc-950/70 p-3 backdrop-blur-[5px] lg:bg-zinc-950/50 lg:p-0 lg:backdrop-blur-[3px]">
+          <div className="flex w-full flex-row items-center gap-3 rounded-xl border border-white/12 bg-zinc-900/90 px-3.5 py-3 text-left shadow-[0_12px_40px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-md lg:mx-3 lg:max-w-[15rem] lg:flex-col lg:items-center lg:gap-2.5 lg:rounded-2xl lg:px-5 lg:py-4 lg:text-center">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-zinc-500/30 bg-zinc-800/80">
               <Sparkles className="h-4 w-4 text-zinc-200" aria-hidden />
             </span>
-            <div>
+            <div className="min-w-0 flex-1 lg:flex-none">
               <p className="font-primary text-sm font-semibold tracking-wide text-zinc-50">Coming soon</p>
-              <p className="mt-1 font-secondary text-[11px] leading-relaxed text-zinc-400">
+              <p className="mt-0.5 font-secondary text-[11px] leading-relaxed text-zinc-400 lg:mt-1">
                 iCloud Mail, Calendar &amp; Contacts — we&apos;re finishing Apple support.
               </p>
             </div>
