@@ -98,6 +98,7 @@ export interface ElectronAPI {
   onNewInteraction: (callback: (payload: unknown) => void) => () => void;
   onWebhookAction: (callback: (payload: { event?: string; data?: unknown }) => void) => () => void;
   onServiceStatusChanged: (callback: (status: { enabled: boolean }) => void) => () => void;
+  onBillingReturn: (callback: (payload: { status: string }) => void) => () => void;
   storeClientName: (clientName: string) => Promise<{ success: boolean; error?: string }>;
   getClientName: () => Promise<{ success: boolean; clientName?: string; error?: string }>;
   setVolume: (level: number) => Promise<{ ok: boolean }>;

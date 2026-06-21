@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 
@@ -30,11 +30,9 @@ function pillCornerClass(index: number, total: number): string {
 function readPillRect(
   value: string,
   buttonRefs: React.MutableRefObject<Map<string, HTMLButtonElement>>,
-  trackRef: React.RefObject<HTMLDivElement | null>,
 ): PillRect | null {
   const button = buttonRefs.current.get(value);
-  const track = trackRef.current;
-  if (!button || !track) return null;
+  if (!button) return null;
   return { left: button.offsetLeft, width: button.offsetWidth };
 }
 
@@ -55,42 +53,67 @@ function SlidingPillTrack({
   const trackRef = useRef<HTMLDivElement>(null);
   const buttonRefs = useRef(new Map<string, HTMLButtonElement>());
   const lastPillRectRef = useRef<PillRect | null>(null);
-  const lastSelectedIndexRef = useRef(0);
-  const [pillRect, setPillRect] = useState<PillRect | null>(null);
+  const lastCornerIndexRef = useRef(0);
+  const prevValueRef = useRef<string | null>(value);
+  const isFirstLayoutRef = useRef(true);
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
+  const [cornerIndex, setCornerIndex] = useState(0);
 
-  const syncPillRect = useCallback(() => {
+  const selectedIndex =
+    value !== null ? connectedProviders.indexOf(value) : lastCornerIndexRef.current;
+
+  const syncCornerIndex = useCallback(
+    (index: number) => {
+      if (index < 0) return;
+      setCornerIndex(index);
+      lastCornerIndexRef.current = index;
+    },
+    [],
+  );
+
+  const measure = useCallback(() => {
     if (!value) return;
-    const next = readPillRect(value, buttonRefs, trackRef);
-    if (!next) return;
-    lastPillRectRef.current = next;
-    lastSelectedIndexRef.current = Math.max(0, connectedProviders.indexOf(value));
-    setPillRect(prev =>
-      prev && prev.left === next.left && prev.width === next.width ? prev : next,
-    );
-  }, [connectedProviders, value]);
+    const next = readPillRect(value, buttonRefs);
+    if (next) lastPillRectRef.current = next;
+    setLayoutEpoch(epoch => epoch + 1);
+  }, [value]);
 
   useLayoutEffect(() => {
-    syncPillRect();
-  }, [syncPillRect]);
+    const selectionChanged = prevValueRef.current !== value;
+    prevValueRef.current = value;
+    measure();
+
+    const index = value !== null ? connectedProviders.indexOf(value) : -1;
+    if (isFirstLayoutRef.current || !selectionChanged || reduceMotion) {
+      syncCornerIndex(index);
+      isFirstLayoutRef.current = false;
+    }
+  }, [connectedProviders, measure, reduceMotion, syncCornerIndex, value]);
 
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => syncPillRect());
+    const observer = new ResizeObserver(() => measure());
     observer.observe(track);
     return () => observer.disconnect();
-  }, [syncPillRect]);
+  }, [measure]);
 
-  const pillTarget = (value ? pillRect : null) ?? lastPillRectRef.current;
+  const pillTarget = useMemo(() => {
+    if (!value) return lastPillRectRef.current;
+    return readPillRect(value, buttonRefs) ?? lastPillRectRef.current;
+  }, [layoutEpoch, value]);
   const pillVisible = value !== null && pillTarget !== null;
-  const selectedIndex =
-    value !== null ? connectedProviders.indexOf(value) : lastSelectedIndexRef.current;
+
+  const handlePillAnimationComplete = () => {
+    if (selectedIndex < 0) return;
+    syncCornerIndex(selectedIndex);
+  };
 
   const motionTransition = reduceMotion
     ? { duration: 0 }
     : {
         x: PILL_SPRING,
-        width: PILL_SPRING,
+        width: { duration: 0 },
         opacity: { duration: 0.18, ease: 'easeOut' as const },
       };
 
@@ -109,7 +132,10 @@ function SlidingPillTrack({
           aria-hidden
           className={cn(
             'pointer-events-none absolute top-1 bottom-1 left-0 z-0 border border-emerald-400/35 bg-emerald-500/10 shadow-[0_0_28px_-12px_rgba(16,185,129,0.55)] will-change-[transform,width,opacity]',
-            pillCornerClass(selectedIndex >= 0 ? selectedIndex : 0, connectedProviders.length),
+            pillCornerClass(
+              cornerIndex >= 0 ? cornerIndex : lastCornerIndexRef.current,
+              connectedProviders.length,
+            ),
           )}
           initial={false}
           animate={{
@@ -118,6 +144,7 @@ function SlidingPillTrack({
             opacity: pillVisible ? 1 : 0,
           }}
           transition={motionTransition}
+          onAnimationComplete={handlePillAnimationComplete}
         />
       ) : null}
 

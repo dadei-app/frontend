@@ -49,6 +49,10 @@ vi.mock('@dadei/ui/lib/assistant/lifecycle/useMicIntent', () => ({
   }),
 }));
 
+vi.mock('@dadei/ui/lib/assistant/lifecycle/useDeviceCapBlocked', () => ({
+  useDeviceCapBlocked: () => false,
+}));
+
 vi.mock('@dadei/ui/contexts/TutorialContext', () => ({
   useTutorialEngaged: () => false,
 }));

@@ -59,6 +59,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     };
   },
 
+  onBillingReturn: (callback: (payload: { status: string }) => void) => {
+    const listener = (_event: unknown, payload: { status: string }) => callback(payload);
+    ipcRenderer.on('billing:return', listener);
+    return () => {
+      ipcRenderer.removeListener('billing:return', listener);
+    };
+  },
+
   // OAuth — unified web flow via dadei://oauth/callback
   startOAuthFlow: (loginUrl: string) =>
     ipcRenderer.invoke('auth:start-oauth-flow', loginUrl) as Promise<{

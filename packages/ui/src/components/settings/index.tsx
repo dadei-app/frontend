@@ -31,7 +31,12 @@ import { veilEase } from '@dadei/ui/lib/platform/shared/motion';
 type AssistantSettingsModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  requestedView?: SidebarView;
+  requestedAction?: string;
+  onBillingReturnConsumed?: () => void;
 };
+
+export type { SidebarView };
 
 type SidebarView =
   | 'integrations'
@@ -84,7 +89,13 @@ const dialogContentClass =
 const dialogContentClassWeb =
   'pointer-events-none fixed inset-0 z-[250] flex items-center justify-center border-0 bg-transparent p-3 shadow-none outline-none focus:outline-none';
 
-export default function AssistantSettingsModal({ open, onOpenChange }: AssistantSettingsModalProps) {
+export default function AssistantSettingsModal({
+  open,
+  onOpenChange,
+  requestedView,
+  requestedAction,
+  onBillingReturnConsumed,
+}: AssistantSettingsModalProps) {
   const [view, setView] = useState<SidebarView>('integrations');
   const [pendingAction, setPendingAction] = useState<string | undefined>(undefined);
   const prefersReducedMotion = useReducedMotion();
@@ -101,6 +112,20 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const views = useMemo(() => visibleViews(isElectron), [isElectron]);
   const isCenteredPanel = view === 'about' || view === 'subscription';
+  const isSubscriptionView = view === 'subscription';
+
+  useEffect(() => {
+    if (!open) return;
+    if (requestedView && ALL_VIEWS.some(v => v.id === requestedView)) {
+      const target = requestedView;
+      if (target === 'startup' && !isElectron) return;
+      if (target === 'about' && !isElectron) return;
+      setView(target);
+    }
+    if (requestedAction) {
+      setPendingAction(requestedAction);
+    }
+  }, [open, requestedView, requestedAction, isElectron]);
 
   useEffect(() => {
     if (!window.electronAPI?.onOpenSettingsSection) return;
@@ -147,6 +172,9 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && tutorialSettingsStep) return;
+    if (!nextOpen) {
+      onBillingReturnConsumed?.();
+    }
     onOpenChange(nextOpen);
   };
 
@@ -291,17 +319,31 @@ export default function AssistantSettingsModal({ open, onOpenChange }: Assistant
 
                       <main
                         className={cn(
-                          'settings-shell-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-none p-4 sm:p-5 lg:overflow-hidden',
+                          'settings-shell-main flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-none',
+                          isSubscriptionView ? 'p-0' : 'p-4 sm:p-5',
+                          !isCenteredPanel && 'lg:overflow-hidden',
                           isCenteredPanel && 'items-center justify-center',
+                          isSubscriptionView && 'lg:overflow-y-auto',
                           tutorialSettingsStep &&
                             tutorialSectionId &&
                             'ring-1 ring-inset ring-emerald-500/15',
                         )}
                       >
-                        <div className="settings-shell-panel-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+                        <div
+                          className={cn(
+                            'settings-shell-panel-host flex min-h-0 w-full min-w-0 flex-1 flex-col',
+                            isSubscriptionView ? 'overflow-visible' : 'overflow-hidden',
+                          )}
+                        >
                           <ActivePanel
                             pendingAction={pendingAction}
-                            onActionConsumed={() => setPendingAction(undefined)}
+                            onActionConsumed={() => {
+                              const action = pendingAction;
+                              setPendingAction(undefined);
+                              if (action === 'billing-success' || action === 'billing-cancel') {
+                                onBillingReturnConsumed?.();
+                              }
+                            }}
                           />
                         </div>
                       </main>

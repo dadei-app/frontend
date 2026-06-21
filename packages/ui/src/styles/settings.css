@@ -304,6 +304,15 @@
 
 /* ── Integrations panel (xl reference) ─────────────────────────────── */
 
+[data-settings-layout='integrations'] .settings-tile {
+  /* Tile shells default to overflow:hidden, which clips provider columns on the right at compact widths. */
+  overflow: visible;
+}
+
+[data-settings-layout='integrations'] .settings-tile-body {
+  overflow: visible;
+}
+
 [data-settings-layout='integrations'] {
   grid-template-rows: minmax(0, 2.75fr) minmax(0, 1.25fr);
 }
@@ -322,6 +331,7 @@
 
 @media (min-width: 1024px) {
   [data-settings-layout='integrations'] [data-tile='providers'] .settings-tile-body {
+    overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
   }

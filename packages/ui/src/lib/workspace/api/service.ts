@@ -4,6 +4,7 @@ import type {
   IntegrationsStatusResponse,
   PrimaryProvidersPatch,
 } from '@dadei/ui/types/integrations.types';
+import type { CommandMode } from '@dadei/ui/types/command.types';
 import type { ServiceModeClaim } from '@dadei/ui/types/service.types';
 import { buildEndpoint, getClientIpAddresses, retryWithBackoff } from './utils';
 
@@ -82,12 +83,17 @@ export const serviceApi = {
    * Claim command service phase for a short conversational window.
    * PATCH /api/v1/service/network/command-mode/claim
    */
-  async claimCommandService(sessionToken: string, holdSeconds = 5): Promise<ServiceModeClaim> {
+  async claimCommandService(
+    sessionToken: string,
+    holdSeconds = 5,
+    mode: CommandMode = 'normal',
+  ): Promise<ServiceModeClaim> {
     const { data } = await api.patch<ServiceModeClaim>(
       ENDPOINTS.SERVICE_COMMAND_MODE_CLAIM,
       {
         session_token: sessionToken,
         hold_seconds: holdSeconds,
+        mode,
       },
       { timeout: API_CONFIG.TIMEOUTS.COMMAND_MODE },
     );

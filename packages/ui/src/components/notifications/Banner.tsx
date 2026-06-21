@@ -467,48 +467,25 @@ export default function Banner({
       ) : null}
 
       <div className="flex min-h-0 flex-1 flex-col px-4 pt-3 pb-2.5">
-        <div className="flex min-h-0 flex-1 items-start gap-3">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <p className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
-              {operation ? (
-                <>
-                  <span className={theme.operationTextClass}>
-                    {actionOperationLabel(operation)}
-                  </span>
-                  <span className="text-zinc-500/80"> · </span>
-                </>
-              ) : null}
-              <span className="text-zinc-400/90">{category || 'Notification'}</span>
-            </p>
-            <div
-              className={cn(
-                BANNER_BODY_SCROLL_CLASS,
-                !isExpanded && 'overflow-hidden',
-              )}
-            >
-              <BannerContent
-                actionType={actionType}
-                operation={operation}
-                title={title}
-                body={body}
-                toolArgs={toolArgs}
-                startTime={startTime}
-                endTime={endTime}
-                compact={!isExpanded}
-              />
-            </div>
-            {error ? (
-              <p className="mt-1 shrink-0 text-xs text-red-400/90 font-secondary">{error}</p>
+        <div className="mb-1 flex shrink-0 items-center justify-between gap-3">
+          <p className="min-w-0 text-[10px] font-semibold uppercase tracking-[0.18em] font-secondary">
+            {operation ? (
+              <>
+                <span className={theme.operationTextClass}>
+                  {actionOperationLabel(operation)}
+                </span>
+                <span className="text-zinc-500/80"> · </span>
+              </>
             ) : null}
-          </div>
-
+            <span className="text-zinc-400/90">{category || 'Notification'}</span>
+          </p>
           {showActions ? (
             onCancel ? (
               <button
                 type="button"
                 onClick={handleCancel}
                 disabled={cancelling}
-                className="shrink-0 rounded-md px-3 py-1.5 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
+                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-400 transition duration-200 hover:bg-white/4 hover:text-zinc-100 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
               >
                 {cancelling ? 'Cancelling…' : cancelLabel || 'Cancel'}
               </button>
@@ -524,6 +501,26 @@ export default function Banner({
             )
           ) : null}
         </div>
+        <div
+          className={cn(
+            BANNER_BODY_SCROLL_CLASS,
+            !isExpanded && 'overflow-hidden',
+          )}
+        >
+          <BannerContent
+            actionType={actionType}
+            operation={operation}
+            title={title}
+            body={body}
+            toolArgs={toolArgs}
+            startTime={startTime}
+            endTime={endTime}
+            compact={!isExpanded}
+          />
+        </div>
+        {error ? (
+          <p className="mt-1 shrink-0 text-xs text-red-400/90 font-secondary">{error}</p>
+        ) : null}
       </div>
     </motion.div>
   );

@@ -152,6 +152,10 @@ export function proposedActionHumanLine(payload: ProposedToolPayload): string | 
     if (operation === 'delete') {
       return title ? `Prepared to cancel ${title}.` : 'Prepared to cancel a calendar event.';
     }
+    if (operation === 'update') {
+      if (title) return `Updated ${title}.`;
+      return 'Updated a calendar event.';
+    }
     if (title) return `Scheduled ${title}.`;
     return 'Scheduled a calendar event.';
   }

@@ -206,7 +206,7 @@ function SpeakerMark({
 function StatusSpinnerRing() {
   return (
     <motion.span
-      className="box-border inline-block size-3.5 shrink-0 rounded-full border-2 border-zinc-600/70 border-t-sky-300/90"
+      className="box-border size-[0.9em] shrink-0 rounded-full border-2 border-zinc-600/70 border-t-sky-300/90"
       animate={{ rotate: 360 }}
       transition={{ duration: 0.9, repeat: Infinity, ease: 'linear' }}
       aria-hidden
@@ -230,15 +230,15 @@ function AnimatedStatusLine({ base }: { base: string }) {
 function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean }) {
   const statusBase = formatAssistantStatusLine(line);
   return (
-    <span
-      className="grid min-w-0 grid-cols-[1.125rem_minmax(0,1fr)] items-start gap-3.5 font-primary text-[15px] leading-[1.55] sm:text-[16px] sm:leading-[1.6]"
+    <p
+      className={cn(
+        'font-primary flex min-h-[1em] min-w-0 items-center gap-2.5 text-[15px] leading-none sm:text-[16px]',
+      )}
       aria-live="polite"
       aria-busy="true"
     >
-      <span className="flex min-h-[1.55rem] items-center justify-center pt-0.5">
-        <StatusSpinnerRing />
-      </span>
-      <span className="relative min-h-[1.55rem] min-w-0 py-0.5">
+      <StatusSpinnerRing />
+      <span className="relative min-w-0 text-zinc-400">
         <AnimatePresence mode="wait" initial={false}>
           <motion.span
             key={statusBase}
@@ -246,13 +246,13 @@ function AssistantLoadingStatus({ line }: { line: string; commandBlue?: boolean 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
             transition={{ duration: 0.28, ease: VOICE_EASE }}
-            className="block min-w-0 whitespace-normal wrap-anywhere text-zinc-400"
+            className="block min-w-0 whitespace-normal wrap-anywhere"
           >
             <AnimatedStatusLine base={statusBase} />
           </motion.span>
         </AnimatePresence>
       </span>
-    </span>
+    </p>
   );
 }
 
@@ -454,12 +454,7 @@ export default function CommandBubble({
           className="pointer-events-none absolute inset-x-4 top-0 h-px rounded-full bg-gradient-to-r from-transparent via-white/15 to-transparent"
         />
 
-        <div
-          className={cn(
-            'relative min-w-0',
-            showStatus ? 'px-6 py-5 sm:px-7 sm:py-5' : 'px-5 py-3.5 sm:px-6 sm:py-4',
-          )}
-        >
+        <div className="relative min-w-0 px-5 py-3.5 sm:px-6 sm:py-4">
           <SpeakerMark
             role={role}
             live={live}
@@ -469,7 +464,7 @@ export default function CommandBubble({
           />
 
           {showBody ? (
-            <div className={cn('min-w-0', showStatus ? 'mt-3.5' : 'mt-2.5')}>
+            <div className="mt-2.5 min-w-0">
               {showStatus && statusForDisplay ? (
                 <AssistantLoadingStatus line={statusForDisplay} commandBlue={commandBlueAccent} />
               ) : listeningEmpty ? (

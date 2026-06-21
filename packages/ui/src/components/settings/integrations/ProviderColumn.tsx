@@ -113,7 +113,7 @@ export function ProviderColumn({
   const actionButton = comingSoon ? (
     <span
       className={cn(
-        'flex max-w-[13rem] shrink-0 cursor-default items-center gap-2 rounded-lg border px-3 py-1.5 font-secondary text-xs font-medium',
+        'flex min-w-0 max-w-full cursor-default items-center gap-2 rounded-lg border px-3 py-1.5 font-secondary text-xs font-medium',
         'border-zinc-500/25 bg-zinc-800/50 text-zinc-400',
       )}
     >
@@ -138,7 +138,7 @@ export function ProviderColumn({
       }}
       title={emailMismatch ? health.account_identifier ?? undefined : undefined}
       className={cn(
-        'flex max-w-[13rem] shrink-0 items-center gap-2 rounded-lg border px-3 py-1.5 font-secondary text-xs font-medium',
+        'flex min-w-0 max-w-full items-center gap-2 rounded-lg border px-3 py-1.5 font-secondary text-xs font-medium',
         'transition-[color,background-color,border-color,box-shadow] duration-300 ease-in-out motion-reduce:transition-none',
         'disabled:cursor-default disabled:opacity-100',
         ctaTone,

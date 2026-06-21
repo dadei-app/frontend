@@ -8,6 +8,8 @@ export const ERROR_CODES = {
   invalid_session: 'Connect to the assistant service and try again.',
   command_mode_not_owner: 'Another device is using the assistant session right now.',
   command_mode_owned: 'The assistant session is already active on another device.',
+  command_limit_reached:
+    "You've used all of today's commands. Upgrade to Pro for unlimited commands.",
   service_disabled: 'Turn on the assistant service in settings, then try again.',
   network_not_found: 'Your workspace could not be found. Sign in again.',
   validation_error: 'That request was not valid. Check your input and try again.',

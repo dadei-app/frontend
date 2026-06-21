@@ -90,13 +90,10 @@ const WORKSPACE_TOOLS: IntegrationTool[] = [
   {
     id: 'gmail',
     name: 'Gmail',
-    short: 'inbox & send',
+    short: 'send only',
     providers: ['google'],
     scopes: [
-      { label: 'read', detail: 'list threads & open messages' },
-      { label: 'search', detail: 'query inbox by sender, subject, or date' },
       { label: 'send', detail: 'compose & deliver outbound mail' },
-      { label: 'modify', detail: 'labels, archive, mark read/unread' },
     ],
   },
   {
@@ -153,34 +150,22 @@ const WORKSPACE_TOOLS: IntegrationTool[] = [
     short: 'documents',
     providers: ['google'],
     scopes: [
-      { label: 'read', detail: 'open & read document content' },
-      { label: 'create', detail: 'start new documents' },
-      { label: 'append', detail: 'add text to the end of a doc' },
-      { label: 'update', detail: 'replace or edit existing content' },
+      { label: 'read', detail: 'open documents & extract text' },
+      { label: 'search', detail: 'find docs by name (app-created with drive.file)' },
+      { label: 'create', detail: 'start new Google Docs' },
+      { label: 'update', detail: 'append or replace document text' },
     ],
   },
   {
-    id: 'files',
-    name: 'OneDrive',
-    short: 'files & folders',
+    id: 'docs',
+    name: 'Word',
+    short: 'documents',
     providers: ['microsoft'],
     scopes: [
-      { label: 'read', detail: 'list & inspect files dadei created' },
-      { label: 'search', detail: 'find files by name or type' },
-      { label: 'create', detail: 'upload or create new files' },
-      { label: 'update', detail: 'rename or change file metadata' },
-    ],
-  },
-  {
-    id: 'drive',
-    name: 'Drive',
-    short: 'app files only',
-    providers: ['google'],
-    scopes: [
-      { label: 'read', detail: 'list & inspect files dadei created' },
-      { label: 'search', detail: 'find files by name or type' },
-      { label: 'create', detail: 'upload or create new files' },
-      { label: 'update', detail: 'rename or change file metadata' },
+      { label: 'read', detail: 'open Word documents & extract text' },
+      { label: 'search', detail: 'find documents across OneDrive' },
+      { label: 'create', detail: 'start new Word documents' },
+      { label: 'update', detail: 'append or replace document text' },
     ],
   },
   {
@@ -189,10 +174,10 @@ const WORKSPACE_TOOLS: IntegrationTool[] = [
     short: 'spreadsheets',
     providers: ['google', 'microsoft'],
     scopes: [
-      { label: 'read', detail: 'read ranges & cell values' },
+      { label: 'read', detail: 'read cell ranges by spreadsheet ID' },
+      { label: 'list', detail: 'browse spreadsheets (Google: app-created; Microsoft: full OneDrive)' },
       { label: 'create', detail: 'start new spreadsheets' },
-      { label: 'append', detail: 'add rows to existing sheets' },
-      { label: 'update', detail: 'write to specific cell ranges' },
+      { label: 'update', detail: 'append rows or write cell ranges' },
     ],
   },
 ];
@@ -393,6 +378,7 @@ export function workspaceToolDisplayName(tool: IntegrationTool, provider: Worksp
     const microsoftNames: Partial<Record<string, string>> = {
       mail: 'Outlook',
       files: 'OneDrive',
+      docs: 'Word',
       sheets: 'Excel',
       tasks: 'To Do',
     };

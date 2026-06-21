@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { resolvePostOAuthPath } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { resolvePostOAuthPath, OAUTH_LINKED_QUERY } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 
 /**
  * Web OAuth return handler — not a user-facing page.
  * The API redirects here with tokens (login) or `linked` (settings connect) in the query string.
  * Desktop Electron uses the `dadei://oauth/callback` custom protocol instead and does not mount this route.
  */
-export default function OAuthCallback() {
+export function OAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { saveTokens } = useAuth();
@@ -26,7 +26,10 @@ export default function OAuthCallback() {
     const linked = searchParams.get('linked');
     if (linked) {
       setMessage('Account connected…');
-      navigate(resolvePostOAuthPath(searchParams.get('next')), { replace: true });
+      const dest = resolvePostOAuthPath(searchParams.get('next'));
+      const returnUrl = new URL(dest, window.location.origin);
+      returnUrl.searchParams.set(OAUTH_LINKED_QUERY, linked);
+      navigate(`${returnUrl.pathname}${returnUrl.search}`, { replace: true });
       return;
     }
 
@@ -61,3 +64,5 @@ export default function OAuthCallback() {
 
   return <Loading visible subtitleOverride={message} />;
 }
+
+export default OAuthCallback;

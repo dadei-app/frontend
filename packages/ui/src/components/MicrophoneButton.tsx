@@ -4,6 +4,7 @@ import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import { AudioContext } from '@dadei/ui/contexts/AudioContext';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { useMicIntent } from '@dadei/ui/lib/assistant/lifecycle/useMicIntent';
+import { useDeviceCapBlocked } from '@dadei/ui/lib/assistant/lifecycle/useDeviceCapBlocked';
 import MicAmbientRipples from '@dadei/ui/components/command/mic/MicAmbientRipples';
 import MicGlassLayer from '@dadei/ui/components/command/mic/MicGlassLayer';
 import MicSpinner from '@dadei/ui/components/command/mic/MicSpinner';
@@ -18,9 +19,17 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
   const micLevel = audioContext?.micLevel ?? 0;
   const { matchesHotkey } = useSystem();
   const { submitMicIntent, inputsInert, appearance } = useMicIntent();
+  const deviceCapBlocked = useDeviceCapBlocked();
+
+  const micDisabled = inputsInert || deviceCapBlocked;
+
+  const handleMicIntent = () => {
+    if (deviceCapBlocked) return;
+    submitMicIntent();
+  };
 
   useEffect(() => {
-    if (disableSpaceToggle) return;
+    if (disableSpaceToggle || deviceCapBlocked) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.repeat || !matchesHotkey(e) || inputsInert) return;
@@ -30,38 +39,44 @@ export default function MicrophoneButton({ disableSpaceToggle = false }: Microph
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [disableSpaceToggle, inputsInert, matchesHotkey, submitMicIntent]);
+  }, [disableSpaceToggle, deviceCapBlocked, inputsInert, matchesHotkey, submitMicIntent]);
 
-  const showEnabled = appearance.tone === 'red';
-  const showCommandMode = appearance.tone === 'blue';
-  const showDisabled = appearance.tone === 'green';
+  const showEnabled = !deviceCapBlocked && appearance.tone === 'red';
+  const showCommandMode = !deviceCapBlocked && appearance.tone === 'blue';
+  const showDisabled = !deviceCapBlocked && appearance.tone === 'green';
+  const showDeviceCapGray = deviceCapBlocked;
 
   return (
     <div className="flex flex-col items-center gap-10">
       <motion.button
         data-tutorial-target="mic-button"
-        onClick={submitMicIntent}
-        disabled={inputsInert}
-        aria-disabled={inputsInert}
+        onClick={handleMicIntent}
+        disabled={micDisabled}
+        aria-disabled={micDisabled}
+        title={
+          deviceCapBlocked
+            ? 'Free plan supports 1 device. Upgrade to Pro for more.'
+            : undefined
+        }
         whileHover={
-          !inputsInert && showDisabled
+          !micDisabled && showDisabled
             ? { scale: 1.05, transition: { duration: 0.15 } }
             : {}
         }
-        whileTap={!inputsInert ? { scale: 0.95, transition: { duration: 0.1 } } : {}}
+        whileTap={!micDisabled ? { scale: 0.95, transition: { duration: 0.1 } } : {}}
         className={cn(
           'relative flex h-40 w-40 items-center justify-center overflow-visible rounded-full',
           'focus:outline-none focus:ring-4',
-          inputsInert && 'cursor-not-allowed focus:ring-zinc-500/20',
-          !inputsInert &&
+          micDisabled && 'cursor-not-allowed opacity-60 focus:ring-zinc-500/20',
+          !micDisabled &&
             (showCommandMode || showEnabled || showDisabled) &&
             'cursor-pointer',
-          !inputsInert && showCommandMode && 'focus:ring-sky-500/25',
-          !inputsInert && showEnabled && 'focus:ring-rose-500/25',
-          !inputsInert && showDisabled && 'focus:ring-emerald-500/25',
+          !micDisabled && showCommandMode && 'focus:ring-sky-500/25',
+          !micDisabled && showEnabled && 'focus:ring-rose-500/25',
+          !micDisabled && showDisabled && 'focus:ring-emerald-500/25',
         )}
       >
-        {appearance.grayChrome === 'locked' ? (
+        {showDeviceCapGray || appearance.grayChrome === 'locked' ? (
           <div aria-hidden className={MIC_GRAY_LOCKED} />
         ) : appearance.grayChrome === 'loading' ? (
           <div aria-hidden className={MIC_GRAY_LOADING} />

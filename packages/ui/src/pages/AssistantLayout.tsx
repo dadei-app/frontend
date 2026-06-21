@@ -1,6 +1,6 @@
-import { useLayoutEffect, useState, type CSSProperties } from 'react';
+import { useLayoutEffect, useEffect, useState, type CSSProperties } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/platform/query/queryHooks';
 import { Loading } from '@dadei/ui/components/Loading';
@@ -21,8 +21,13 @@ import { BannerStackHost, ToastStackHost } from '@dadei/ui/contexts/Notification
 import Header from '@dadei/ui/components/Header';
 import InteractionPanel from '@dadei/ui/components/interaction-panel';
 import MobileInteractionsSheet from '@dadei/ui/components/MobileInteractionsSheet';
-import AssistantSettingsModal from '@dadei/ui/components/settings';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import AssistantSettingsModal, { type SidebarView } from '@dadei/ui/components/settings';
+import {
+  ASSISTANT_PATH,
+  OAUTH_LINKED_QUERY,
+  SETTINGS_RETURN_QUERY,
+  isSettingsSidebarSection,
+} from '@dadei/ui/lib/platform/runtime/assistantPaths';
 import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { ENROLLMENT_TRANSCRIPT_OPENER } from '@dadei/ui/types/command.types';
@@ -115,7 +120,7 @@ function assistantLoadingSubtitle(
 }
 
 function AssistantLayoutShell() {
-  const { formatHotkey, viewportFillClass } = useSystem();
+  const { formatHotkey, viewportFillClass, isElectron } = useSystem();
   const isMobileAssistant = useMobileAssistant();
   const { isServiceEnabled, permissionsGateOpen } = useService();
   const { state, voiceEnrollmentActive } = useCommand();
@@ -132,6 +137,54 @@ function AssistantLayoutShell() {
     (!tutorial || tutorial.wakeWordEnabled);
   const [isPeoplePanelOpen, setIsPeoplePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsDeepLink, setSettingsDeepLink] = useState<{
+    view: SidebarView;
+    action?: string;
+  } | null>(null);
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (isElectron) return;
+    const billing = searchParams.get('billing');
+    if (billing === 'success') {
+      setSettingsOpen(true);
+      setSettingsDeepLink({ view: 'subscription', action: 'billing-success' });
+      navigate(ASSISTANT_PATH, { replace: true });
+      return;
+    }
+    if (billing === 'cancel') {
+      setSettingsOpen(true);
+      setSettingsDeepLink({ view: 'subscription', action: 'billing-cancel' });
+      navigate(ASSISTANT_PATH, { replace: true });
+      return;
+    }
+
+    const settingsSection = searchParams.get(SETTINGS_RETURN_QUERY);
+    if (settingsSection && isSettingsSidebarSection(settingsSection)) {
+      const linked = searchParams.get(OAUTH_LINKED_QUERY);
+      setSettingsOpen(true);
+      setSettingsDeepLink({
+        view: settingsSection,
+        action: linked ? `oauth-linked-${linked}` : undefined,
+      });
+      navigate(ASSISTANT_PATH, { replace: true });
+    }
+  }, [isElectron, navigate, searchParams]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.onBillingReturn) return;
+    const off = window.electronAPI.onBillingReturn(({ status }) => {
+      if (status === 'success' || status === 'portal') {
+        setSettingsOpen(true);
+        setSettingsDeepLink({ view: 'subscription', action: 'billing-success' });
+      } else if (status === 'cancel') {
+        setSettingsOpen(true);
+        setSettingsDeepLink({ view: 'subscription', action: 'billing-cancel' });
+      }
+    });
+    return off;
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -268,7 +321,18 @@ function AssistantLayoutShell() {
           <TutorialPersonsBridge setIsPeoplePanelOpen={setIsPeoplePanelOpen} />
         </>
       ) : null}
-      <AssistantSettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <AssistantSettingsModal
+        open={settingsOpen || !!settingsDeepLink}
+        onOpenChange={next => {
+          if (!next) {
+            setSettingsDeepLink(null);
+          }
+          setSettingsOpen(next);
+        }}
+        requestedView={settingsDeepLink?.view}
+        requestedAction={settingsDeepLink?.action}
+        onBillingReturnConsumed={() => setSettingsDeepLink(null)}
+      />
       {/* Above settings overlay (z-[250]); must not live inside the z-10 main stacking context. */}
       <ToastStackHost
         className={cn(

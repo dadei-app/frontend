@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import LoginPage from '@dadei/ui/pages/LoginPage';
 
@@ -49,19 +49,22 @@ describe('LoginPage', () => {
     mockTriggerProviderOAuth.mockResolvedValue(undefined);
   });
 
-  it('hides the email form by default and reveals it via the link', () => {
+  it('shows providers by default and reveals the email form via the link', async () => {
     renderLoginPage();
 
+    expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /use email and password instead/i })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /use email and password instead/i }));
 
-    expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
+    });
     expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
   });
 
-  it('renders three provider buttons', () => {
+  it('renders three provider buttons by default', () => {
     renderLoginPage();
 
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();

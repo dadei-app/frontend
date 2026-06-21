@@ -8,6 +8,8 @@ import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { Conversation } from '@dadei/ui/types/models.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
 import type { IntegrationsStatusResponse } from '@dadei/ui/types/integrations.types';
+import { subscriptionApi } from '@dadei/ui/lib/workspace/api/subscription';
+import type { SubscriptionView } from '@dadei/ui/types/subscription.types';
 import {
   ASSISTANT_MEMORIES_LIST_LIMIT,
   AUTH_ME_STALE_MS,
@@ -112,4 +114,20 @@ export function useIntegrationsStatusQuery(enabled = true) {
     staleTime: 60_000,
     refetchOnMount: true,
   });
+}
+
+const SUBSCRIPTION_STALE_MS = 30_000;
+
+export function useSubscription(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.subscription,
+    queryFn: (): Promise<SubscriptionView> => subscriptionApi.getSubscription(),
+    enabled,
+    staleTime: SUBSCRIPTION_STALE_MS,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function invalidateSubscription(queryClient: ReturnType<typeof useQueryClient>) {
+  return queryClient.invalidateQueries({ queryKey: queryKeys.subscription });
 }

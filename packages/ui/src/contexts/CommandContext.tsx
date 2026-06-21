@@ -48,6 +48,7 @@ import {
   formatToolResultUserMessage,
   formatWsTranscriptError,
   getUserErrorMessage,
+  parseApiDetail,
 } from '@dadei/ui/lib/platform/errors/userMessage';
 import { isProposedToolSummary, proposedActionHumanLine } from '@dadei/ui/lib/workspace/display/actionDisplay';
 import {
@@ -673,7 +674,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
     goIdle();
   }, [abortActiveStream, endVoiceEnrollmentMode, goIdle, releaseCommandService]);
 
-  const claimCommandService = useCallback(async (): Promise<boolean> => {
+  const claimCommandService = useCallback(async (mode: CommandMode = 'normal'): Promise<boolean> => {
     return runAssistantTransition(async () => {
       const sessionId = getRealtimeSessionId();
       if (!selectCanClaimCommandService(runtimeRef.current, sessionId)) return false;
@@ -681,10 +682,33 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       if (!sessionToken) return false;
       const baseline = runtimeRef.current.serviceStateRevision;
       try {
-        await serviceApi.claimCommandService(sessionToken, CLAIM_HOLD_SECONDS);
+        await serviceApi.claimCommandService(sessionToken, CLAIM_HOLD_SECONDS, mode);
         await runtimeActions.waitForServiceStateRevisionAfter(baseline);
         return selectIsCommandOwner(runtimeRef.current, sessionId);
       } catch (e) {
+        if (axios.isAxiosError(e) && e.response?.status === 402) {
+          const body = e.response.data;
+          const detail =
+            typeof body === 'object' && body !== null && 'detail' in body
+              ? (body as { detail: unknown }).detail
+              : undefined;
+          const parsed = parseApiDetail(detail);
+          if (parsed.code === 'command_limit_reached') {
+            const limit =
+              typeof detail === 'object' &&
+              detail !== null &&
+              'limit' in detail &&
+              typeof (detail as { limit: unknown }).limit === 'number'
+                ? (detail as { limit: number }).limit
+                : undefined;
+            const message =
+              limit != null
+                ? `You've hit your daily limit of ${limit} commands. Upgrade to Pro for unlimited.`
+                : ERROR_CODES.command_limit_reached;
+            showToast(message, 'info');
+            return false;
+          }
+        }
         if (axios.isAxiosError(e) && e.response?.status === 409) {
           setCommandState('locked');
           resetLiveBubbles();
@@ -694,7 +718,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
         return false;
       }
     });
-  }, [resetLiveBubbles, runtimeActions]);
+  }, [resetLiveBubbles, runtimeActions, showToast]);
 
   const scheduleWakeFalsePositiveRelease = useCallback(() => {
     clearWakeTimeout();
@@ -1221,7 +1245,7 @@ export function CommandProvider({ children }: { children: ReactNode }) {
       setCommandThinkingActive(true);
 
       try {
-        const claimed = await claimCommandService();
+        const claimed = await claimCommandService(enrollmentMode);
         if (!claimed) {
           await rollbackVoiceEnrollmentAttempt();
           return false;

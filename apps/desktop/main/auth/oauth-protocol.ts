@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
+import path from 'path';
+import { openDefaultBrowserOAuthWindow } from './browser-oauth-window';
 
 /** Must match backend `DADEI_DESKTOP_OAUTH_ORIGIN`. */
 export const DESKTOP_OAUTH_RETURN_ORIGIN = 'dadei://oauth';
@@ -50,18 +52,52 @@ function settlePending(params: OAuthCallbackParams): void {
   }
 }
 
-export function deliverOAuthCallback(rawUrl: string): boolean {
-  const params = parseOAuthCallbackUrl(rawUrl);
-  if (!params) {
-    return false;
+function settingsSectionFromOAuthNext(next?: string): string {
+  if (!next) return 'integrations';
+  try {
+    const path = next.startsWith('/') ? next : `/${next}`;
+    const section = new URL(path, 'https://dadei.local').searchParams.get('settings');
+    const valid = new Set([
+      'integrations',
+      'memories',
+      'account',
+      'audio',
+      'startup',
+      'subscription',
+      'about',
+    ]);
+    if (section && valid.has(section)) {
+      return section;
+    }
+  } catch {
+    /* ignore */
   }
+  return 'integrations';
+}
+
+function finishOAuthFlow(params: OAuthCallbackParams): void {
   settlePending(params);
+
   const win = getMainWindow?.();
   if (win && !win.isDestroyed()) {
     win.show();
     win.focus();
     win.webContents.send('oauth:callback', params);
+    if (params.linked) {
+      win.webContents.send('app:open-settings-section', {
+        section: settingsSectionFromOAuthNext(params.next),
+        action: `oauth-linked-${params.linked}`,
+      });
+    }
   }
+}
+
+export function deliverOAuthCallback(rawUrl: string): boolean {
+  const params = parseOAuthCallbackUrl(rawUrl);
+  if (!params) {
+    return false;
+  }
+  finishOAuthFlow(params);
   return true;
 }
 
@@ -90,7 +126,7 @@ export function registerOAuthProtocol(getWindow: () => BrowserWindow | null): vo
 
       pendingFlow = { resolve, reject, timeout };
 
-      void shell.openExternal(loginUrl).catch((err: unknown) => {
+      void openDefaultBrowserOAuthWindow(loginUrl).catch((err: unknown) => {
         if (pendingFlow) {
           clearTimeout(pendingFlow.timeout);
           pendingFlow = null;
@@ -103,9 +139,9 @@ export function registerOAuthProtocol(getWindow: () => BrowserWindow | null): vo
 
 export function registerDesktopProtocolClient(): void {
   if (process.defaultApp) {
-    if (process.argv.length >= 2) {
-      app.setAsDefaultProtocolClient('dadei', process.execPath, [process.argv[1]!]);
-    }
+    // `electron .` passes "." as argv[1]; protocol callbacks launch from system32, so store an absolute path.
+    const appPath = path.resolve(process.argv[1] ?? process.cwd());
+    app.setAsDefaultProtocolClient('dadei', process.execPath, [appPath]);
   } else {
     app.setAsDefaultProtocolClient('dadei');
   }

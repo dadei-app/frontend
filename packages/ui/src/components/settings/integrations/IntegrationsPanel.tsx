@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Clock3, CloudSun, Globe, Map as MapIcon, Unplug } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
+import { useNotifications } from '@dadei/ui/contexts/NotificationContext';
 import { useTutorialSettingsTourActive } from '@dadei/ui/contexts/TutorialContext';
 import {
   triggerProviderOAuth,
@@ -10,10 +11,10 @@ import {
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
 import { useAuthMeQuery, useIntegrationsStatusQuery } from '@dadei/ui/lib/platform/query/queryHooks';
 import { queryKeys } from '@dadei/ui/lib/platform/query/queryKeys';
-import { ASSISTANT_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
+import { settingsReturnPath } from '@dadei/ui/lib/platform/runtime/assistantPaths';
 import { authApi } from '@dadei/ui/lib/workspace/api/auth';
 import { serviceApi } from '@dadei/ui/lib/workspace/api/service';
-import { GridTile, SettingsGrid4 } from '@dadei/ui/components/settings/layout';
+import { GridTile, SettingsGrid4, type SettingsPanelProps } from '@dadei/ui/components/settings/layout';
 import { GlassAlertModal } from '@dadei/ui/components/ui/GlassModal';
 import type { ProviderHealth } from '@dadei/ui/types/integrations.types';
 import type { UserMe } from '@dadei/ui/types/auth.types';
@@ -25,26 +26,22 @@ import { ReconnectBanner } from './ReconnectBanner';
 const REALTIME_SOURCES = [
   {
     name: 'Weather',
-    description:
-      'Used when you ask about conditions, rain, temperature, or what to wear. Loads current conditions and short forecasts from Google Weather at coordinates—often paired with your location or a place from Maps.',
+    description: 'Current conditions and short forecasts from Google Weather.',
     Icon: CloudSun,
   },
   {
     name: 'Maps',
-    description:
-      'Used for place search, addresses, directions, travel time, and “near me” questions. Also resolves “where am I” and supplies coordinates when Weather needs a location.',
+    description: 'Place search, directions, travel time, and nearby lookups.',
     Icon: MapIcon,
   },
   {
     name: 'Web Search',
-    description:
-      'Used when the answer needs fresh public information—news, facts, or topics not in Gmail, Drive, or memory. Queries the web via Brave Search for result snippets and links (no Google account).',
+    description: 'Fresh public info from the web via Brave Search—no account needed.',
     Icon: Globe,
   },
   {
     name: 'Current Time',
-    description:
-      'Used for “what time is it”, scheduling in your timezone, and sanity-checking meeting times. Reads your account timezone and IANA zones via Google’s timezone API—always on, no Workspace sign-in.',
+    description: 'Your timezone and local time—always on, no sign-in.',
     Icon: Clock3,
   },
 ] as const;
@@ -85,9 +82,10 @@ const PROVIDER_LABEL: Record<string, string> = {
   apple: 'Apple',
 };
 
-export function IntegrationsPanel() {
+export function IntegrationsPanel({ pendingAction, onActionConsumed }: SettingsPanelProps) {
   const queryClient = useQueryClient();
   const { user: me, refreshUser, saveTokens } = useAuth();
+  const { showToast } = useNotifications();
   const settingsTourActive = useTutorialSettingsTourActive();
   const integrationsStatusQuery = useIntegrationsStatusQuery();
   const authMeQuery = useAuthMeQuery(!settingsTourActive);
@@ -124,6 +122,14 @@ export function IntegrationsPanel() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.authMe });
   };
 
+  useEffect(() => {
+    if (!pendingAction?.startsWith('oauth-linked-')) return;
+    const provider = pendingAction.slice('oauth-linked-'.length);
+    showToast(`${PROVIDER_LABEL[provider] ?? provider} connected`, 'success');
+    invalidateAfterAuth();
+    onActionConsumed?.();
+  }, [onActionConsumed, pendingAction, queryClient, refreshUser, showToast]);
+
   const handleProviderConnect = async (provider: string) => {
     const oauthProvider = normalizeOAuthProvider(provider);
     setConnectError('');
@@ -133,7 +139,7 @@ export function IntegrationsPanel() {
         saveTokens,
         onSuccess: invalidateAfterAuth,
         onError: msg => setConnectError(msg),
-        webNextPath: ASSISTANT_PATH,
+        webNextPath: settingsReturnPath('integrations'),
         mode: 'link',
       });
     } finally {
@@ -211,7 +217,7 @@ export function IntegrationsPanel() {
           </p>
         ) : (
           <>
-            <div className="grid min-h-0 shrink-0 grid-cols-1 gap-3 lg:grid-cols-3">
+            <div className="grid min-h-0 w-full min-w-0 shrink-0 grid-cols-1 gap-3 lg:grid-cols-3">
               {providers.map(health => (
                 <ProviderColumn
                   key={health.provider}

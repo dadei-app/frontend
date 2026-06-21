@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Settings2, LogOut, Users, Mic } from 'lucide-react';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import PersonsPanel from '@dadei/ui/components/PersonsPanel';
+import ProBadge from '@dadei/ui/components/ProBadge';
 import Tooltip from '@dadei/ui/components/ui/Tooltip';
 import { ToolbarButton, ToolbarDivider, ToolbarShell } from '@dadei/ui/components/ui/Toolbar';
 import { useMobileAssistant } from '@dadei/ui/lib/platform/hooks/useMobileAssistant';
+import { useSubscription } from '@dadei/ui/lib/platform/query/queryHooks';
 
 function HeaderTooltip({ label, children }: { label: string; children: ReactNode }) {
   const mobile = useMobileAssistant();
@@ -27,6 +29,8 @@ export default function Header({
   const { logout } = useAuth();
   const navigate = useNavigate();
   const peopleButtonRef = useRef<HTMLButtonElement>(null);
+  const { data: subscription } = useSubscription();
+  const showProBadge = subscription?.tier === 'pro';
 
   return (
     <header
@@ -40,6 +44,7 @@ export default function Header({
         <span className="assistant-brand-wordmark select-none font-brand text-2xl font-extrabold tracking-widest sm:text-3xl">
           dadei
         </span>
+        {showProBadge ? <ProBadge /> : null}
       </div>
 
       <ToolbarShell>
