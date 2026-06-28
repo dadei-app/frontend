@@ -46,10 +46,15 @@ for (const dir of OUTPUTS) {
 // Electron generic icon + platform packaging icons all use the stylized logo.
 writeFileSync(join(RESOURCES, 'icon.png'), logo512);
 
-const icon16 = await sharp(Buffer.from(logoSvg(16))).png().toBuffer();
-const icon32 = await sharp(Buffer.from(logoSvg(32))).png().toBuffer();
-const icon256 = await sharp(Buffer.from(logoSvg(256))).png().toBuffer();
-writeFileSync(join(RESOURCES, 'icon.ico'), await pngToIco([icon16, icon32, icon256, logo512]));
+// 256 is the largest dimension a .ico can encode (the dir entry stores width
+// in one byte, where 0 means 256). Passing 512 here makes png-to-ico emit a
+// bogus "256x256" entry holding 512x512 data, which NSIS rejects on Windows
+// with "invalid icon file size".
+const icoSizes = [16, 24, 32, 48, 64, 128, 256];
+const icoBuffers = await Promise.all(
+  icoSizes.map((size) => sharp(Buffer.from(logoSvg(size))).png().toBuffer()),
+);
+writeFileSync(join(RESOURCES, 'icon.ico'), await pngToIco(icoBuffers));
 
 if (process.platform === 'darwin') {
   const iconsetDir = join(RESOURCES, 'icon.iconset');
