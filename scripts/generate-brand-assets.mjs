@@ -1,75 +1,35 @@
 /**
- * Brand assets, rendered from SVG with sharp.
+ * Brand assets, rendered from the canonical UI brand source with sharp.
  *
  *   logo.png             stylized header treatment: mark inside the rounded zinc box
  *   logo-transparent.png bare mark only: dot + pulse waves on transparent
  *
- * Written to packages/ui/src/assets, apps/website/public, apps/desktop/resources.
+ * Source lives in packages/ui/src/assets. Generated platform copies are written
+ * to packages/ui/src/assets, apps/website/public, and apps/desktop/resources.
  * Run: npm run generate:brand
  */
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import sharp from 'sharp';
 import pngToIco from 'png-to-ico';
+import opentype from 'opentype.js';
+import {
+  logoSvg,
+  markSvg,
+  OG_BACKGROUND,
+  POIRET_ONE_FONT_PATH,
+  TRANSPARENT,
+  WORDMARK,
+  WORDMARK_FILL,
+} from '../packages/ui/src/assets/brand-source.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const UI_ASSETS = join(ROOT, 'packages/ui/src/assets');
 const PUBLIC = join(ROOT, 'apps/website/public');
 const RESOURCES = join(ROOT, 'apps/desktop/resources');
 const OUTPUTS = [UI_ASSETS, PUBLIC, RESOURCES];
-
-const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
-
-const GRADIENT = `
-  <linearGradient id="em" x1="20" y1="14" x2="80" y2="88" gradientUnits="userSpaceOnUse">
-    <stop offset="0" stop-color="#5cf0b0" />
-    <stop offset="0.55" stop-color="#00cc6a" />
-    <stop offset="1" stop-color="#00a85a" />
-  </linearGradient>`;
-
-// dot + pulse waves, authored in a 0..100 space.
-const MARK = `
-  <path d="M34.5 78.85 A31 31 0 1 1 65.5 78.85" fill="none" stroke="url(#em)" stroke-width="3.4" stroke-linecap="round" opacity="0.42" />
-  <path d="M40 69.32 A20 20 0 1 1 60 69.32" fill="none" stroke="url(#em)" stroke-width="3.9" stroke-linecap="round" opacity="0.82" />
-  <circle cx="50" cy="52" r="8" fill="url(#em)" />`;
-
-/** Bare mark, transparent background. */
-function markSvg(size) {
-  return `<svg width="${size}" height="${size}" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-    <defs>${GRADIENT}</defs>
-    ${MARK}
-  </svg>`;
-}
-
-/**
- * Flat zinc box with a beveled gradient border and a single mark lifted by a soft
- * drop shadow (no ghost/double-layer). Mark fills most of the square.
- */
-function logoSvg(size) {
-  const radius = Math.round(size * 0.22);
-  const inset = Math.round(size * 0.085); // ~83% mark coverage
-  const markScale = (size - inset * 2) / 100;
-  const ring = Math.max(2, Math.round(size * 0.016));
-  const ringOffset = ring / 2;
-  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      ${GRADIENT}
-      <linearGradient id="edge" x1="0" y1="0" x2="0" y2="${size}" gradientUnits="userSpaceOnUse">
-        <stop offset="0" stop-color="#52525b" stop-opacity="0.9" />
-        <stop offset="0.5" stop-color="#27272a" stop-opacity="0.5" />
-        <stop offset="1" stop-color="#000000" stop-opacity="0.65" />
-      </linearGradient>
-      <filter id="markShadow" x="-25%" y="-25%" width="150%" height="150%">
-        <feDropShadow dx="0" dy="0.9" stdDeviation="1.2" flood-color="#000000" flood-opacity="0.55" />
-      </filter>
-    </defs>
-    <rect x="0" y="0" width="${size}" height="${size}" rx="${radius}" fill="#18181b" />
-    <g transform="translate(${inset}, ${inset}) scale(${markScale})" filter="url(#markShadow)">${MARK}</g>
-    <rect x="${ringOffset}" y="${ringOffset}" width="${size - ring}" height="${size - ring}" rx="${radius - ringOffset}" fill="none" stroke="url(#edge)" stroke-width="${ring}" />
-  </svg>`;
-}
 
 for (const dir of OUTPUTS) {
   mkdirSync(dir, { recursive: true });
@@ -114,12 +74,71 @@ if (process.platform === 'darwin') {
   rmSync(iconsetDir, { recursive: true, force: true });
 }
 
-await sharp({
-  create: { width: 1200, height: 630, channels: 4, background: { r: 9, g: 9, b: 11, alpha: 1 } },
-})
-  .composite([{ input: await sharp(Buffer.from(logoSvg(280))).png().toBuffer(), gravity: 'centre' }])
-  .png()
-  .toFile(join(PUBLIC, 'og-image.png'));
+// og-image — branded lockup: stylized mark + outlined Poiret One "dadei" wordmark,
+// centered on a zinc card. Text is outlined to paths so no system font is required.
+{
+  const OG_W = 1200;
+  const OG_H = 630;
+  const markPx = 240;
+  const fontSize = 200;
+  const gap = 48;
+
+  const fontBuf = readFileSync(POIRET_ONE_FONT_PATH);
+  const font = opentype.parse(
+    fontBuf.buffer.slice(fontBuf.byteOffset, fontBuf.byteOffset + fontBuf.byteLength),
+  );
+
+  const tracking = fontSize * 0.2;
+  const glyphs = [];
+  let cursor = 0;
+  for (const char of WORDMARK) {
+    glyphs.push(font.getPath(char, cursor, 0, fontSize));
+    cursor += font.getAdvanceWidth(char, fontSize) + tracking;
+  }
+  const totalW = cursor - tracking;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const g of glyphs) {
+    const { x1, y1, x2, y2 } = g.getBoundingBox();
+    minX = Math.min(minX, x1);
+    minY = Math.min(minY, y1);
+    maxX = Math.max(maxX, x2);
+    maxY = Math.max(maxY, y2);
+  }
+  maxX = Math.max(maxX, totalW);
+
+  const pad = 4;
+  const svgW = Math.ceil(maxX - minX + pad * 2);
+  const svgH = Math.ceil(maxY - minY + pad * 2);
+  const paths = glyphs.map((g) => `<path d="${g.toPathData(2)}" fill="${WORDMARK_FILL}" />`).join('\n    ');
+  const wordSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW}" height="${svgH}" viewBox="${minX - pad} ${minY - pad} ${svgW} ${svgH}">
+    ${paths}
+  </svg>`;
+  const wordBuf = await sharp(Buffer.from(wordSvg)).png().toBuffer();
+  const wordMeta = await sharp(wordBuf).metadata();
+
+  const markBuf = await sharp(Buffer.from(logoSvg(markPx))).png().toBuffer();
+
+  const lockupW = markPx + gap + wordMeta.width;
+  const left = Math.round((OG_W - lockupW) / 2);
+
+  await sharp({
+    create: { width: OG_W, height: OG_H, channels: 4, background: OG_BACKGROUND },
+  })
+    .composite([
+      { input: markBuf, left, top: Math.round((OG_H - markPx) / 2) },
+      {
+        input: wordBuf,
+        left: left + markPx + gap,
+        top: Math.round((OG_H - wordMeta.height) / 2),
+      },
+    ])
+    .png()
+    .toFile(join(PUBLIC, 'og-image.png'));
+}
 
 rmSync(join(RESOURCES, 'icons'), { recursive: true, force: true });
 
