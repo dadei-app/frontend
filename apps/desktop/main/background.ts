@@ -30,6 +30,7 @@ import { registerSettingsIpc } from './settings-ipc';
 import { configureSessionPermissions } from './session-permissions';
 import { getStartup } from './settings-store';
 import { setTrayMainWindow, syncTrayFromSettings, usesSystemTray } from './tray';
+import { applyDockIcon, resolveWindowIcon } from './app-icon';
 
 const isDev = process.env.NODE_ENV === 'development';
 
@@ -82,11 +83,14 @@ function windowFromContents(contents: WebContents): BrowserWindow | null {
 }
 
 function createWindow() {
+  const windowIcon = process.platform === 'darwin' ? undefined : resolveWindowIcon();
+
   mainWindow = new BrowserWindow({
     width: 1500,
     height: 800,
     autoHideMenuBar: true,
     backgroundColor: '#09090b',
+    ...(windowIcon ? { icon: windowIcon } : {}),
     ...(isDarwin
       ? {
           titleBarStyle: 'hiddenInset' as const,
@@ -241,6 +245,7 @@ ipcMain.handle('bootstrap:get-state', () => getLastBootstrapState());
 
 app.whenReady().then(async () => {
   configureSessionPermissions();
+  applyDockIcon();
 
   registerOAuthProtocol(() => mainWindow);
   registerBillingProtocol(() => mainWindow);

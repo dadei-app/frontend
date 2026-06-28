@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Brain, Mic, WandSparkles, Waves, type LucideIcon } from 'lucide-react';
+import { Brain, WandSparkles, Waves, type LucideIcon } from 'lucide-react';
+import { logoUrl } from '@dadei/ui/assets/brand';
 import DesktopMomentum from '@/components/landing/DesktopMomentum';
 import FloatingAppMockup from '@/components/landing/FloatingAppMockup';
 import IntegrationsShowcase from '@/components/landing/IntegrationsShowcase';
@@ -103,6 +104,17 @@ export default function LandingPage() {
         <LaunchConversationIntro />
 
         <section id="meet" className="mx-auto w-full max-w-[1240px] px-5 py-8 sm:px-8 sm:py-14">
+          <div className="mb-8 flex items-center justify-center gap-4 sm:mb-10">
+            <img
+              src={logoUrl}
+              alt=""
+              width={52}
+              height={52}
+              className="h-[52px] w-[52px] shrink-0 rounded-lg"
+              aria-hidden
+            />
+            <span className="font-brand text-3xl tracking-[0.2em] text-zinc-100 sm:text-4xl">dadei</span>
+          </div>
           <div className="grid items-center gap-6 sm:gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-12">
             <div>
               <SectionHeading
@@ -222,11 +234,24 @@ export default function LandingPage() {
 
       <footer className="border-t border-white/10 bg-zinc-950/70 py-10">
         <div className="mx-auto flex w-full max-w-[1240px] flex-col items-center justify-between gap-5 px-5 sm:flex-row sm:px-8">
-          <div className="flex items-center gap-4 text-zinc-400">
-            <Mic className="h-5 w-5 text-emerald-300" aria-hidden />
-            <span className="font-semibold text-zinc-100 text-xl font-brand">dadei</span>
+          <div className="flex items-center gap-3 text-zinc-400">
+            <img
+              src={logoUrl}
+              alt=""
+              width={28}
+              height={28}
+              className="h-7 w-7 shrink-0 rounded-lg"
+              aria-hidden
+            />
+            <span className="font-brand text-xl tracking-[0.18em] text-zinc-100">dadei</span>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-zinc-300 font-secondary">
+            <Link to="/privacy" className="hover:text-zinc-100">
+              Privacy
+            </Link>
+            <Link to="/terms" className="hover:text-zinc-100">
+              Terms
+            </Link>
             <a
               href="https://github.com/dadei-app/frontend/releases/latest"
               className="hover:text-zinc-100"

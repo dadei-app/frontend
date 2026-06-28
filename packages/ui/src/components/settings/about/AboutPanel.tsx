@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Mic } from 'lucide-react';
+import { logoUrl } from '@dadei/ui/assets/brand';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { UpdaterCheckResult } from '@dadei/ui/types/electron';
 import {
@@ -96,12 +96,19 @@ export function AboutPanel({ pendingAction, onActionConsumed }: SettingsPanelPro
 
   return (
     <SettingsBento centered>
-      <div className="flex h-20 w-20 items-center justify-center rounded-full border border-emerald-500/30 bg-emerald-500/10">
-        <Mic className="h-12 w-12 text-emerald-300/90" strokeWidth={1.5} />
+      <div className="flex flex-col items-center gap-4">
+        <img
+          src={logoUrl}
+          alt=""
+          width={80}
+          height={80}
+          className="h-20 w-20 shrink-0 rounded-lg"
+          aria-hidden
+        />
+        <span className="font-brand text-4xl tracking-wider text-zinc-100">dadei</span>
       </div>
       <div>
-        <h1 className="font-brand text-4xl tracking-wider text-zinc-100">dadei</h1>
-        <p className="mt-2 text-base text-zinc-500 font-secondary">
+        <p className="text-base text-zinc-500 font-secondary">
           Version {version || '—'}
           {buildHash ? ` · ${buildHash.slice(0, 7)}` : ''}
         </p>

@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2, Sparkles } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { SiApple } from 'react-icons/si';
+import { logoUrl } from '@dadei/ui/assets/brand';
 import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
@@ -14,6 +15,7 @@ import {
 } from '@dadei/ui/lib/platform/auth/providerAuth';
 import { cn } from '@dadei/ui/lib/platform/shared/cn';
 import { getUserErrorMessage } from '@dadei/ui/lib/platform/errors/userMessage';
+import { TERMS_VERSION } from '@dadei/ui/lib/platform/legal/constants';
 
 const veilEase = [0.22, 1, 0.36, 1] as const;
 
@@ -97,6 +99,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [acceptBiometric, setAcceptBiometric] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -143,8 +147,18 @@ export default function LoginPage() {
         setError('Password must be at least 6 characters');
         return;
       }
+      if (!acceptTerms || !acceptBiometric) {
+        setError('You must accept the Terms of Service and biometric voice consent to create an account');
+        return;
+      }
 
-      await register({ email, password });
+      await register({
+        email,
+        password,
+        accept_terms: acceptTerms,
+        accept_biometric: acceptBiometric,
+        terms_version: TERMS_VERSION,
+      });
       onAuthenticated();
     } catch (err: unknown) {
       setError(
@@ -175,6 +189,9 @@ export default function LoginPage() {
       }
     }
   };
+
+  const termsHref = isElectron ? 'https://dadei.app/terms' : '/terms';
+  const privacyHref = isElectron ? 'https://dadei.app/privacy' : '/privacy';
 
   if (isLoading || isAuthenticated) {
     return (
@@ -210,7 +227,18 @@ export default function LoginPage() {
             />
 
             <div className="relative mb-5 text-center">
-              <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 font-primary">Welcome to dadei</h1>
+              <div className="mb-4 flex items-center justify-center gap-3">
+                <img
+                  src={logoUrl}
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 shrink-0 rounded-lg"
+                  aria-hidden
+                />
+                <span className="font-brand text-2xl tracking-[0.2em] text-zinc-100">dadei</span>
+              </div>
+              <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 font-primary">Welcome</h1>
               <p className="mt-1.5 text-sm text-zinc-500 font-secondary">
                 Sign in to your intelligent voice workspace
               </p>
@@ -376,6 +404,63 @@ export default function LoginPage() {
                         ) : null}
                       </AnimatePresence>
 
+                      <AnimatePresence initial={false} mode="popLayout">
+                        {!isLoginMode ? (
+                          <motion.div
+                            key="consent"
+                            layout
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={fieldTransition}
+                            className="space-y-2.5 overflow-hidden pt-1"
+                          >
+                            <label className="flex items-start gap-2.5 text-left font-secondary text-xs text-zinc-400">
+                              <input
+                                type="checkbox"
+                                checked={acceptTerms}
+                                onChange={(e) => setAcceptTerms(e.target.checked)}
+                                disabled={loading}
+                                className="mt-0.5 rounded border-white/20 bg-zinc-900/60 text-emerald-500 focus:ring-emerald-500/30"
+                              />
+                              <span>
+                                I agree to the{' '}
+                                <a
+                                  href={termsHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-400/95 underline decoration-emerald-500/30 hover:text-emerald-300"
+                                >
+                                  Terms of Service
+                                </a>{' '}
+                                and{' '}
+                                <a
+                                  href={privacyHref}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-emerald-400/95 underline decoration-emerald-500/30 hover:text-emerald-300"
+                                >
+                                  Privacy Policy
+                                </a>
+                              </span>
+                            </label>
+                            <label className="flex items-start gap-2.5 text-left font-secondary text-xs text-zinc-400">
+                              <input
+                                type="checkbox"
+                                checked={acceptBiometric}
+                                onChange={(e) => setAcceptBiometric(e.target.checked)}
+                                disabled={loading}
+                                className="mt-0.5 rounded border-white/20 bg-zinc-900/60 text-emerald-500 focus:ring-emerald-500/30"
+                              />
+                              <span>
+                                I consent to biometric voice processing (wake word detection and
+                                speaker recognition) as described in the Privacy Policy
+                              </span>
+                            </label>
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
+
                       <motion.button
                         layout
                         type="submit"
@@ -407,6 +492,8 @@ export default function LoginPage() {
                         onClick={() => {
                           setIsLoginMode(!isLoginMode);
                           setError('');
+                          setAcceptTerms(false);
+                          setAcceptBiometric(false);
                         }}
                         disabled={loading}
                         className="font-primary font-semibold text-emerald-400/95 transition-colors hover:text-emerald-300 disabled:opacity-50"

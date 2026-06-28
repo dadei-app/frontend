@@ -5,6 +5,7 @@ import {
   AuthResponse,
   TokenResponse,
   UserMe,
+  AcceptConsentPayload,
 } from '../../../types/auth.types';
 import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
 
@@ -29,6 +30,9 @@ export const authApi = {
     const { data } = await api.post<AuthResponse>(ENDPOINTS.AUTH_REGISTER, {
       email: registerData.email,
       password: registerData.password,
+      accept_terms: registerData.accept_terms,
+      accept_biometric: registerData.accept_biometric,
+      terms_version: registerData.terms_version,
     });
     return data;
   },
@@ -57,6 +61,11 @@ export const authApi = {
 
   me: async (): Promise<UserMe> => {
     const { data } = await api.get<UserMe>(ENDPOINTS.AUTH_ME);
+    return data;
+  },
+
+  acceptConsent: async (payload: AcceptConsentPayload): Promise<UserMe> => {
+    const { data } = await api.post<UserMe>(ENDPOINTS.AUTH_ACCEPT_CONSENT, payload);
     return data;
   },
 

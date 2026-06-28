@@ -17,8 +17,12 @@
   },
   "extraResources": [
     {
-      "from": "resources/icon.png",
-      "to": "icon.png"
+      "from": "resources/logo.png",
+      "to": "logo.png"
+    },
+    {
+      "from": "resources/logo-transparent.png",
+      "to": "logo-transparent.png"
     }
   ],
   "asar": true,
@@ -32,14 +36,14 @@
   },
   "win": {
     "target": "nsis",
-    "icon": "resources/icon.png"
+    "icon": "resources/icon.ico"
   },
   "nsis": {
     "differentialPackage": false
   },
   "mac": {
     "target": ["dmg", "zip"],
-    "icon": "resources/icon.png",
+    "icon": "resources/icon.icns",
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "entitlements": "resources/entitlements.mac.plist",
@@ -52,7 +56,7 @@
   },
   "linux": {
     "target": ["AppImage"],
-    "icon": "resources/icon.png",
+    "icon": "resources/logo.png",
     "category": "Utility"
   },
   "protocols": [
