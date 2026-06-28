@@ -1,6 +1,6 @@
-import { app, Menu, Tray, nativeImage, type BrowserWindow, type NativeImage } from 'electron';
-import path from 'path';
+import { Menu, Tray, type BrowserWindow } from 'electron';
 import { buildTrayMenuTemplate } from './menu';
+import { resolveTrayIcon } from './app-icon';
 
 export function usesSystemTray(): boolean {
   return process.platform === 'win32' || process.platform === 'linux';
@@ -26,32 +26,11 @@ export function destroyTray(): void {
   tray = null;
 }
 
-async function resolveTrayIcon(): Promise<NativeImage> {
-  const candidates = [
-    path.join(process.resourcesPath, 'icon.png'),
-    path.join(app.getAppPath(), 'resources', 'icon.png'),
-  ];
-
-  for (const candidate of candidates) {
-    const image = nativeImage.createFromPath(candidate);
-    if (!image.isEmpty()) {
-      return image.resize({ width: 16, height: 16 });
-    }
-  }
-
-  try {
-    const fromExe = await app.getFileIcon(process.execPath, { size: 'small' });
-    if (!fromExe.isEmpty()) {
-      return fromExe.resize({ width: 16, height: 16 });
-    }
-  } catch (error) {
-    console.warn('[tray] failed to read icon from executable', error);
-  }
-
-  return nativeImage.createEmpty();
+async function loadTrayIcon() {
+  return resolveTrayIcon();
 }
 
-function attachTrayHandlers(icon: NativeImage): void {
+function attachTrayHandlers(icon: NonNullable<ReturnType<typeof resolveTrayIcon>>): void {
   if (tray) {
     tray.setImage(icon);
     tray.setContextMenu(Menu.buildFromTemplate(buildTrayMenuTemplate(showMainWindow)));
@@ -70,8 +49,8 @@ export async function syncTrayFromSettings(): Promise<void> {
     return;
   }
 
-  const image = await resolveTrayIcon();
-  if (image.isEmpty()) {
+  const image = await loadTrayIcon();
+  if (!image) {
     console.warn('[tray] no tray icon available');
     destroyTray();
     return;

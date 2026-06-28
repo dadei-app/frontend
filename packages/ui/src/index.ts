@@ -27,6 +27,8 @@ export {
 export type { ShowBannerInput, BannerItem } from './contexts/NotificationContext';
 
 export { default as Header } from './components/Header';
+export { DadeiMark } from './components/brand/DadeiMark';
+export { DadeiLogo } from './components/brand/DadeiLogo';
 export { default as MicrophoneButton } from './components/MicrophoneButton';
 export { default as InteractionPanel } from './components/interaction-panel';
 export { default as Banner } from './components/notifications/Banner';

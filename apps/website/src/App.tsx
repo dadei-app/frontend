@@ -12,6 +12,8 @@ import { AudioProvider } from '@dadei/ui/contexts/AudioContext';
 import { NotificationProvider } from '@dadei/ui/contexts/NotificationContext';
 import AssistantLayout from '@dadei/ui/pages/AssistantLayout';
 import LandingPage from '@/pages/LandingPage';
+import PrivacyPolicy from '@/pages/PrivacyPolicy';
+import Terms from '@/pages/Terms';
 import LoginPage from '@dadei/ui/pages/LoginPage';
 import { OAuthCallback } from '@dadei/ui/pages/OAuthCallback';
 import { OAUTH_CALLBACK_PATH } from '@dadei/ui/lib/platform/runtime/assistantPaths';
@@ -30,6 +32,8 @@ export function App() {
           <NotificationProvider>
             <Routes>
               <Route path="/" element={<LandingPage />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
+              <Route path="/terms" element={<Terms />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path={OAUTH_CALLBACK_PATH} element={<OAuthCallback />} />
               <Route path="/app" element={<Navigate to="/assistant" replace />} />

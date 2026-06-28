@@ -16,6 +16,9 @@ export interface LoginCredentials {
 export interface RegisterData {
     email: string;
     password: string;
+    accept_terms: boolean;
+    accept_biometric: boolean;
+    terms_version: string;
 }
 
 export interface AuthResponse {

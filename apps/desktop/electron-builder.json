@@ -32,14 +32,14 @@
   },
   "win": {
     "target": "nsis",
-    "icon": "resources/icon.png"
+    "icon": "resources/icon.ico"
   },
   "nsis": {
     "differentialPackage": false
   },
   "mac": {
     "target": ["dmg", "zip"],
-    "icon": "resources/icon.png",
+    "icon": "resources/icon.icns",
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
     "entitlements": "resources/entitlements.mac.plist",
@@ -52,7 +52,7 @@
   },
   "linux": {
     "target": ["AppImage"],
-    "icon": "resources/icon.png",
+    "icon": "resources/icons/512.png",
     "category": "Utility"
   },
   "protocols": [

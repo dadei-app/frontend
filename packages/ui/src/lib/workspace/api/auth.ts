@@ -29,6 +29,9 @@ export const authApi = {
     const { data } = await api.post<AuthResponse>(ENDPOINTS.AUTH_REGISTER, {
       email: registerData.email,
       password: registerData.password,
+      accept_terms: registerData.accept_terms,
+      accept_biometric: registerData.accept_biometric,
+      terms_version: registerData.terms_version,
     });
     return data;
   },

@@ -36,7 +36,6 @@ import { useTutorialContext, useTutorialEngaged } from '@dadei/ui/contexts/Tutor
 
 const COMMAND_START_RETRY_MS = 500;
 const COMMAND_AUDIO_PROCESSOR_BUFFER_SIZE = 256;
-const ENABLE_LOCAL_WAKE_DETECTOR = true;
 
 const MIC_LEVEL_ANALYSER_FFT = 256;
 const MIC_LEVEL_ANALYSER_SMOOTHING = 0.7;
@@ -408,21 +407,19 @@ export function AudioProvider({ children }: { children: React.ReactNode }) {
     });
     mediaStreamRef.current = media;
 
-    if (ENABLE_LOCAL_WAKE_DETECTOR) {
-      const wakeDetector = new OpenWakeWordDetector({ threshold: 0.5 });
-      wakeDetector.onWakeWord(onWakeWordDetected);
-      try {
-        await wakeDetector.start(media);
-        wakeDetectorRef.current = wakeDetector;
-      } catch (error) {
-        if (!wakeDetectorFailureLoggedRef.current) {
-          wakeDetectorFailureLoggedRef.current = true;
-          console.error('[Audio] wake-word detector start failed; ambient capture continues', error);
-        } else {
-          console.warn('[Audio] wake-word detector unavailable for this session.');
-        }
-        wakeDetectorRef.current = null;
+    const wakeDetector = new OpenWakeWordDetector({ threshold: 0.5 });
+    wakeDetector.onWakeWord(onWakeWordDetected);
+    try {
+      await wakeDetector.start(media);
+      wakeDetectorRef.current = wakeDetector;
+    } catch (error) {
+      if (!wakeDetectorFailureLoggedRef.current) {
+        wakeDetectorFailureLoggedRef.current = true;
+        console.error('[Audio] wake-word detector start failed; ambient capture continues', error);
+      } else {
+        console.warn('[Audio] wake-word detector unavailable for this session.');
       }
+      wakeDetectorRef.current = null;
     }
 
     const ctx = new window.AudioContext({ sampleRate: prefs.sampleRate });
