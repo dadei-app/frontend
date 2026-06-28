@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Loader2, Sparkles } from 'lucide-react';
 import { FcGoogle } from 'react-icons/fc';
 import { SiApple } from 'react-icons/si';
-import { DadeiLogo } from '@dadei/ui/components/brand/DadeiLogo';
+import { logoUrl } from '@dadei/ui/assets/brand';
 import { Loading } from '@dadei/ui/components/Loading';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
@@ -227,8 +227,16 @@ export default function LoginPage() {
             />
 
             <div className="relative mb-5 text-center">
-              <div className="mb-4 flex justify-center">
-                <DadeiLogo markSize={40} textClassName="text-2xl tracking-[0.2em]" />
+              <div className="mb-4 flex items-center justify-center gap-3">
+                <img
+                  src={logoUrl}
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 shrink-0 rounded-lg"
+                  aria-hidden
+                />
+                <span className="font-brand text-2xl tracking-[0.2em] text-zinc-100">dadei</span>
               </div>
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-50 font-primary">Welcome</h1>
               <p className="mt-1.5 text-sm text-zinc-500 font-secondary">

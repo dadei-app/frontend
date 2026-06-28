@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { DadeiLogo } from '@dadei/ui/components/brand/DadeiLogo';
+import { logoUrl } from '@dadei/ui/assets/brand';
 
 export function LegalPageShell({
   title,
@@ -17,8 +17,16 @@ export function LegalPageShell({
 
       <header className="border-b border-white/10 bg-zinc-950/80 backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-3xl items-center justify-between px-5 py-5 sm:px-8">
-          <Link to="/" className="transition-opacity hover:opacity-90">
-            <DadeiLogo markSize={36} textClassName="text-xl tracking-[0.18em]" />
+          <Link to="/" className="inline-flex items-center gap-3 transition-opacity hover:opacity-90">
+            <img
+              src={logoUrl}
+              alt=""
+              width={36}
+              height={36}
+              className="h-9 w-9 shrink-0 rounded-lg"
+              aria-hidden
+            />
+            <span className="font-brand text-xl tracking-[0.18em] text-zinc-100">dadei</span>
           </Link>
           <Link
             to="/"

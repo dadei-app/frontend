@@ -47,6 +47,13 @@ export interface UserMe {
     primary_calendar_provider: string | null;
     primary_contacts_provider: string | null;
     tutorial_completed: boolean;
+    consent_required: boolean;
+}
+
+export interface AcceptConsentPayload {
+    terms_version: string;
+    accept_terms: boolean;
+    accept_biometric: boolean;
 }
 
 export interface TokenResponse {

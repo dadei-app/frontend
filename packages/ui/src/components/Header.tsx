@@ -1,8 +1,8 @@
 import { useRef, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Settings2, LogOut, Users } from 'lucide-react';
+import { logoUrl } from '@dadei/ui/assets/brand';
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
-import { DadeiMark } from '@dadei/ui/components/brand/DadeiMark';
 import PersonsPanel from '@dadei/ui/components/PersonsPanel';
 import ProBadge from '@dadei/ui/components/ProBadge';
 import Tooltip from '@dadei/ui/components/ui/Tooltip';
@@ -39,9 +39,14 @@ export default function Header({
       style={{ minHeight: 'var(--assistant-header-h, 4.75rem)' }}
     >
       <div className="flex min-w-0 flex-1 items-center gap-4 text-lg font-semibold tracking-tight text-emerald-400/95">
-        <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-900/70 ring-1 ring-white/10">
-          <DadeiMark size={42} aria-hidden="true" />
-        </span>
+        <img
+          src={logoUrl}
+          alt=""
+          width={44}
+          height={44}
+          className="h-11 w-11 shrink-0 rounded-lg"
+          aria-hidden
+        />
         <span className="assistant-brand-wordmark select-none font-brand text-2xl font-extrabold tracking-widest sm:text-3xl">
           dadei
         </span>

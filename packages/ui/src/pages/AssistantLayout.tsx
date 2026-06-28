@@ -4,6 +4,7 @@ import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-route
 import { useAuth } from '@dadei/ui/contexts/AuthContext';
 import { useAuthMeQuery, useNeedsTutorial } from '@dadei/ui/lib/platform/query/queryHooks';
 import { Loading } from '@dadei/ui/components/Loading';
+import ConsentGateScreen from '@dadei/ui/components/legal/ConsentGateScreen';
 import { TutorialOverlayContent } from '@dadei/ui/components/tutorial/Overlay';
 import {
   TutorialProvider,
@@ -353,14 +354,20 @@ export default function AssistantLayout() {
   const location = useLocation();
   const meLoading = isAuthenticated && meQuery.isLoading;
   const sessionDataLoading = isAuthenticated && !isReady;
+  const needsConsent = Boolean(meQuery.data?.consent_required);
   const showLoadingOverlay =
     isLoggingOut ||
     !isBootstrapReady ||
     isLoading ||
     meLoading ||
-    sessionDataLoading;
+    (sessionDataLoading && !needsConsent);
   const showShell =
-    isBootstrapReady && !isLoading && !isLoggingOut && isAuthenticated && isReady;
+    isBootstrapReady &&
+    !isLoading &&
+    !isLoggingOut &&
+    isAuthenticated &&
+    isReady &&
+    !needsConsent;
 
   if (isBootstrapReady && !isLoading && !isLoggingOut && !isAuthenticated) {
     const next = `${location.pathname}${location.search}${location.hash}`;
@@ -370,7 +377,9 @@ export default function AssistantLayout() {
 
   return (
     <>
-      {showShell ? (
+      {needsConsent ? (
+        <ConsentGateScreen />
+      ) : showShell ? (
         needsTutorial ? (
           <TutorialProvider>
             <AssistantLayoutShell />

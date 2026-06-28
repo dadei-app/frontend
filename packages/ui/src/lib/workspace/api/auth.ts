@@ -5,6 +5,7 @@ import {
   AuthResponse,
   TokenResponse,
   UserMe,
+  AcceptConsentPayload,
 } from '../../../types/auth.types';
 import { ENDPOINTS } from '@dadei/ui/lib/workspace/api/http/constants';
 
@@ -60,6 +61,11 @@ export const authApi = {
 
   me: async (): Promise<UserMe> => {
     const { data } = await api.get<UserMe>(ENDPOINTS.AUTH_ME);
+    return data;
+  },
+
+  acceptConsent: async (payload: AcceptConsentPayload): Promise<UserMe> => {
+    const { data } = await api.post<UserMe>(ENDPOINTS.AUTH_ACCEPT_CONSENT, payload);
     return data;
   },
 

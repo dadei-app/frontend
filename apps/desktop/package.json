@@ -12,7 +12,6 @@
     "build": "rimraf dist renderer/dist && vite build --config renderer/vite.config.ts && tsc -p main/tsconfig.json",
     "start": "cross-env NODE_ENV=production electron .",
     "package": "npm run build && electron-builder --publish never",
-    "generate-icons": "node scripts/generate-icons.mjs",
     "clean": "rimraf dist renderer/dist release"
   },
   "dependencies": {
@@ -43,9 +42,7 @@
     "cross-env": "^10.1.0",
     "electron": "^39.8.10",
     "electron-builder": "^26.0.12",
-    "png-to-ico": "^2.1.8",
     "rimraf": "^6.1.2",
-    "sharp": "^0.34.5",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^8.0.16",

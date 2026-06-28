@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DadeiLogo } from '@dadei/ui/components/brand/DadeiLogo';
+import { logoUrl } from '@dadei/ui/assets/brand';
 import { useSystem } from '@dadei/ui/contexts/SystemContext';
 import type { UpdaterCheckResult } from '@dadei/ui/types/electron';
 import {
@@ -96,7 +96,17 @@ export function AboutPanel({ pendingAction, onActionConsumed }: SettingsPanelPro
 
   return (
     <SettingsBento centered>
-      <DadeiLogo markSize={72} textClassName="text-4xl tracking-wider" className="flex-col gap-4" />
+      <div className="flex flex-col items-center gap-4">
+        <img
+          src={logoUrl}
+          alt=""
+          width={80}
+          height={80}
+          className="h-20 w-20 shrink-0 rounded-lg"
+          aria-hidden
+        />
+        <span className="font-brand text-4xl tracking-wider text-zinc-100">dadei</span>
+      </div>
       <div>
         <p className="text-base text-zinc-500 font-secondary">
           Version {version || '—'}

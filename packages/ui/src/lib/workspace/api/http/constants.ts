@@ -26,6 +26,7 @@ export const ENDPOINTS = {
   AUTH_MICROSOFT_WEB_LOGIN: '/auth/microsoft/web/login',
   AUTH_APPLE_WEB_LOGIN: '/auth/apple/web/login',
   AUTH_ME: '/auth/me',
+  AUTH_ACCEPT_CONSENT: '/auth/accept-consent',
   TUTORIAL_COMPLETE: '/service/tutorial/complete',
 
   // Service
